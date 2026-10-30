@@ -1,5 +1,8 @@
 import { app, BrowserWindow, shell } from 'electron';
 import { join } from 'path';
+import { existsSync } from 'fs';
+import { LibraryStore } from './services/library-store';
+import { registerRepoIpc } from './ipc/repos.ipc';
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -32,7 +35,14 @@ function createWindow(): void {
   }
 }
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
+  const store = new LibraryStore(app.getPath('userData'), join(app.getPath('home'), 'Glibrary'));
+  await store.load();
+  await store.applyStartupFixes((repo) =>
+    repo.localPath != null ? existsSync(repo.localPath) : false,
+  );
+
+  registerRepoIpc(store);
   createWindow();
 
   app.on('activate', () => {
