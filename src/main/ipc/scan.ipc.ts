@@ -10,6 +10,7 @@ import type { GitService } from '../services/git-service';
 import { detectProject } from '../services/detector';
 import { applyDetection } from '../services/detector/apply';
 import { scanFolders, classifyFound } from '../services/scanner';
+import { parseImportItems, parseFolders } from './scan-parsing';
 import { normalizeGitUrl, normalizeLocalPath, parseGithubRepo } from '../../shared/git-utils';
 
 function ok<T>(data: T): IpcResult<T> {
@@ -30,37 +31,6 @@ function inferInstalled(localPath: string): boolean {
   return ['node_modules', '.venv', 'venv', 'target'].some((d) =>
     existsSync(join(localPath, d)),
   );
-}
-
-function parseFolders(raw: unknown, fallback: string[]): string[] {
-  if (raw == null || typeof raw !== 'object') return fallback;
-  const value = (raw as { folders?: unknown }).folders;
-  if (!Array.isArray(value)) return fallback;
-  return value.filter((v): v is string => typeof v === 'string' && v.trim() !== '');
-}
-
-interface ImportItem {
-  localPath: string;
-  remoteUrl?: string;
-  branch?: string;
-}
-
-function parseImportItems(raw: unknown): ImportItem[] {
-  if (raw == null || typeof raw !== 'object') return [];
-  const items = (raw as { items?: unknown }).items;
-  if (!Array.isArray(items)) return [];
-  return items
-    .map((item): ImportItem | null => {
-      if (item == null || typeof item !== 'object') return null;
-      const obj = item as Record<string, unknown>;
-      if (typeof obj.localPath !== 'string') return null;
-      return {
-        localPath: obj.localPath,
-        ...(typeof obj.remoteUrl === 'string' ? { remoteUrl: obj.remoteUrl } : {}),
-        ...(typeof obj.branch === 'string' ? { branch: obj.branch } : {})
-      };
-    })
-    .filter((item): item is ImportItem => item != null);
 }
 
 const CANDIDATE_HOMES = [

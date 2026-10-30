@@ -65,14 +65,13 @@ export const api = {
 
   scanImport: (items: ScannedRepo[]): Promise<Repo[]> =>
     unwrap<Repo[]>(
-      window.api.invoke(
-        IpcChannels.scanImport,
-        items.map((i) => ({
+      window.api.invoke(IpcChannels.scanImport, {
+        items: items.map((i) => ({
           localPath: i.localPath,
           ...(i.remoteUrl != null ? { remoteUrl: i.remoteUrl } : {}),
           ...(i.branch != null ? { branch: i.branch } : {})
-        })),
-      ),
+        }))
+      }),
     ),
 
   onboardingSuggest: (): Promise<ScanFolderSuggestion[]> =>
