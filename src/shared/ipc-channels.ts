@@ -1,5 +1,7 @@
 export const IpcChannels = {
   libraryGet: 'library:get',
+  libraryExport: 'library:export',
+  libraryImport: 'library:import',
   repoAddByUrl: 'repo:addByUrl',
   repoAddLocal: 'repo:addLocal',
   repoUpdate: 'repo:update',

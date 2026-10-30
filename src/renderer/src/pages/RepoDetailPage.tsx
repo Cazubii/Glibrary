@@ -1,5 +1,22 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
-import { ArrowLeft, RefreshCw, Star, Wrench, AlertTriangle, Check, Globe, Download } from 'lucide-react';
+import { useEffect, useMemo, useState, useCallback, type ReactNode } from 'react';
+import {
+  ArrowLeft,
+  RefreshCw,
+  Star,
+  Wrench,
+  AlertTriangle,
+  Check,
+  Globe,
+  Download,
+  Folder,
+  Code,
+  Terminal,
+  ExternalLink,
+  Trash2,
+  FileText,
+  Package,
+  X
+} from 'lucide-react';
 import type { CommandSpec, ProcessKind, Repo } from '@shared/types';
 import { useLibraryStore, runConfirmKey } from '../store/library';
 import { api } from '../lib/api';
@@ -37,6 +54,8 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
   const [notes, setNotes] = useState(repo?.notes ?? '');
   const [notesTimer, setNotesTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [pendingRun, setPendingRun] = useState<{ kind: ProcessKind; command: string } | null>(null);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removeText, setRemoveText] = useState('');
 
   const repoLogs = logs[repoId] ?? [];
 
@@ -173,6 +192,39 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     }
+  };
+
+  const runAction = async (fn: () => unknown): Promise<void> => {
+    try {
+      await fn();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const createEnv = async (): Promise<void> => {
+    await runAction(async () => {
+      await api.repoCreateEnv(repo.id);
+      if (repo.detection != null) {
+        await patch({ detection: { ...repo.detection, hasEnvExample: false } });
+      }
+    });
+  };
+
+  const uninstall = async (): Promise<void> => {
+    await runAction(async () => {
+      await api.repoUninstallDeps(repo.id);
+    });
+  };
+
+  const confirmRemove = async (deleteFolder: boolean): Promise<void> => {
+    if (removeText.trim() !== repo.name) return;
+    setRemoveOpen(false);
+    setRemoveText('');
+    await runAction(async () => {
+      await api.repoRemove(repo.id, deleteFolder);
+      onBack();
+    });
   };
 
   const setCommand = (field: 'installCommand' | 'startCommand') =>
@@ -339,6 +391,63 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
               <div className="mb-2 text-sm font-semibold">Tags</div>
               <TagEditor tags={repo.tags} onChange={(tags) => void patch({ tags })} />
             </div>
+
+            <div className="rounded-lg bg-steam-panel p-4">
+              <div className="mb-3 text-sm font-semibold">Ações</div>
+              <div className="flex flex-wrap gap-2">
+                {repo.localPath != null && (
+                  <>
+                    <ActionChip
+                      icon={<Folder size={14} />}
+                      label="Abrir pasta"
+                      onClick={() => void runAction(() => api.repoOpenFolder(repo.id))}
+                    />
+                    <ActionChip
+                      icon={<Code size={14} />}
+                      label="Abrir no editor"
+                      onClick={() => void runAction(() => api.repoOpenEditor(repo.id))}
+                    />
+                    <ActionChip
+                      icon={<Terminal size={14} />}
+                      label="Abrir terminal"
+                      onClick={() => void runAction(() => api.repoOpenTerminal(repo.id))}
+                    />
+                  </>
+                )}
+                {repo.remoteUrl != null && (
+                  <ActionChip
+                    icon={<ExternalLink size={14} />}
+                    label="Abrir no GitHub"
+                    onClick={() =>
+                      void runAction(() => {
+                        window.open(repo.remoteUrl as string, '_blank');
+                      })
+                    }
+                  />
+                )}
+                {repo.localPath != null && repo.detection?.hasEnvExample === true && (
+                  <ActionChip
+                    icon={<FileText size={14} />}
+                    label="Criar .env"
+                    onClick={() => void createEnv()}
+                  />
+                )}
+                {repo.localPath != null &&
+                  (repo.status === 'installed' || repo.status === 'cloned') && (
+                    <ActionChip
+                      icon={<Package size={14} />}
+                      label="Desinstalar dependências"
+                      onClick={() => void uninstall()}
+                    />
+                  )}
+                <ActionChip
+                  icon={<Trash2 size={14} />}
+                  label="Remover da biblioteca"
+                  danger
+                  onClick={() => setRemoveOpen(true)}
+                />
+              </div>
+            </div>
           </div>
         )}
 
@@ -381,6 +490,59 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
         )}
       </div>
 
+      {removeOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={() => setRemoveOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-md rounded-lg bg-steam-panel p-6"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label="Remover repositório"
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-lg font-bold text-steam-error">
+                <Trash2 size={18} /> Remover {repo.name}
+              </h2>
+              <button type="button" onClick={() => setRemoveOpen(false)} aria-label="Fechar">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="mb-3 text-sm text-steam-text/70">
+              Digite <strong className="text-steam-text">{repo.name}</strong> para confirmar. A
+              pasta só é apagada na opção abaixo.
+            </p>
+            <input
+              type="text"
+              value={removeText}
+              onChange={(e) => setRemoveText(e.target.value)}
+              placeholder={repo.name}
+              className="w-full rounded border border-steam-elevated bg-steam-bg px-3 py-2 text-sm outline-none focus:border-steam-error"
+            />
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={removeText.trim() !== repo.name}
+                onClick={() => void confirmRemove(true)}
+                className="rounded bg-steam-error px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                Remover e apagar a pasta do disco
+              </button>
+              <button
+                type="button"
+                disabled={removeText.trim() !== repo.name}
+                onClick={() => void confirmRemove(false)}
+                className="rounded bg-steam-elevated px-4 py-2 text-sm disabled:opacity-40"
+              >
+                Remover somente da biblioteca
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {pendingRun != null && (
         <ConfirmDialog
           title="Confirmar execução"
@@ -396,6 +558,33 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
         />
       )}
     </div>
+  );
+}
+
+function ActionChip({
+  icon,
+  label,
+  onClick,
+  danger = false
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs ${
+        danger
+          ? 'bg-steam-error/15 text-steam-error hover:bg-steam-error/25'
+          : 'bg-steam-elevated text-steam-text/80 hover:bg-steam-accent/20'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 

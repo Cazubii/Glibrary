@@ -78,6 +78,21 @@ export default function App(): React.JSX.Element {
     if (error != null) pushToast(error);
   }, [error, pushToast]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        const input = document.getElementById('library-search') as HTMLInputElement | null;
+        input?.focus();
+        input?.select();
+      } else if (e.key === 'Escape') {
+        setOpenRepoId(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   if (!loaded) {
     return (
       <div className="flex h-full items-center justify-center bg-steam-bg text-steam-text">

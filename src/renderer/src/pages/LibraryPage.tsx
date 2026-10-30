@@ -1,10 +1,26 @@
 import { useMemo, useState } from 'react';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, ArrowDownWideNarrow, Download, Upload } from 'lucide-react';
 import type { Repo } from '@shared/types';
 import RepoGrid from '../components/RepoGrid';
 import Sidebar, { type SidebarFilter } from '../components/Sidebar';
 import AddRepoDialog from '../components/AddRepoDialog';
 import ScanDialog from '../components/ScanDialog';
+import { useLibraryStore } from '../store/library';
+import { api } from '../lib/api';
+
+type SortKey = 'name' | 'recent' | 'stars';
+
+function sortRepos(repos: Repo[], sort: SortKey): Repo[] {
+  const copy = [...repos];
+  switch (sort) {
+    case 'name':
+      return copy.sort((a, b) => a.name.localeCompare(b.name));
+    case 'recent':
+      return copy.sort((a, b) => b.addedAt.localeCompare(a.addedAt));
+    case 'stars':
+      return copy.sort((a, b) => (b.stars ?? 0) - (a.stars ?? 0));
+  }
+}
 
 interface Props {
   repos: Repo[];
@@ -60,11 +76,42 @@ export default function LibraryPage({
   const [query, setQuery] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [showScan, setShowScan] = useState(false);
+  const [sort, setSort] = useState<SortKey>('name');
+  const settings = useLibraryStore((s) => s.settings);
+  const updateSettings = useLibraryStore((s) => s.updateSettings);
+  const viewMode = settings?.viewMode ?? 'grid';
 
   const visible = useMemo(
-    () => repos.filter((r) => matchesFilter(r, filter) && matchesSearch(r, query)),
-    [repos, filter, query],
+    () =>
+      sortRepos(
+        repos.filter((r) => matchesFilter(r, filter) && matchesSearch(r, query)),
+        sort,
+      ),
+    [repos, filter, query, sort],
   );
+
+  const toggleView = (): void => {
+    void updateSettings({ viewMode: viewMode === 'grid' ? 'list' : 'grid' }).catch((e: unknown) =>
+      onError(e instanceof Error ? e.message : String(e)),
+    );
+  };
+
+  const doExport = async (): Promise<void> => {
+    try {
+      await api.libraryExport();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const doImport = async (): Promise<void> => {
+    try {
+      const count = await api.libraryImport();
+      if (count > 0) onReload();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   return (
     <div className="flex h-full">
@@ -86,18 +133,60 @@ export default function LibraryPage({
             Adicionar
           </button>
 
-          <div className="relative ml-auto w-72">
-            <Search
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-steam-text/50"
-            />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar repositórios…"
-              className="w-full rounded border border-steam-elevated bg-steam-panel py-2 pl-9 pr-3 text-sm outline-none focus:border-steam-accent"
-            />
+          <div className="relative ml-auto flex items-center gap-2">
+            <div className="relative w-60">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-steam-text/50"
+              />
+              <input
+                id="library-search"
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar repositórios… (Ctrl+K)"
+                className="w-full rounded border border-steam-elevated bg-steam-panel py-2 pl-9 pr-3 text-sm outline-none focus:border-steam-accent"
+              />
+            </div>
+
+            <div className="flex items-center gap-1 rounded border border-steam-elevated">
+              <ArrowDownWideNarrow size={14} className="ml-2 text-steam-text/50" />
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as SortKey)}
+                className="bg-steam-panel py-1.5 pr-2 text-xs outline-none"
+              >
+                <option value="name">Nome</option>
+                <option value="recent">Recentes</option>
+                <option value="stars">Estrelas</option>
+              </select>
+            </div>
+
+            <button
+              type="button"
+              onClick={toggleView}
+              title={viewMode === 'grid' ? 'Modo lista' : 'Modo grade'}
+              className="rounded border border-steam-elevated bg-steam-panel p-2 hover:bg-steam-elevated"
+            >
+              {viewMode === 'grid' ? <List size={16} /> : <LayoutGrid size={16} />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void doExport()}
+              title="Exportar biblioteca"
+              className="rounded border border-steam-elevated bg-steam-panel p-2 hover:bg-steam-elevated"
+            >
+              <Download size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => void doImport()}
+              title="Importar biblioteca"
+              className="rounded border border-steam-elevated bg-steam-panel p-2 hover:bg-steam-elevated"
+            >
+              <Upload size={16} />
+            </button>
           </div>
         </header>
 
@@ -142,7 +231,12 @@ export default function LibraryPage({
               )}
             </div>
           ) : (
-            <RepoGrid repos={visible} onToggleFavorite={onToggleFavorite} onOpen={onOpenRepo} />
+            <RepoGrid
+              repos={visible}
+              viewMode={viewMode}
+              onToggleFavorite={onToggleFavorite}
+              onOpen={onOpenRepo}
+            />
           )}
         </div>
       </main>

@@ -1,6 +1,8 @@
 import { ipcMain, dialog, BrowserWindow, shell } from 'electron';
 import { randomUUID } from 'crypto';
-import { existsSync, statSync } from 'fs';
+import { copyFileSync, existsSync, statSync } from 'fs';
+import { readFile, rm, writeFile } from 'fs/promises';
+import { spawn } from 'child_process';
 import { basename, join, resolve } from 'path';
 import type { DetectionResult, IpcResult, Repo, Settings } from '../../shared/types';
 import {
@@ -9,7 +11,8 @@ import {
   RepoIdInputSchema,
   RepoUpdateInputSchema,
   RepoRemoveInputSchema,
-  SettingsPatchSchema
+  SettingsPatchSchema,
+  LibraryFileSchema
 } from '../../shared/schemas';
 import { IpcChannels } from '../../shared/ipc-channels';
 import type { LibraryStore } from '../services/library-store';
@@ -57,6 +60,27 @@ function repoNameFromUrl(url: string): string {
   return segment;
 }
 
+function openTerminal(cwd: string): void {
+  const spawnDetached = (command: string, args: string[]): void => {
+    const child = spawn(command, args, {
+      cwd,
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false
+    });
+    child.on('error', () => undefined);
+    child.unref();
+  };
+
+  if (process.platform === 'win32') {
+    spawnDetached('cmd.exe', []);
+  } else if (process.platform === 'darwin') {
+    spawnDetached('open', ['-a', 'Terminal', cwd]);
+  } else {
+    spawnDetached('x-terminal-emulator', []);
+  }
+}
+
 export function registerRepoIpc(
   store: LibraryStore,
   git: GitService,
@@ -67,6 +91,65 @@ export function registerRepoIpc(
   ipcMain.handle(IpcChannels.libraryGet, async (): Promise<IpcResult<unknown>> => {
     try {
       return ok(store.get());
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  ipcMain.handle(IpcChannels.libraryExport, async (): Promise<IpcResult<string | null>> => {
+    try {
+      const win = BrowserWindow.getFocusedWindow();
+      const options = {
+        defaultPath: 'glibrary-backup.json',
+        filters: [{ name: 'JSON', extensions: ['json'] }]
+      };
+      const result = win
+        ? await dialog.showSaveDialog(win, options)
+        : await dialog.showSaveDialog(options);
+      if (result.canceled || result.filePath == null) return ok(null);
+      await writeFile(result.filePath, JSON.stringify(store.get(), null, 2), 'utf8');
+      return ok(result.filePath);
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  ipcMain.handle(IpcChannels.libraryImport, async (): Promise<IpcResult<number>> => {
+    try {
+      const win = BrowserWindow.getFocusedWindow();
+      const options = {
+        properties: ['openFile' as const],
+        filters: [{ name: 'JSON', extensions: ['json'] }]
+      };
+      const result = win
+        ? await dialog.showOpenDialog(win, options)
+        : await dialog.showOpenDialog(options);
+      if (result.canceled || result.filePaths.length === 0) return ok(0);
+      const raw = JSON.parse(await readFile(result.filePaths[0], 'utf8')) as unknown;
+      const file = LibraryFileSchema.parse(raw);
+      const existing = store.listRepos();
+      const knownUrls = new Set(
+        existing.filter((r) => r.remoteUrl != null).map((r) => normalizeGitUrl(r.remoteUrl as string)),
+      );
+      const knownPaths = new Set(
+        existing
+          .filter((r) => r.localPath != null)
+          .map((r) => normalizeLocalPath(r.localPath as string, process.platform)),
+      );
+      let imported = 0;
+      for (const repo of file.repos) {
+        if (knownUrls.has(repo.remoteUrl != null ? normalizeGitUrl(repo.remoteUrl) : '')) continue;
+        if (
+          repo.localPath != null &&
+          knownPaths.has(normalizeLocalPath(repo.localPath, process.platform))
+        ) {
+          continue;
+        }
+        const exists = store.listRepos().some((r) => r.id === repo.id);
+        await store.addRepo(exists ? { ...repo, id: randomUUID() } : repo);
+        imported += 1;
+      }
+      return ok(imported);
     } catch (e) {
       return fail(e);
     }
@@ -365,6 +448,110 @@ export function registerRepoIpc(
         if (repo.openUrl == null) return fail(new Error('Nenhuma URL detectada'));
         await shell.openExternal(repo.openUrl);
         return ok(null);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.repoOpenFolder,
+    async (_event, raw: unknown): Promise<IpcResult<null>> => {
+      try {
+        const { id } = RepoIdInputSchema.parse(raw);
+        const repo = store.getRepo(id);
+        if (!repo) return fail(new Error('Repositório não encontrado'));
+        if (repo.localPath == null) return fail(new Error('Repositório sem pasta local'));
+        const error = await shell.openPath(repo.localPath);
+        if (error !== '') return fail(new Error(error));
+        return ok(null);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.repoOpenEditor,
+    async (_event, raw: unknown): Promise<IpcResult<null>> => {
+      try {
+        const { id } = RepoIdInputSchema.parse(raw);
+        const repo = store.getRepo(id);
+        if (!repo) return fail(new Error('Repositório não encontrado'));
+        if (repo.localPath == null) return fail(new Error('Repositório sem pasta local'));
+        const editor = store.getSettings().editorCommand;
+        const child = spawn(editor, [repo.localPath], {
+          shell: process.platform === 'win32',
+          detached: true,
+          stdio: 'ignore'
+        });
+        child.on('error', () => undefined);
+        child.unref();
+        return ok(null);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.repoOpenTerminal,
+    async (_event, raw: unknown): Promise<IpcResult<null>> => {
+      try {
+        const { id } = RepoIdInputSchema.parse(raw);
+        const repo = store.getRepo(id);
+        if (!repo) return fail(new Error('Repositório não encontrado'));
+        if (repo.localPath == null) return fail(new Error('Repositório sem pasta local'));
+        openTerminal(repo.localPath);
+        return ok(null);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.repoCreateEnv,
+    async (_event, raw: unknown): Promise<IpcResult<null>> => {
+      try {
+        const { id } = RepoIdInputSchema.parse(raw);
+        const repo = store.getRepo(id);
+        if (!repo) return fail(new Error('Repositório não encontrado'));
+        if (repo.localPath == null) return fail(new Error('Repositório sem pasta local'));
+        const source = join(repo.localPath, '.env.example');
+        const target = join(repo.localPath, '.env');
+        if (!existsSync(source)) return fail(new Error('.env.example não encontrado'));
+        if (existsSync(target)) return fail(new Error('.env já existe'));
+        copyFileSync(source, target);
+        await store.updateRepo(id, {
+          detection: repo.detection != null ? { ...repo.detection, hasEnvExample: false } : undefined
+        });
+        return ok(null);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.repoUninstallDeps,
+    async (_event, raw: unknown): Promise<IpcResult<Repo>> => {
+      try {
+        const { id } = RepoIdInputSchema.parse(raw);
+        const repo = store.getRepo(id);
+        if (!repo) return fail(new Error('Repositório não encontrado'));
+        if (repo.localPath == null) return fail(new Error('Repositório sem pasta local'));
+        const targets = ['node_modules', '.venv', 'venv'];
+        for (const dir of targets) {
+          const full = join(repo.localPath, dir);
+          if (existsSync(full)) await rm(full, { recursive: true, force: true });
+        }
+        const updated = await store.updateRepo(id, {
+          status: 'cloned',
+          installedAt: undefined
+        });
+        broadcastStatus(id, updated.status);
+        return ok(updated);
       } catch (e) {
         return fail(e);
       }

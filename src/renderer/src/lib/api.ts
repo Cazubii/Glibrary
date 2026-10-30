@@ -95,6 +95,27 @@ export const api = {
   repoOpenBrowser: (id: string): Promise<null> =>
     unwrap<null>(window.api.invoke(IpcChannels.repoOpenBrowser, { id })),
 
+  repoOpenFolder: (id: string): Promise<null> =>
+    unwrap<null>(window.api.invoke(IpcChannels.repoOpenFolder, { id })),
+
+  repoOpenEditor: (id: string): Promise<null> =>
+    unwrap<null>(window.api.invoke(IpcChannels.repoOpenEditor, { id })),
+
+  repoOpenTerminal: (id: string): Promise<null> =>
+    unwrap<null>(window.api.invoke(IpcChannels.repoOpenTerminal, { id })),
+
+  repoCreateEnv: (id: string): Promise<null> =>
+    unwrap<null>(window.api.invoke(IpcChannels.repoCreateEnv, { id })),
+
+  repoUninstallDeps: (id: string): Promise<Repo> =>
+    unwrap<Repo>(window.api.invoke(IpcChannels.repoUninstallDeps, { id })),
+
+  libraryExport: (): Promise<string | null> =>
+    unwrap<string | null>(window.api.invoke(IpcChannels.libraryExport)),
+
+  libraryImport: (): Promise<number> =>
+    unwrap<number>(window.api.invoke(IpcChannels.libraryImport)),
+
   processRun: (id: string, kind: ProcessKind, extraIndex?: number): Promise<RunHandle> =>
     unwrap<RunHandle>(
       window.api.invoke(IpcChannels.processRun, {
