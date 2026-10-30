@@ -14,7 +14,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@shared/*": ["./src/shared/*"]
+    }
   },
   "include": ["src/**/*", "tests/**/*", "electron.vite.config.ts", "vitest.config.ts"]
 }

@@ -24,7 +24,11 @@ export default defineConfig({
       alias: {
         '@renderer': resolve('src/renderer/src'),
         '@shared': resolve('src/shared')
-      }
+      },
+      dedupe: ['react', 'react-dom']
+    },
+    optimizeDeps: {
+      include: ['react', 'react-dom', 'react-dom/client', 'zustand', 'lucide-react']
     },
     plugins: [react()]
   }

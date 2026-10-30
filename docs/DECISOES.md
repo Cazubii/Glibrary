@@ -24,6 +24,21 @@ dev; todo o resto é restrito a `'self'`.
 Os itens do checklist da Fase 0 são interdependentes (o gate `typecheck && lint && test`
 exige todos os arquivos juntos). Um único `feat(fase-0)` cobre a fase.
 
+## 2026-10-30 — Fase 1
+
+### Window.api declarado em `env.d.ts` do renderer
+`src/preload/index.d.ts` conflitava com `src/preload/index.ts` (mesmo basename). A
+declaração global de `Window.api` foi movida para `src/renderer/src/env.d.ts`, com o tipo
+`GlibraryApi` em `src/shared/types.ts`.
+
+### Zod: `RepoPatchSchema` sem `id`
+`repo:update` recebe `{ id, patch }`. `RepoUpdateInputSchema` (patch + id obrigatório)
+substitui o merge frágil que deixava `id` opcional.
+
+### React/Vite: `dedupe` + `optimizeDeps`
+O zustand e o React entravam em grafos de dependência separados do Vite ("Invalid hook
+call"). Fix: `resolve.dedupe: ['react','react-dom']` e `optimizeDeps.include` no renderer.
+
 ## Sugestões
 
 (itens fora do escopo da v1 — não implementar, conforme seção 14 da spec)
