@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Repo, Settings } from '@shared/types';
+import type { LogLine, Repo, Settings } from '@shared/types';
 import { api } from '../lib/api';
 
 interface LibraryState {
@@ -7,19 +7,28 @@ interface LibraryState {
   settings: Settings | null;
   loaded: boolean;
   error: string | null;
+  logs: Record<string, LogLine[]>;
+  confirmedRuns: string[];
   load: () => Promise<void>;
   addLocal: (path: string) => Promise<Repo>;
   updateRepo: (id: string, patch: Partial<Repo>) => Promise<void>;
   removeRepo: (id: string, deleteFolder: boolean) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
   updateSettings: (patch: Partial<Settings>) => Promise<void>;
+  appendLog: (id: string, line: LogLine) => void;
+  clearLogs: (id: string) => void;
+  confirmRun: (key: string) => void;
 }
+
+export const runConfirmKey = (id: string, command: string): string => `${id}::${command}`;
 
 export const useLibraryStore = create<LibraryState>((set, get) => ({
   repos: [],
   settings: null,
   loaded: false,
   error: null,
+  logs: {},
+  confirmedRuns: [],
 
   load: async () => {
     try {
@@ -56,5 +65,16 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   updateSettings: async (patch) => {
     const settings = await api.settingsSet(patch);
     set({ settings });
-  }
+  },
+
+  appendLog: (id, line) =>
+    set((s) => {
+      const current = s.logs[id] ?? [];
+      const next = [...current, line];
+      return { logs: { ...s.logs, [id]: next.length > 5000 ? next.slice(-5000) : next } };
+    }),
+
+  clearLogs: (id) => set((s) => ({ logs: { ...s.logs, [id]: [] } })),
+
+  confirmRun: (key) => set((s) => ({ confirmedRuns: [...s.confirmedRuns, key] }))
 }));

@@ -2,7 +2,10 @@ import type {
   DetectionResult,
   IpcResult,
   LibraryFile,
+  LogLine,
+  ProcessKind,
   Repo,
+  RunHandle,
   Settings
 } from '../../../shared/types';
 import { IpcChannels } from '../../../shared/ipc-channels';
@@ -28,6 +31,34 @@ export const api = {
 
   repoDetect: (id: string): Promise<DetectionResult> =>
     unwrap<DetectionResult>(window.api.invoke(IpcChannels.repoDetect, { id })),
+
+  repoOpenBrowser: (id: string): Promise<null> =>
+    unwrap<null>(window.api.invoke(IpcChannels.repoOpenBrowser, { id })),
+
+  processRun: (id: string, kind: ProcessKind, extraIndex?: number): Promise<RunHandle> =>
+    unwrap<RunHandle>(
+      window.api.invoke(IpcChannels.processRun, {
+        id,
+        kind,
+        ...(extraIndex != null ? { extraIndex } : {})
+      }),
+    ),
+
+  processStop: (id: string): Promise<null> =>
+    unwrap<null>(window.api.invoke(IpcChannels.processStop, { id })),
+
+  processGetLogs: (id: string): Promise<LogLine[]> =>
+    unwrap<LogLine[]>(window.api.invoke(IpcChannels.processGetLogs, { id })),
+
+  onProcessLog: (listener: (payload: { id: string; line: LogLine }) => void) =>
+    window.api.on(IpcChannels.processLog, (payload: unknown) => {
+      listener(payload as { id: string; line: LogLine });
+    }),
+
+  onProcessExit: (listener: (payload: { id: string; code: number }) => void) =>
+    window.api.on(IpcChannels.processExit, (payload: unknown) => {
+      listener(payload as { id: string; code: number });
+    }),
 
   dialogPickFolder: (): Promise<string | null> =>
     unwrap<string | null>(window.api.invoke(IpcChannels.dialogPickFolder)),

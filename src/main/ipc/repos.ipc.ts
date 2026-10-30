@@ -135,6 +135,22 @@ export function registerRepoIpc(store: LibraryStore): void {
     },
   );
 
+  ipcMain.handle(
+    IpcChannels.repoOpenBrowser,
+    async (_event, raw: unknown): Promise<IpcResult<null>> => {
+      try {
+        const { id } = RepoIdInputSchema.parse(raw);
+        const repo = store.getRepo(id);
+        if (!repo) return fail(new Error('Repositório não encontrado'));
+        if (repo.openUrl == null) return fail(new Error('Nenhuma URL detectada'));
+        await shell.openExternal(repo.openUrl);
+        return ok(null);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
   ipcMain.handle(IpcChannels.dialogPickFolder, async (): Promise<IpcResult<string | null>> => {
     try {
       const win = BrowserWindow.getFocusedWindow();

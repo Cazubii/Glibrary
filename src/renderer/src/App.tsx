@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { AlertCircle, X } from 'lucide-react';
 import { Library } from 'lucide-react';
+import type { Repo } from '@shared/types';
 import { useLibraryStore } from './store/library';
+import { api } from './lib/api';
 import LibraryPage from './pages/LibraryPage';
 import RepoDetailPage from './pages/RepoDetailPage';
 
@@ -25,6 +27,21 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const offStatus = api.onStatusChanged(({ id, status }) => {
+      useLibraryStore.setState((s) => ({
+        repos: s.repos.map((r) => (r.id === id ? { ...r, status: status as Repo['status'] } : r))
+      }));
+    });
+    const offExit = api.onProcessExit(() => {
+      void load();
+    });
+    return () => {
+      offStatus();
+      offExit();
+    };
   }, [load]);
 
   useEffect(() => {

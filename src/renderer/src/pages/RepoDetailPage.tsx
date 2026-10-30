@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, RefreshCw, Star, Wrench, AlertTriangle, Check } from 'lucide-react';
-import type { CommandSpec, Repo } from '@shared/types';
-import { useLibraryStore } from '../store/library';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { ArrowLeft, RefreshCw, Star, Wrench, AlertTriangle, Check, Globe } from 'lucide-react';
+import type { CommandSpec, ProcessKind, Repo } from '@shared/types';
+import { useLibraryStore, runConfirmKey } from '../store/library';
 import { api } from '../lib/api';
 import GeneratedCover from '../components/GeneratedCover';
 import StatusBadge from '../components/StatusBadge';
 import CommandEditor from '../components/CommandEditor';
+import ActionButton from '../components/ActionButton';
+import LogConsole from '../components/LogConsole';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 type Tab = 'overview' | 'console' | 'commands' | 'notes';
 
@@ -16,16 +19,39 @@ interface Props {
 }
 
 export default function RepoDetailPage({ repoId, onBack, onError }: Props): React.JSX.Element {
-  const { repos, updateRepo, toggleFavorite } = useLibraryStore();
+  const { repos, logs, confirmedRuns, updateRepo, toggleFavorite, appendLog, clearLogs, confirmRun } =
+    useLibraryStore();
   const repo = useMemo(() => repos.find((r) => r.id === repoId), [repos, repoId]);
   const [tab, setTab] = useState<Tab>('overview');
   const [detecting, setDetecting] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [notes, setNotes] = useState(repo?.notes ?? '');
   const [notesTimer, setNotesTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [pendingRun, setPendingRun] = useState<{ kind: ProcessKind; command: string } | null>(null);
+
+  const repoLogs = logs[repoId] ?? [];
 
   useEffect(() => {
     setNotes(repo?.notes ?? '');
   }, [repo?.notes]);
+
+  const patch = useCallback(
+    async (p: Partial<Repo>): Promise<void> => {
+      try {
+        await updateRepo(repoId, p);
+      } catch (e) {
+        onError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [repoId, updateRepo, onError],
+  );
+
+  useEffect(() => {
+    const offLog = api.onProcessLog(({ id, line }) => appendLog(id, line));
+    return () => {
+      offLog();
+    };
+  }, [appendLog]);
 
   if (repo == null) {
     return (
@@ -41,14 +67,6 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
       </div>
     );
   }
-
-  const patch = async (p: Partial<Repo>): Promise<void> => {
-    try {
-      await updateRepo(repo.id, p);
-    } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
-    }
-  };
 
   const detectAgain = async (): Promise<void> => {
     setDetecting(true);
@@ -69,6 +87,59 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
       onError(e instanceof Error ? e.message : String(e));
     } finally {
       setDetecting(false);
+    }
+  };
+
+  const runKind = async (kind: ProcessKind): Promise<void> => {
+    const spec = kind === 'install' ? repo.installCommand : repo.startCommand;
+    if (spec == null) {
+      onError(
+        kind === 'install'
+          ? 'Nenhum comando de instalação configurado'
+          : 'Nenhum comando de início configurado',
+      );
+      return;
+    }
+    const key = runConfirmKey(repo.id, spec.command);
+    if (!confirmedRuns.includes(key)) {
+      setPendingRun({ kind, command: spec.command });
+      return;
+    }
+    await execute(kind);
+  };
+
+  const execute = async (kind: ProcessKind): Promise<void> => {
+    setBusy(true);
+    try {
+      await api.processRun(repo.id, kind);
+      await patch({
+        status: kind === 'install' ? 'installing' : 'running'
+      });
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const stop = async (): Promise<void> => {
+    setBusy(true);
+    try {
+      await api.processStop(repo.id);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const locateFolder = async (): Promise<void> => {
+    try {
+      const folder = await api.dialogPickFolder();
+      if (folder == null) return;
+      await updateRepo(repo.id, { localPath: folder, status: 'cloned' });
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -120,6 +191,15 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
             <div className="text-xs text-steam-text/60">{repo.owner ?? 'local'}</div>
             <h1 className="text-2xl font-bold">{repo.name}</h1>
           </div>
+          <ActionButton
+            repo={repo}
+            busy={busy}
+            onInstall={() => void runKind('install')}
+            onStart={() => void runKind('start')}
+            onStop={() => void stop()}
+            onRetry={() => void runKind('install')}
+            onLocate={() => void locateFolder()}
+          />
           <button
             type="button"
             onClick={() => void toggleFavorite(repo.id)}
@@ -148,6 +228,15 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
           <span className="text-[11px] text-steam-warn" title="Comandos editados manualmente">
             comandos editados
           </span>
+        )}
+        {repo.openUrl != null && (
+          <button
+            type="button"
+            onClick={() => void api.repoOpenBrowser(repo.id).catch((e: unknown) => onError(String(e)))}
+            className="flex items-center gap-1 rounded bg-steam-green/20 px-2 py-1 text-xs text-steam-green hover:bg-steam-green/30"
+          >
+            <Globe size={12} /> Abrir no navegador
+          </button>
         )}
       </div>
 
@@ -204,8 +293,8 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
         )}
 
         {tab === 'console' && (
-          <div className="flex h-full items-center justify-center text-steam-text/50">
-            Console chega na Fase 3 (execução de processos).
+          <div className="h-full min-h-[320px]">
+            <LogConsole lines={repoLogs} onClear={() => clearLogs(repo.id)} />
           </div>
         )}
 
@@ -241,6 +330,21 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
           />
         )}
       </div>
+
+      {pendingRun != null && (
+        <ConfirmDialog
+          title="Confirmar execução"
+          message={`Você vai executar código de terceiros na sua máquina.\n\nComando: ${pendingRun.command}\nPasta: ${repo.localPath ?? '(atual)'}`}
+          confirmLabel="Executar"
+          onConfirm={() => {
+            const kind = pendingRun.kind;
+            confirmRun(runConfirmKey(repo.id, pendingRun.command));
+            setPendingRun(null);
+            void execute(kind);
+          }}
+          onCancel={() => setPendingRun(null)}
+        />
+      )}
     </div>
   );
 }
