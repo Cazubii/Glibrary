@@ -6,6 +6,9 @@ import type {
   ProcessKind,
   Repo,
   RunHandle,
+  ScanFolderSuggestion,
+  ScanProgress,
+  ScannedRepo,
   Settings
 } from '../../../shared/types';
 import type { ToolStatus } from '../../../shared/tools';
@@ -51,6 +54,34 @@ export const api = {
 
   toolsCheck: (force = false): Promise<ToolStatus[]> =>
     unwrap<ToolStatus[]>(window.api.invoke(IpcChannels.toolsCheck, { force })),
+
+  scanStart: (folders?: string[]): Promise<ScannedRepo[]> =>
+    unwrap<ScannedRepo[]>(
+      window.api.invoke(IpcChannels.scanStart, folders != null ? { folders } : {}),
+    ),
+
+  scanCancel: (): Promise<null> =>
+    unwrap<null>(window.api.invoke(IpcChannels.scanCancel)),
+
+  scanImport: (items: ScannedRepo[]): Promise<Repo[]> =>
+    unwrap<Repo[]>(
+      window.api.invoke(
+        IpcChannels.scanImport,
+        items.map((i) => ({
+          localPath: i.localPath,
+          ...(i.remoteUrl != null ? { remoteUrl: i.remoteUrl } : {}),
+          ...(i.branch != null ? { branch: i.branch } : {})
+        })),
+      ),
+    ),
+
+  onboardingSuggest: (): Promise<ScanFolderSuggestion[]> =>
+    unwrap<ScanFolderSuggestion[]>(window.api.invoke(IpcChannels.onboardingSuggest)),
+
+  onScanProgress: (listener: (payload: ScanProgress) => void) =>
+    window.api.on(IpcChannels.scanProgress, (payload: unknown) => {
+      listener(payload as ScanProgress);
+    }),
 
   repoUpdate: (id: string, patch: Partial<Repo>): Promise<Repo> =>
     unwrap<Repo>(window.api.invoke(IpcChannels.repoUpdate, { id, patch })),

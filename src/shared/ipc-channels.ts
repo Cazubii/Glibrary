@@ -25,6 +25,8 @@ export const IpcChannels = {
   scanStart: 'scan:start',
   scanProgress: 'scan:progress',
   scanCancel: 'scan:cancel',
+  scanImport: 'scan:import',
+  onboardingSuggest: 'onboarding:suggest',
   toolsCheck: 'tools:check',
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',

@@ -4,6 +4,7 @@ import type { Repo } from '@shared/types';
 import RepoGrid from '../components/RepoGrid';
 import Sidebar, { type SidebarFilter } from '../components/Sidebar';
 import AddRepoDialog from '../components/AddRepoDialog';
+import ScanDialog from '../components/ScanDialog';
 
 interface Props {
   repos: Repo[];
@@ -58,7 +59,7 @@ export default function LibraryPage({
 }: Props): React.JSX.Element {
   const [query, setQuery] = useState('');
   const [showAdd, setShowAdd] = useState(false);
-  const [scanPlaceholder, setScanPlaceholder] = useState(false);
+  const [showScan, setShowScan] = useState(false);
 
   const visible = useMemo(
     () => repos.filter((r) => matchesFilter(r, filter) && matchesSearch(r, query)),
@@ -71,7 +72,7 @@ export default function LibraryPage({
         repos={repos}
         filter={filter}
         onFilterChange={onFilterChange}
-        onScan={() => setScanPlaceholder(true)}
+        onScan={() => setShowScan(true)}
       />
 
       <main className="flex flex-1 flex-col overflow-hidden">
@@ -125,7 +126,7 @@ export default function LibraryPage({
                 <div className="flex gap-3">
                   <button
                     type="button"
-                    onClick={() => setScanPlaceholder(true)}
+                    onClick={() => setShowScan(true)}
                     className="rounded bg-steam-elevated px-5 py-2.5 text-sm font-semibold hover:bg-steam-accent/20"
                   >
                     Escanear minhas pastas
@@ -156,27 +157,12 @@ export default function LibraryPage({
         />
       )}
 
-      {scanPlaceholder && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-          onClick={() => setScanPlaceholder(false)}
-          role="presentation"
-        >
-          <div
-            className="rounded-lg bg-steam-panel p-6"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-          >
-            <p className="mb-4">O scanner de pastas chega na Fase 5.</p>
-            <button
-              type="button"
-              onClick={() => setScanPlaceholder(false)}
-              className="rounded bg-steam-accent px-4 py-2 text-sm font-semibold text-steam-bg"
-            >
-              Entendi
-            </button>
-          </div>
-        </div>
+      {showScan && (
+        <ScanDialog
+          onClose={() => setShowScan(false)}
+          onImported={() => onReload()}
+          onError={onError}
+        />
       )}
     </div>
   );

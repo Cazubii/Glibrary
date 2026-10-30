@@ -59,6 +59,36 @@ pois o repositório pode não ter `origin`.
 esquema (seção 12.3). A validação/normalização definitiva continua no main via
 `normalizeGitUrl`.
 
+## 2026-10-30 — Fase 5
+
+### `tools-checker` com `shell: true` só porque a lista é fixa
+No Windows, `npm`, `pnpm`, `code` etc. são `.cmd` e exigem shell. Como os comandos vêm de
+uma whitelist fixa (seção 8), não há entrada do usuário no shell. O Node 24 emite um
+`DeprecationWarning` (DEP0190) sobre args com shell — benigno; se incomodar, trocar por
+`where` + `execFile` sem shell.
+
+### Versão extraída por regex genérica
+Em vez de regex por ferramenta, usamos `/\d+\.\d+(?:\.\d+)?/` no stdout+stderr combinados
+(`java -version`, por exemplo, escreve no stderr). Python tenta `python`, `python3`, `py`.
+
+### Scanner separa descoberta de metadados git
+`scanFolders` só varre o disco (testável sem git); a leitura de `origin`/branch é injetada
+via `readGit` no IPC. A detecção completa roda na importação, não no scan, para manter o
+aceite de <10s.
+
+### Duplicata por URL com pasta diferente não pergunta — apenas marca
+A spec sugere perguntar quando a URL é igual mas a pasta difere. Para simplificar a v1, o
+`ScanDialog` mostra esses itens como "já na biblioteca" (desmarcados). Registrado como
+simplificação; pode virar diálogo depois.
+
+### Onboarding marcado em `localStorage`
+Não há campo de settings para "onboarding concluído". Usamos `glibrary.onboardingDone` no
+`localStorage` do renderer para não repetir a tela após "Pular".
+
+### Novos canais IPC
+`scan:import` e `onboarding:suggest` foram adicionados além da lista da seção 10 para
+importar em lote e sugerir pastas sem duplicar chamadas.
+
 ## Sugestões
 
 (itens fora do escopo da v1 — não implementar, conforme seção 14 da spec)

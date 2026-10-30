@@ -8,6 +8,7 @@ import { ToolsChecker } from './services/tools-checker';
 import { registerRepoIpc } from './ipc/repos.ipc';
 import { registerProcessIpc } from './ipc/process.ipc';
 import { registerToolsIpc } from './ipc/tools.ipc';
+import { registerScanIpc } from './ipc/scan.ipc';
 
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -60,6 +61,7 @@ void app.whenReady().then(async () => {
   registerRepoIpc(store, gitService, join(app.getPath('userData'), 'covers'));
   registerProcessIpc(processManager, store);
   registerToolsIpc(toolsChecker);
+  registerScanIpc(store, gitService);
   createWindow();
 
   app.on('activate', () => {

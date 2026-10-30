@@ -7,6 +7,7 @@ import { api } from './lib/api';
 import LibraryPage from './pages/LibraryPage';
 import RepoDetailPage from './pages/RepoDetailPage';
 import ToolsPage from './pages/ToolsPage';
+import Onboarding from './components/Onboarding';
 import type { SidebarFilter } from './components/Sidebar';
 
 interface Toast {
@@ -16,13 +17,18 @@ interface Toast {
 
 type Page = 'library' | 'tools';
 
+const ONBOARDING_KEY = 'glibrary.onboardingDone';
+
 export default function App(): React.JSX.Element {
-  const { repos, loaded, error, load, toggleFavorite, tools, toolsLoaded, loadTools } =
+  const { repos, settings, loaded, error, load, toggleFavorite, tools, toolsLoaded, loadTools } =
     useLibraryStore();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [openRepoId, setOpenRepoId] = useState<string | null>(null);
   const [page, setPage] = useState<Page>('library');
   const [filter, setFilter] = useState<SidebarFilter>({ kind: 'all' });
+  const [onboarded, setOnboarded] = useState(
+    () => localStorage.getItem(ONBOARDING_KEY) === '1',
+  );
 
   const pushToast = useCallback((message: string) => {
     const id = Date.now() + Math.random();
@@ -31,6 +37,18 @@ export default function App(): React.JSX.Element {
       setToasts((t) => t.filter((toast) => toast.id !== id));
     }, 5000);
   }, []);
+
+  const finishOnboarding = useCallback(() => {
+    localStorage.setItem(ONBOARDING_KEY, '1');
+    setOnboarded(true);
+    void load();
+  }, [load]);
+
+  const showOnboarding =
+    loaded &&
+    !onboarded &&
+    repos.length === 0 &&
+    (settings?.scanFolders.length ?? 0) === 0;
 
   useEffect(() => {
     void load();
@@ -108,7 +126,9 @@ export default function App(): React.JSX.Element {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        {openRepoId != null ? (
+        {showOnboarding ? (
+          <Onboarding onDone={finishOnboarding} onError={pushToast} />
+        ) : openRepoId != null ? (
           <RepoDetailPage
             repoId={openRepoId}
             onBack={() => setOpenRepoId(null)}

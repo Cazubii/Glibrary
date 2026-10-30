@@ -121,3 +121,25 @@ export interface GlibraryApi {
   invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
   on: (channel: string, listener: (...args: unknown[]) => void) => () => void;
 }
+
+export interface FoundRepo {
+  localPath: string;
+  remoteUrl?: string;
+  branch?: string;
+}
+
+export interface ScannedRepo extends FoundRepo {
+  duplicateOf?: 'path' | 'url';
+  existingRepoId?: string;
+}
+
+export interface ScanProgress {
+  currentPath: string;
+  found: number;
+  done?: boolean;
+}
+
+export interface ScanFolderSuggestion {
+  path: string;
+  exists: boolean;
+}
