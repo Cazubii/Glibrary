@@ -47,7 +47,14 @@ export interface DetectionResult {
   requiredTools: string[]; // ids da tabela de ferramentas (seção 8)
   hasEnvExample: boolean; // existe .env.example e não existe .env
   detectedPort?: number; // se achou a porta (vite=5173, next=3000...)
+  isMonorepo?: boolean; // workspaces ou pnpm-workspace.yaml (seção 6)
+  readmeCommands?: CommandSpec[]; // "Comandos sugeridos pelo README" (seção 6)
 }
+
+/** Resultado parcial devolvido por cada detector; o index.ts junta todos. */
+export type DetectionPartial = Omit<Partial<DetectionResult>, 'kinds'> & {
+  kinds: ProjectKind[];
+};
 
 export interface Repo {
   id: string; // uuid
@@ -67,6 +74,7 @@ export interface Repo {
   detection?: DetectionResult;
   installCommand?: CommandSpec; // escolhido/editado pelo usuário
   startCommand?: CommandSpec;
+  commandsEditedByUser?: boolean; // detecção nunca sobrescreve (seção 6)
   extraCommands?: { label: string; spec: CommandSpec }[]; // ex: "build", "test"
   openUrl?: string; // ex: http://localhost:5173 (botão "Abrir no navegador")
   addedAt: string; // ISO

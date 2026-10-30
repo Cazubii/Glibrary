@@ -53,7 +53,9 @@ export const DetectionResultSchema = z.object({
   startCandidates: z.array(CommandSpecSchema),
   requiredTools: z.array(z.string()),
   hasEnvExample: z.boolean(),
-  detectedPort: z.number().int().positive().optional()
+  detectedPort: z.number().int().positive().optional(),
+  isMonorepo: z.boolean().optional(),
+  readmeCommands: z.array(CommandSpecSchema).optional()
 })
 
 export const RepoSchema = z.object({
@@ -74,6 +76,7 @@ export const RepoSchema = z.object({
   detection: DetectionResultSchema.optional(),
   installCommand: CommandSpecSchema.optional(),
   startCommand: CommandSpecSchema.optional(),
+  commandsEditedByUser: z.boolean().optional(),
   extraCommands: z
     .array(z.object({ label: z.string().min(1), spec: CommandSpecSchema }))
     .optional(),

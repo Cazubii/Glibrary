@@ -1,0 +1,8 @@
+{
+  "name": "fixture-node-monorepo",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "turbo dev"
+  }
+}

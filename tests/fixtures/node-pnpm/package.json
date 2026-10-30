@@ -1,0 +1,6 @@
+{
+  "name": "fixture-node-pnpm",
+  "scripts": {
+    "start": "node index.js"
+  }
+}
