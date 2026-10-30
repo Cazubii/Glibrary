@@ -89,6 +89,31 @@ Não há campo de settings para "onboarding concluído". Usamos `glibrary.onboar
 `scan:import` e `onboarding:suggest` foram adicionados além da lista da seção 10 para
 importar em lote e sugerir pastas sem duplicar chamadas.
 
+## 2026-10-30 — Fase 6
+
+### "Desinstalar dependências" apaga pastas conhecidas
+Não há um comando universal de desinstalação. Removemos `node_modules`, `.venv` e `venv`
+quando existem e voltamos o status para `cloned`. Nunca mexe em `target/dist` (saída de
+build, não dependência).
+
+### Remoção com confirmação digitada
+O `RepoDetailPage` exige digitar o nome exato do repositório. Há duas opções: remover só da
+biblioteca (mantém a pasta) ou remover e apagar a pasta do disco (via `shell.trashItem`, que
+manda para a lixeira em vez de deletar de vez).
+
+### Exportar/importar mantém as configurações atuais
+A importação traz apenas os repositórios, deduplicando por URL local/remota normalizada e
+por `id`. As `settings` do arquivo importado são ignoradas para não sobrescrever as do
+usuário.
+
+### Ícone a partir de um PNG 512×512
+`resources/icon.png` é gerado localmente; o electron-builder converte para `.ico` no
+Windows. `win/mac/linux.icon` apontam para ele.
+
+### `dist/` fora do git
+O instalador é artefato de build; `.gitignore` já cobre `dist/`. O `resources/icon.png` é
+versionado.
+
 ## Sugestões
 
 (itens fora do escopo da v1 — não implementar, conforme seção 14 da spec)

@@ -5,12 +5,23 @@ directories:
   buildResources: resources
 files:
   - out/**
+  - resources/**
+icon: resources/icon.png
 win:
+  icon: resources/icon.png
   target:
     - nsis
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
 mac:
+  icon: resources/icon.png
   target:
     - dmg
 linux:
+  icon: resources/icon.png
   target:
     - AppImage
