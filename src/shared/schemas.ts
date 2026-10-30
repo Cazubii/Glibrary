@@ -1,0 +1,129 @@
+import { z } from 'zod'
+
+export const CommandSpecSchema = z.object({
+  command: z.string().min(1),
+  cwd: z.string().optional(),
+  env: z.record(z.string(), z.string()).optional()
+})
+
+export const ProjectKindSchema = z.enum([
+  'node',
+  'python',
+  'docker',
+  'rust',
+  'go',
+  'dotnet',
+  'java',
+  'make',
+  'static',
+  'unknown'
+])
+
+export const RepoStatusSchema = z.enum([
+  'not_cloned',
+  'cloning',
+  'cloned',
+  'installing',
+  'installed',
+  'running',
+  'error',
+  'missing'
+])
+
+export const DetectionResultSchema = z.object({
+  kinds: z.array(ProjectKindSchema),
+  packageManager: z
+    .enum([
+      'npm',
+      'pnpm',
+      'yarn',
+      'bun',
+      'pip',
+      'poetry',
+      'uv',
+      'pipenv',
+      'cargo',
+      'go',
+      'dotnet',
+      'maven',
+      'gradle'
+    ])
+    .optional(),
+  installCandidates: z.array(CommandSpecSchema),
+  startCandidates: z.array(CommandSpecSchema),
+  requiredTools: z.array(z.string()),
+  hasEnvExample: z.boolean(),
+  detectedPort: z.number().int().positive().optional()
+})
+
+export const RepoSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  owner: z.string().optional(),
+  remoteUrl: z.string().optional(),
+  localPath: z.string().optional(),
+  status: RepoStatusSchema,
+  description: z.string().optional(),
+  language: z.string().optional(),
+  stars: z.number().int().nonnegative().optional(),
+  topics: z.array(z.string()).optional(),
+  coverPath: z.string().optional(),
+  tags: z.array(z.string()),
+  favorite: z.boolean(),
+  notes: z.string().optional(),
+  detection: DetectionResultSchema.optional(),
+  installCommand: CommandSpecSchema.optional(),
+  startCommand: CommandSpecSchema.optional(),
+  extraCommands: z
+    .array(z.object({ label: z.string().min(1), spec: CommandSpecSchema }))
+    .optional(),
+  openUrl: z.string().optional(),
+  addedAt: z.string(),
+  installedAt: z.string().optional(),
+  lastRunAt: z.string().optional(),
+  lastPulledAt: z.string().optional(),
+  behindBy: z.number().int().nonnegative().optional(),
+  lastError: z.string().optional()
+})
+
+export const SettingsSchema = z.object({
+  reposRoot: z.string().min(1),
+  scanFolders: z.array(z.string()),
+  githubToken: z.string().optional(),
+  editorCommand: z.string().min(1),
+  terminalPreference: z.string().min(1),
+  theme: z.enum(['dark', 'light']),
+  viewMode: z.enum(['grid', 'list']),
+  checkUpdatesOnStart: z.boolean()
+})
+
+export const LibraryFileSchema = z.object({
+  version: z.literal(1),
+  repos: z.array(RepoSchema),
+  settings: SettingsSchema
+})
+
+export const RepoPatchSchema = RepoSchema.partial().refine(
+  (patch) => Object.keys(patch).length > 0,
+  { message: 'patch vazio' },
+)
+
+export const AddByUrlInputSchema = z.object({
+  url: z.string().min(1),
+  clone: z.boolean()
+})
+
+export const AddLocalInputSchema = z.object({
+  path: z.string().min(1)
+})
+
+export const RepoIdInputSchema = z.object({
+  id: z.string().min(1)
+})
+
+export const RepoRemoveInputSchema = z.object({
+  id: z.string().min(1),
+  deleteFolder: z.boolean()
+})
+
+export const SettingsPatchSchema = SettingsSchema.partial()

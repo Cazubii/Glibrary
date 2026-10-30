@@ -1,0 +1,16 @@
+appId: com.cazubii.glibrary
+productName: Glibrary
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - out/**
+win:
+  target:
+    - nsis
+mac:
+  target:
+    - dmg
+linux:
+  target:
+    - AppImage
