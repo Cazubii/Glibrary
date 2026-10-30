@@ -6,16 +6,23 @@ import { useLibraryStore } from './store/library';
 import { api } from './lib/api';
 import LibraryPage from './pages/LibraryPage';
 import RepoDetailPage from './pages/RepoDetailPage';
+import ToolsPage from './pages/ToolsPage';
+import type { SidebarFilter } from './components/Sidebar';
 
 interface Toast {
   id: number;
   message: string;
 }
 
+type Page = 'library' | 'tools';
+
 export default function App(): React.JSX.Element {
-  const { repos, loaded, error, load, toggleFavorite } = useLibraryStore();
+  const { repos, loaded, error, load, toggleFavorite, tools, toolsLoaded, loadTools } =
+    useLibraryStore();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [openRepoId, setOpenRepoId] = useState<string | null>(null);
+  const [page, setPage] = useState<Page>('library');
+  const [filter, setFilter] = useState<SidebarFilter>({ kind: 'all' });
 
   const pushToast = useCallback((message: string) => {
     const id = Date.now() + Math.random();
@@ -27,7 +34,8 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadTools();
+  }, [load, loadTools]);
 
   useEffect(() => {
     const offStatus = api.onStatusChanged(({ id, status }) => {
@@ -66,13 +74,30 @@ export default function App(): React.JSX.Element {
         <Library size={22} className="text-steam-accent" />
         <span className="text-lg font-bold tracking-wide">GLIBRARY</span>
         <nav className="ml-4 flex gap-1 text-sm">
-          <span className="rounded bg-steam-elevated px-3 py-1 text-steam-accent">Biblioteca</span>
-          <span
-            className="cursor-not-allowed rounded px-3 py-1 text-steam-text/40"
-            title="Em breve (Fase 5)"
+          <button
+            type="button"
+            onClick={() => {
+              setPage('library');
+              setOpenRepoId(null);
+            }}
+            className={`rounded px-3 py-1 ${
+              page === 'library' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60'
+            }`}
+          >
+            Biblioteca
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPage('tools');
+              setOpenRepoId(null);
+            }}
+            className={`rounded px-3 py-1 ${
+              page === 'tools' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60'
+            }`}
           >
             Ferramentas
-          </span>
+          </button>
           <span
             className="cursor-not-allowed rounded px-3 py-1 text-steam-text/40"
             title="Em breve"
@@ -89,9 +114,22 @@ export default function App(): React.JSX.Element {
             onBack={() => setOpenRepoId(null)}
             onError={pushToast}
           />
+        ) : page === 'tools' ? (
+          <ToolsPage
+            tools={tools}
+            toolsLoaded={toolsLoaded}
+            repos={repos}
+            onRecheck={() => void loadTools(true)}
+            onFilterByTool={(tool) => {
+              setFilter({ kind: 'tool', tool });
+              setPage('library');
+            }}
+          />
         ) : (
           <LibraryPage
             repos={repos}
+            filter={filter}
+            onFilterChange={setFilter}
             onToggleFavorite={(id) =>
               void toggleFavorite(id).catch((e: unknown) => pushToast(String(e)))
             }

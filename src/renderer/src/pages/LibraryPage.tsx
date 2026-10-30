@@ -7,6 +7,8 @@ import AddRepoDialog from '../components/AddRepoDialog';
 
 interface Props {
   repos: Repo[];
+  filter: SidebarFilter;
+  onFilterChange: (filter: SidebarFilter) => void;
   onToggleFavorite: (id: string) => void;
   onOpenRepo: (id: string) => void;
   onReload: () => void;
@@ -23,6 +25,8 @@ function matchesFilter(repo: Repo, filter: SidebarFilter): boolean {
       return repo.tags.includes(filter.tag);
     case 'updates':
       return (repo.behindBy ?? 0) > 0;
+    case 'tool':
+      return (repo.detection?.requiredTools ?? []).includes(filter.tool);
     case 'status':
       if (filter.status === 'installed') {
         return repo.status === 'installed' || repo.status === 'running';
@@ -45,12 +49,13 @@ function matchesSearch(repo: Repo, query: string): boolean {
 
 export default function LibraryPage({
   repos,
+  filter,
+  onFilterChange,
   onToggleFavorite,
   onOpenRepo,
   onReload,
   onError
 }: Props): React.JSX.Element {
-  const [filter, setFilter] = useState<SidebarFilter>({ kind: 'all' });
   const [query, setQuery] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [scanPlaceholder, setScanPlaceholder] = useState(false);
@@ -65,7 +70,7 @@ export default function LibraryPage({
       <Sidebar
         repos={repos}
         filter={filter}
-        onFilterChange={setFilter}
+        onFilterChange={onFilterChange}
         onScan={() => setScanPlaceholder(true)}
       />
 
@@ -94,6 +99,19 @@ export default function LibraryPage({
             />
           </div>
         </header>
+
+        {filter.kind === 'tool' && (
+          <div className="flex items-center gap-2 border-b border-steam-elevated/30 px-6 py-2 text-xs text-steam-text/70">
+            <span>Filtrando por ferramenta: <strong>{filter.tool}</strong></span>
+            <button
+              type="button"
+              onClick={() => onFilterChange({ kind: 'all' })}
+              className="rounded bg-steam-elevated px-2 py-0.5 hover:bg-steam-accent/20"
+            >
+              limpar
+            </button>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto p-6">
           {visible.length === 0 ? (

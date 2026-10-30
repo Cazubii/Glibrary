@@ -1,15 +1,21 @@
-import { Star } from 'lucide-react';
+import { Star, AlertTriangle } from 'lucide-react';
 import type { Repo } from '@shared/types';
 import GeneratedCover from './GeneratedCover';
 import StatusBadge from './StatusBadge';
 
 interface Props {
   repo: Repo;
+  missingTools?: string[];
   onToggleFavorite: (id: string) => void;
   onOpen: (id: string) => void;
 }
 
-export default function RepoCard({ repo, onToggleFavorite, onOpen }: Props): React.JSX.Element {
+export default function RepoCard({
+  repo,
+  missingTools,
+  onToggleFavorite,
+  onOpen
+}: Props): React.JSX.Element {
   return (
     <button
       type="button"
@@ -57,6 +63,12 @@ export default function RepoCard({ repo, onToggleFavorite, onOpen }: Props): Rea
                 #{tag}
               </span>
             ))}
+          </div>
+        )}
+        {missingTools != null && missingTools.length > 0 && (
+          <div className="flex items-center gap-1 pt-1 text-[11px] text-steam-warn">
+            <AlertTriangle size={12} />
+            Falta: {missingTools.join(', ')}
           </div>
         )}
       </div>

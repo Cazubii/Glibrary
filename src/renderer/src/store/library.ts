@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { LogLine, Repo, Settings } from '@shared/types';
+import type { ToolStatus } from '@shared/tools';
 import { api } from '../lib/api';
 
 interface LibraryState {
@@ -10,7 +11,10 @@ interface LibraryState {
   logs: Record<string, LogLine[]>;
   confirmedRuns: string[];
   cloneProgress: Record<string, { percent: number | null; stage: string }>;
+  tools: ToolStatus[];
+  toolsLoaded: boolean;
   load: () => Promise<void>;
+  loadTools: (force?: boolean) => Promise<ToolStatus[]>;
   addLocal: (path: string) => Promise<Repo>;
   updateRepo: (id: string, patch: Partial<Repo>) => Promise<void>;
   removeRepo: (id: string, deleteFolder: boolean) => Promise<void>;
@@ -32,6 +36,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   logs: {},
   confirmedRuns: [],
   cloneProgress: {},
+  tools: [],
+  toolsLoaded: false,
 
   load: async () => {
     try {
@@ -39,6 +45,17 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       set({ repos: library.repos, settings: library.settings, loaded: true, error: null });
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e), loaded: true });
+    }
+  },
+
+  loadTools: async (force = false) => {
+    try {
+      const tools = await api.toolsCheck(force);
+      set({ tools, toolsLoaded: true });
+      return tools;
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : String(e), toolsLoaded: true });
+      return [];
     }
   },
 

@@ -7,7 +7,8 @@ export type SidebarFilter =
   | { kind: 'favorites' }
   | { kind: 'status'; status: Repo['status'] }
   | { kind: 'updates' }
-  | { kind: 'tag'; tag: string };
+  | { kind: 'tag'; tag: string }
+  | { kind: 'tool'; tool: string };
 
 interface Props {
   repos: Repo[];

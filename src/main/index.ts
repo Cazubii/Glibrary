@@ -4,8 +4,10 @@ import { existsSync } from 'fs';
 import { LibraryStore } from './services/library-store';
 import { ProcessManager } from './services/process-manager';
 import { GitService } from './services/git-service';
+import { ToolsChecker } from './services/tools-checker';
 import { registerRepoIpc } from './ipc/repos.ipc';
 import { registerProcessIpc } from './ipc/process.ipc';
+import { registerToolsIpc } from './ipc/tools.ipc';
 
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -53,9 +55,11 @@ void app.whenReady().then(async () => {
 
   const processManager = new ProcessManager(store, join(app.getPath('userData'), 'logs'), broadcast);
   const gitService = new GitService();
+  const toolsChecker = new ToolsChecker();
 
   registerRepoIpc(store, gitService, join(app.getPath('userData'), 'covers'));
   registerProcessIpc(processManager, store);
+  registerToolsIpc(toolsChecker);
   createWindow();
 
   app.on('activate', () => {

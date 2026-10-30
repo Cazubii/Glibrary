@@ -4,6 +4,8 @@ import type { Repo } from '@shared/types';
 interface Props {
   repo: Repo;
   busy: boolean;
+  blocked?: boolean;
+  blockedReason?: string;
   cloneProgress?: { percent: number | null; stage: string };
   onInstall: () => void;
   onStart: () => void;
@@ -16,6 +18,8 @@ interface Props {
 export default function ActionButton({
   repo,
   busy,
+  blocked = false,
+  blockedReason,
   cloneProgress,
   onInstall,
   onStart,
@@ -35,7 +39,13 @@ export default function ActionButton({
     colorClass: string,
     onClick: () => void,
   ): React.JSX.Element => (
-    <button type="button" onClick={onClick} disabled={busy} className={`${base} ${colorClass}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy || blocked}
+      title={blocked ? blockedReason : undefined}
+      className={`${base} ${colorClass}`}
+    >
       {icon}
       {label}
     </button>

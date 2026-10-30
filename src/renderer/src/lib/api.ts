@@ -8,6 +8,7 @@ import type {
   RunHandle,
   Settings
 } from '../../../shared/types';
+import type { ToolStatus } from '../../../shared/tools';
 import { IpcChannels } from '../../../shared/ipc-channels';
 
 async function unwrap<T>(promise: Promise<unknown>): Promise<T> {
@@ -47,6 +48,9 @@ export const api = {
 
   repoRefreshMeta: (id: string): Promise<Repo> =>
     unwrap<Repo>(window.api.invoke(IpcChannels.repoRefreshMeta, { id })),
+
+  toolsCheck: (force = false): Promise<ToolStatus[]> =>
+    unwrap<ToolStatus[]>(window.api.invoke(IpcChannels.toolsCheck, { force })),
 
   repoUpdate: (id: string, patch: Partial<Repo>): Promise<Repo> =>
     unwrap<Repo>(window.api.invoke(IpcChannels.repoUpdate, { id, patch })),

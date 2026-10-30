@@ -19,9 +19,18 @@ interface Props {
 }
 
 export default function RepoDetailPage({ repoId, onBack, onError }: Props): React.JSX.Element {
-  const { repos, logs, confirmedRuns, cloneProgress, updateRepo, toggleFavorite, appendLog, clearLogs, confirmRun } =
+  const { repos, logs, confirmedRuns, cloneProgress, tools, updateRepo, toggleFavorite, appendLog, clearLogs, confirmRun } =
     useLibraryStore();
   const repo = useMemo(() => repos.find((r) => r.id === repoId), [repos, repoId]);
+
+  const missingTools = useMemo(() => {
+    if (repo?.detection == null) return [] as string[];
+    return repo.detection.requiredTools.filter(
+      (id) => tools.find((t) => t.id === id)?.installed === false,
+    );
+  }, [repo?.detection, tools]);
+  const blocked = missingTools.length > 0;
+  const blockedReason = blocked ? `Falta instalar: ${missingTools.join(', ')}` : undefined;
   const [tab, setTab] = useState<Tab>('overview');
   const [detecting, setDetecting] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -217,6 +226,8 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
           <ActionButton
             repo={repo}
             busy={busy}
+            blocked={blocked}
+            blockedReason={blockedReason}
             cloneProgress={cloneProgress[repo.id]}
             onInstall={() => void (repo.status === 'not_cloned' ? clone() : runKind('install'))}
             onStart={() => void runKind('start')}
@@ -248,6 +259,11 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
 
       <div className="flex items-center gap-2 border-b border-steam-elevated/50 px-4 py-2">
         <StatusBadge status={repo.status} />
+        {blocked && (
+          <span className="flex items-center gap-1 rounded bg-steam-warn/20 px-2 py-1 text-xs text-steam-warn">
+            <AlertTriangle size={12} /> Falta: {missingTools.join(', ')}
+          </span>
+        )}
         {(repo.behindBy ?? 0) > 0 && (
           <button
             type="button"
