@@ -1,8 +1,16 @@
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, dialog, shell } from 'electron';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { LibraryStore } from './services/library-store';
+import { ProcessManager } from './services/process-manager';
 import { registerRepoIpc } from './ipc/repos.ipc';
+import { registerProcessIpc } from './ipc/process.ipc';
+
+function broadcast(channel: string, payload: unknown): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send(channel, payload);
+  }
+}
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -42,11 +50,35 @@ void app.whenReady().then(async () => {
     repo.localPath != null ? existsSync(repo.localPath) : false,
   );
 
+  const processManager = new ProcessManager(store, join(app.getPath('userData'), 'logs'), broadcast);
+
   registerRepoIpc(store);
+  registerProcessIpc(processManager, store);
   createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+
+  app.on('before-quit', (event) => {
+    const running = processManager.runningRepoIds();
+    if (running.length === 0) return;
+    event.preventDefault();
+    void dialog
+      .showMessageBox({
+        type: 'warning',
+        buttons: ['Parar todos e sair', 'Cancelar'],
+        defaultId: 0,
+        cancelId: 1,
+        title: 'Processos em execução',
+        message: `Há ${running.length} repositórios rodando. Parar todos e sair?`
+      })
+      .then(async ({ response }) => {
+        if (response === 0) {
+          await processManager.stopAll();
+          app.exit(0);
+        }
+      });
   });
 });
 

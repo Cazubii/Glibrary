@@ -131,3 +131,9 @@ export const RepoRemoveInputSchema = z.object({
 })
 
 export const SettingsPatchSchema = SettingsSchema.partial()
+
+export const ProcessRunInputSchema = z.object({
+  id: z.string().min(1),
+  kind: z.enum(['install', 'start', 'extra']),
+  extraIndex: z.number().int().nonnegative().optional()
+})

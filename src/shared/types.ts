@@ -104,6 +104,19 @@ export interface LibraryFile {
 
 export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
+export type ProcessKind = 'install' | 'start' | 'extra';
+
+export interface LogLine {
+  ts: string; // ISO
+  stream: 'out' | 'err' | 'sys';
+  text: string;
+}
+
+export interface RunHandle {
+  pid: number;
+  logFile: string | null;
+}
+
 export interface GlibraryApi {
   invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
   on: (channel: string, listener: (...args: unknown[]) => void) => () => void;
