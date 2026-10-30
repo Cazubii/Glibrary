@@ -1,16 +1,19 @@
 import { ipcMain, dialog, BrowserWindow, shell } from 'electron';
 import { randomUUID } from 'crypto';
 import { existsSync, statSync } from 'fs';
-import { basename, resolve } from 'path';
-import type { IpcResult, Repo, Settings } from '../../shared/types';
+import { basename, join, resolve } from 'path';
+import type { DetectionResult, IpcResult, Repo, Settings } from '../../shared/types';
 import {
   AddLocalInputSchema,
+  RepoIdInputSchema,
   RepoUpdateInputSchema,
   RepoRemoveInputSchema,
   SettingsPatchSchema
 } from '../../shared/schemas';
 import { IpcChannels } from '../../shared/ipc-channels';
 import type { LibraryStore } from '../services/library-store';
+import { detectProject } from '../services/detector';
+import { applyDetection } from '../services/detector/apply';
 
 function ok<T>(data: T): IpcResult<T> {
   return { ok: true, data };
@@ -24,6 +27,12 @@ function broadcastStatus(id: string, status: Repo['status']): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send(IpcChannels.repoStatusChanged, { id, status });
   }
+}
+
+function inferInstalled(localPath: string): boolean {
+  return ['node_modules', '.venv', 'venv', 'target'].some((d) =>
+    existsSync(join(localPath, d)),
+  );
 }
 
 export function registerRepoIpc(store: LibraryStore): void {
@@ -50,16 +59,19 @@ export function registerRepoIpc(store: LibraryStore): void {
         if (duplicate) {
           return fail(new Error('Esta pasta já está na biblioteca'));
         }
+        const installed = inferInstalled(localPath);
         const repo: Repo = {
           id: randomUUID(),
           name: basename(localPath),
           localPath,
-          status: 'cloned',
+          status: installed ? 'installed' : 'cloned',
           tags: [],
           favorite: false,
-          addedAt: new Date().toISOString()
+          addedAt: new Date().toISOString(),
+          ...(installed ? { installedAt: new Date().toISOString() } : {})
         };
-        const saved = await store.addRepo(repo);
+        const detection = await detectProject(localPath);
+        const saved = await store.addRepo(applyDetection(repo, detection));
         broadcastStatus(saved.id, saved.status);
         return ok(saved);
       } catch (e) {
@@ -80,6 +92,25 @@ export function registerRepoIpc(store: LibraryStore): void {
           broadcastStatus(updated.id, updated.status);
         }
         return ok(updated);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.repoDetect,
+    async (_event, raw: unknown): Promise<IpcResult<DetectionResult>> => {
+      try {
+        const { id } = RepoIdInputSchema.parse(raw);
+        const repo = store.getRepo(id);
+        if (!repo) return fail(new Error('Repositório não encontrado'));
+        if (repo.localPath == null) {
+          return fail(new Error('Repositório sem pasta local'));
+        }
+        const detection = await detectProject(repo.localPath);
+        await store.updateRepo(id, applyDetection(repo, detection));
+        return ok(detection);
       } catch (e) {
         return fail(e);
       }

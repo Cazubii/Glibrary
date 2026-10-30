@@ -1,4 +1,5 @@
 import type {
+  DetectionResult,
   IpcResult,
   LibraryFile,
   Repo,
@@ -24,6 +25,9 @@ export const api = {
 
   repoRemove: (id: string, deleteFolder: boolean): Promise<null> =>
     unwrap<null>(window.api.invoke(IpcChannels.repoRemove, { id, deleteFolder })),
+
+  repoDetect: (id: string): Promise<DetectionResult> =>
+    unwrap<DetectionResult>(window.api.invoke(IpcChannels.repoDetect, { id })),
 
   dialogPickFolder: (): Promise<string | null> =>
     unwrap<string | null>(window.api.invoke(IpcChannels.dialogPickFolder)),

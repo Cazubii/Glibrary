@@ -3,6 +3,7 @@ import { AlertCircle, X } from 'lucide-react';
 import { Library } from 'lucide-react';
 import { useLibraryStore } from './store/library';
 import LibraryPage from './pages/LibraryPage';
+import RepoDetailPage from './pages/RepoDetailPage';
 
 interface Toast {
   id: number;
@@ -61,37 +62,24 @@ export default function App(): React.JSX.Element {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <LibraryPage
-          repos={repos}
-          onToggleFavorite={(id) => void toggleFavorite(id).catch((e: unknown) => pushToast(String(e)))}
-          onOpenRepo={setOpenRepoId}
-          onReload={() => void load()}
-          onError={pushToast}
-        />
+        {openRepoId != null ? (
+          <RepoDetailPage
+            repoId={openRepoId}
+            onBack={() => setOpenRepoId(null)}
+            onError={pushToast}
+          />
+        ) : (
+          <LibraryPage
+            repos={repos}
+            onToggleFavorite={(id) =>
+              void toggleFavorite(id).catch((e: unknown) => pushToast(String(e)))
+            }
+            onOpenRepo={setOpenRepoId}
+            onReload={() => void load()}
+            onError={pushToast}
+          />
+        )}
       </div>
-
-      {openRepoId != null && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-          onClick={() => setOpenRepoId(null)}
-          role="presentation"
-        >
-          <div
-            className="rounded-lg bg-steam-panel p-6"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-          >
-            <p className="mb-4">Detalhe do repositório chega na Fase 2.</p>
-            <button
-              type="button"
-              onClick={() => setOpenRepoId(null)}
-              className="rounded bg-steam-accent px-4 py-2 text-sm font-semibold text-steam-bg"
-            >
-              Fechar
-            </button>
-          </div>
-        </div>
-      )}
 
       <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex flex-col gap-2">
         {toasts.map((toast) => (
