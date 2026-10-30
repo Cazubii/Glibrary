@@ -4,21 +4,25 @@ import type { Repo } from '@shared/types';
 interface Props {
   repo: Repo;
   busy: boolean;
+  cloneProgress?: { percent: number | null; stage: string };
   onInstall: () => void;
   onStart: () => void;
   onStop: () => void;
   onRetry: () => void;
   onLocate: () => void;
+  onCancelClone?: () => void;
 }
 
 export default function ActionButton({
   repo,
   busy,
+  cloneProgress,
   onInstall,
   onStart,
   onStop,
   onRetry,
-  onLocate
+  onLocate,
+  onCancelClone
 }: Props): React.JSX.Element {
   const status = repo.status;
 
@@ -42,10 +46,27 @@ export default function ActionButton({
       return button('Clonar', <Download size={16} />, 'bg-steam-accent text-steam-bg', onInstall);
     case 'cloning':
       return (
-        <button type="button" disabled className={`${base} bg-steam-accent text-steam-bg`}>
-          <Loader2 size={16} className="animate-spin" />
-          Clonando…
-        </button>
+        <div className="flex flex-col items-stretch gap-1">
+          <div className="flex items-center justify-center gap-2 rounded bg-steam-accent px-6 py-2.5 text-sm font-bold uppercase text-steam-bg">
+            <Loader2 size={16} className="animate-spin" />
+            {cloneProgress?.stage ?? 'Clonando…'}
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded bg-steam-elevated">
+            <div
+              className="h-full bg-steam-accent transition-all"
+              style={{ width: `${cloneProgress?.percent ?? 0}%` }}
+            />
+          </div>
+          {onCancelClone != null && (
+            <button
+              type="button"
+              onClick={onCancelClone}
+              className="text-xs text-steam-text/60 hover:text-steam-error"
+            >
+              Cancelar
+            </button>
+          )}
+        </div>
       );
     case 'cloned': {
       const needsInstall = (repo.detection?.installCandidates.length ?? 0) > 0;

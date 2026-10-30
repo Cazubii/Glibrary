@@ -9,6 +9,7 @@ interface LibraryState {
   error: string | null;
   logs: Record<string, LogLine[]>;
   confirmedRuns: string[];
+  cloneProgress: Record<string, { percent: number | null; stage: string }>;
   load: () => Promise<void>;
   addLocal: (path: string) => Promise<Repo>;
   updateRepo: (id: string, patch: Partial<Repo>) => Promise<void>;
@@ -18,6 +19,7 @@ interface LibraryState {
   appendLog: (id: string, line: LogLine) => void;
   clearLogs: (id: string) => void;
   confirmRun: (key: string) => void;
+  setCloneProgress: (id: string, progress: { percent: number | null; stage: string }) => void;
 }
 
 export const runConfirmKey = (id: string, command: string): string => `${id}::${command}`;
@@ -29,6 +31,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   error: null,
   logs: {},
   confirmedRuns: [],
+  cloneProgress: {},
 
   load: async () => {
     try {
@@ -76,5 +79,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
   clearLogs: (id) => set((s) => ({ logs: { ...s.logs, [id]: [] } })),
 
-  confirmRun: (key) => set((s) => ({ confirmedRuns: [...s.confirmedRuns, key] }))
+  confirmRun: (key) => set((s) => ({ confirmedRuns: [...s.confirmedRuns, key] })),
+
+  setCloneProgress: (id, progress) =>
+    set((s) => ({ cloneProgress: { ...s.cloneProgress, [id]: progress } }))
 }));

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { ArrowLeft, RefreshCw, Star, Wrench, AlertTriangle, Check, Globe } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Star, Wrench, AlertTriangle, Check, Globe, Download } from 'lucide-react';
 import type { CommandSpec, ProcessKind, Repo } from '@shared/types';
 import { useLibraryStore, runConfirmKey } from '../store/library';
 import { api } from '../lib/api';
@@ -19,7 +19,7 @@ interface Props {
 }
 
 export default function RepoDetailPage({ repoId, onBack, onError }: Props): React.JSX.Element {
-  const { repos, logs, confirmedRuns, updateRepo, toggleFavorite, appendLog, clearLogs, confirmRun } =
+  const { repos, logs, confirmedRuns, cloneProgress, updateRepo, toggleFavorite, appendLog, clearLogs, confirmRun } =
     useLibraryStore();
   const repo = useMemo(() => repos.find((r) => r.id === repoId), [repos, repoId]);
   const [tab, setTab] = useState<Tab>('overview');
@@ -108,6 +108,17 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
     await execute(kind);
   };
 
+  const clone = async (): Promise<void> => {
+    setBusy(true);
+    try {
+      await api.repoClone(repo.id);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const execute = async (kind: ProcessKind): Promise<void> => {
     setBusy(true);
     try {
@@ -126,6 +137,18 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
     setBusy(true);
     try {
       await api.processStop(repo.id);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pull = async (): Promise<void> => {
+    setBusy(true);
+    try {
+      await api.repoPull(repo.id);
+      await patch({ behindBy: 0, lastPulledAt: new Date().toISOString() });
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -194,10 +217,11 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
           <ActionButton
             repo={repo}
             busy={busy}
-            onInstall={() => void runKind('install')}
+            cloneProgress={cloneProgress[repo.id]}
+            onInstall={() => void (repo.status === 'not_cloned' ? clone() : runKind('install'))}
             onStart={() => void runKind('start')}
             onStop={() => void stop()}
-            onRetry={() => void runKind('install')}
+            onRetry={() => void (repo.status === 'error' && repo.localPath == null ? clone() : runKind('install'))}
             onLocate={() => void locateFolder()}
           />
           <button
@@ -224,6 +248,16 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
 
       <div className="flex items-center gap-2 border-b border-steam-elevated/50 px-4 py-2">
         <StatusBadge status={repo.status} />
+        {(repo.behindBy ?? 0) > 0 && (
+          <button
+            type="button"
+            onClick={() => void pull()}
+            disabled={busy}
+            className="flex items-center gap-1 rounded bg-steam-accent/20 px-2 py-1 text-xs text-steam-accent hover:bg-steam-accent/30 disabled:opacity-50"
+          >
+            <Download size={12} /> Atualizar ({repo.behindBy} commits atrás)
+          </button>
+        )}
         {repo.commandsEditedByUser === true && (
           <span className="text-[11px] text-steam-warn" title="Comandos editados manualmente">
             comandos editados

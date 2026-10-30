@@ -114,7 +114,8 @@ export const RepoUpdateInputSchema = RepoPatchSchema.extend({
 
 export const AddByUrlInputSchema = z.object({
   url: z.string().min(1),
-  clone: z.boolean()
+  clone: z.boolean(),
+  name: z.string().min(1).optional()
 })
 
 export const AddLocalInputSchema = z.object({

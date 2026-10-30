@@ -38,9 +38,13 @@ export default function App(): React.JSX.Element {
     const offExit = api.onProcessExit(() => {
       void load();
     });
+    const offClone = api.onCloneProgress(({ id, percent, stage }) => {
+      useLibraryStore.getState().setCloneProgress(id, { percent, stage });
+    });
     return () => {
       offStatus();
       offExit();
+      offClone();
     };
   }, [load]);
 

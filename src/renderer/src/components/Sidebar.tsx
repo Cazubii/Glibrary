@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { FolderOpen, Library, Star, AlertTriangle, HardDrive, Circle } from 'lucide-react';
+import { FolderOpen, Library, Star, AlertTriangle, HardDrive, Circle, RefreshCcw } from 'lucide-react';
 import type { Repo } from '@shared/types';
 
 export type SidebarFilter =
   | { kind: 'all' }
   | { kind: 'favorites' }
   | { kind: 'status'; status: Repo['status'] }
+  | { kind: 'updates' }
   | { kind: 'tag'; tag: string };
 
 interface Props {
@@ -28,11 +29,12 @@ export default function Sidebar({
     const installed = repos.filter((r) => r.status === 'installed' || r.status === 'running').length;
     const notCloned = repos.filter((r) => r.status === 'not_cloned').length;
     const errors = repos.filter((r) => r.status === 'error').length;
+    const updates = repos.filter((r) => (r.behindBy ?? 0) > 0).length;
     const tags = new Map<string, number>();
     for (const r of repos) {
       for (const t of r.tags) tags.set(t, (tags.get(t) ?? 0) + 1);
     }
-    return { favorites, installed, notCloned, errors, tags: [...tags.entries()].sort() };
+    return { favorites, installed, notCloned, errors, updates, tags: [...tags.entries()].sort() };
   }, [repos]);
 
   const itemClass = (active: boolean): string =>
@@ -97,6 +99,14 @@ export default function Sidebar({
         >
           <AlertTriangle size={16} />
           {!collapsed && <span>Com erro ({counts.errors})</span>}
+        </button>
+        <button
+          type="button"
+          className={itemClass(filter.kind === 'updates')}
+          onClick={() => onFilterChange({ kind: 'updates' })}
+        >
+          <RefreshCcw size={16} />
+          {!collapsed && <span>Com atualização ({counts.updates})</span>}
         </button>
       </nav>
 

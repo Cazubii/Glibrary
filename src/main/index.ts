@@ -3,6 +3,7 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import { LibraryStore } from './services/library-store';
 import { ProcessManager } from './services/process-manager';
+import { GitService } from './services/git-service';
 import { registerRepoIpc } from './ipc/repos.ipc';
 import { registerProcessIpc } from './ipc/process.ipc';
 
@@ -51,8 +52,9 @@ void app.whenReady().then(async () => {
   );
 
   const processManager = new ProcessManager(store, join(app.getPath('userData'), 'logs'), broadcast);
+  const gitService = new GitService();
 
-  registerRepoIpc(store);
+  registerRepoIpc(store, gitService, join(app.getPath('userData'), 'covers'));
   registerProcessIpc(processManager, store);
   createWindow();
 

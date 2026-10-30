@@ -39,6 +39,26 @@ substitui o merge frágil que deixava `id` opcional.
 O zustand e o React entravam em grafos de dependência separados do Vite ("Invalid hook
 call"). Fix: `resolve.dedupe: ['react','react-dom']` e `optimizeDeps.include` no renderer.
 
+## 2026-10-30 — Fase 4
+
+### `ahead`/`behind` vindos direto do `status()` do simple-git
+`FetchStatus` não usa `rev-list` (não existe como método tipado no `SimpleGit`). O
+`StatusResult` do simple-git já expõe `ahead`, `behind` e `isClean()`, então após
+`fetch(['--all','--prune','--quiet'])` lemos esses campos diretamente.
+
+### Progresso do clone com `SimpleGitProgressEvent`
+O tipo é `SimpleGitProgressEvent` (não `ProgressResult`, que não é exportado). O clone
+informa `method`, `stage`, `progress`; só repassamos eventos de `method === 'clone'`.
+
+### `remote(['get-url','origin'])` pode retornar `void | string`
+`getRemoteUrl` faz `typeof result === 'string' ? result.trim() : null` e captura erros,
+pois o repositório pode não ter `origin`.
+
+### Normalização de URL no renderer
+`AddRepoDialog` prefixa `https://` quando o usuário cola `github.com/owner/repo` sem
+esquema (seção 12.3). A validação/normalização definitiva continua no main via
+`normalizeGitUrl`.
+
 ## Sugestões
 
 (itens fora do escopo da v1 — não implementar, conforme seção 14 da spec)

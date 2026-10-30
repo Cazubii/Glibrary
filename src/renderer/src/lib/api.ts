@@ -23,6 +23,31 @@ export const api = {
   repoAddLocal: (path: string): Promise<Repo> =>
     unwrap<Repo>(window.api.invoke(IpcChannels.repoAddLocal, { path })),
 
+  repoAddByUrl: (url: string, clone: boolean, name?: string): Promise<Repo> =>
+    unwrap<Repo>(
+      window.api.invoke(IpcChannels.repoAddByUrl, {
+        url,
+        clone,
+        ...(name != null ? { name } : {})
+      }),
+    ),
+
+  repoClone: (id: string): Promise<null> =>
+    unwrap<null>(window.api.invoke(IpcChannels.repoClone, { id })),
+
+  repoPull: (id: string): Promise<{ updated: boolean; summary: string }> =>
+    unwrap<{ updated: boolean; summary: string }>(window.api.invoke(IpcChannels.repoPull, { id })),
+
+  repoFetchStatus: (
+    id: string,
+  ): Promise<{ behindBy: number; ahead: number; dirty: boolean }> =>
+    unwrap<{ behindBy: number; ahead: number; dirty: boolean }>(
+      window.api.invoke(IpcChannels.repoFetchStatus, { id }),
+    ),
+
+  repoRefreshMeta: (id: string): Promise<Repo> =>
+    unwrap<Repo>(window.api.invoke(IpcChannels.repoRefreshMeta, { id })),
+
   repoUpdate: (id: string, patch: Partial<Repo>): Promise<Repo> =>
     unwrap<Repo>(window.api.invoke(IpcChannels.repoUpdate, { id, patch })),
 
@@ -58,6 +83,13 @@ export const api = {
   onProcessExit: (listener: (payload: { id: string; code: number }) => void) =>
     window.api.on(IpcChannels.processExit, (payload: unknown) => {
       listener(payload as { id: string; code: number });
+    }),
+
+  onCloneProgress: (
+    listener: (payload: { id: string; percent: number | null; stage: string }) => void,
+  ) =>
+    window.api.on(IpcChannels.cloneProgress, (payload: unknown) => {
+      listener(payload as { id: string; percent: number | null; stage: string });
     }),
 
   dialogPickFolder: (): Promise<string | null> =>

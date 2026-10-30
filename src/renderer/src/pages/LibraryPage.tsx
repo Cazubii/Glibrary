@@ -21,6 +21,8 @@ function matchesFilter(repo: Repo, filter: SidebarFilter): boolean {
       return repo.favorite;
     case 'tag':
       return repo.tags.includes(filter.tag);
+    case 'updates':
+      return (repo.behindBy ?? 0) > 0;
     case 'status':
       if (filter.status === 'installed') {
         return repo.status === 'installed' || repo.status === 'running';
