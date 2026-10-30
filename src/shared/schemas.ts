@@ -103,10 +103,11 @@ export const LibraryFileSchema = z.object({
   settings: SettingsSchema
 })
 
-export const RepoPatchSchema = RepoSchema.partial().refine(
-  (patch) => Object.keys(patch).length > 0,
-  { message: 'patch vazio' },
-)
+export const RepoPatchSchema = RepoSchema.partial().omit({ id: true });
+
+export const RepoUpdateInputSchema = RepoPatchSchema.extend({
+  id: z.string().min(1)
+});
 
 export const AddByUrlInputSchema = z.object({
   url: z.string().min(1),

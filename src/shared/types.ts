@@ -93,3 +93,10 @@ export interface LibraryFile {
   repos: Repo[];
   settings: Settings;
 }
+
+export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: string };
+
+export interface GlibraryApi {
+  invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
+  on: (channel: string, listener: (...args: unknown[]) => void) => () => void;
+}
