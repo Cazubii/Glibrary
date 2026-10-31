@@ -1,0 +1,38 @@
+name: Relatar um bug
+description: Informe um problema reproduzível na Glibrary.
+body:
+  - type: markdown
+    attributes:
+      value: Remova caminhos pessoais, tokens, URLs privadas e dados sensíveis antes de enviar.
+  - type: input
+    id: version
+    attributes:
+      label: Versão da Glibrary
+      placeholder: Ex. versão ou commit
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Sistema operacional
+      placeholder: Ex. Windows 11, macOS ou distribuição Linux
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Passos para reproduzir
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Resultado esperado
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: O que aconteceu
+    validations:
+      required: true
