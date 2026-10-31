@@ -1,6 +1,8 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import type { LibraryFile, Repo, Settings } from '../../shared/types';
+import { homedir } from 'os';
+import { z } from 'zod';
+import type { BaseItem, LibraryFile, ProjectRef, Repo, Settings, Skill } from '../../shared/types';
 import { LibraryFileSchema, RepoSchema, SettingsPatchSchema } from '../../shared/schemas';
 import { applyStartupCorrections } from '../../shared/status';
 
@@ -11,6 +13,8 @@ const TMP_FILE = 'library.json.tmp';
 export function defaultSettings(reposRoot: string): Settings {
   return {
     reposRoot,
+    basesRoot: join(homedir(), 'BASES'),
+    skillFolders: [join(homedir(), '.claude', 'skills'), join(homedir(), '.opencode', 'skills'), join(homedir(), '.agents', 'skills')],
     scanFolders: [],
     editorCommand: 'code',
     terminalPreference: 'auto',
@@ -21,17 +25,43 @@ export function defaultSettings(reposRoot: string): Settings {
 }
 
 export function emptyLibrary(reposRoot: string): LibraryFile {
-  return { version: 1, repos: [], settings: defaultSettings(reposRoot) };
+  return { version: 2, repos: [], skills: [], bases: [], projects: [], settings: defaultSettings(reposRoot) };
 }
 
-function migrate(raw: unknown): LibraryFile {
+export function migrateLibrary(raw: unknown): LibraryFile {
   if (raw == null || typeof raw !== 'object') {
     throw new Error('library.json inválido: não é um objeto');
   }
   const record = raw as Record<string, unknown>;
   const version = record['version'];
   if (version === 1) {
-    return LibraryFileSchema.parse(raw);
+    const old = zLegacyLibrary.parse(raw);
+    const projects: ProjectRef[] = [];
+    const bases: BaseItem[] = [];
+    for (const repo of old.repos) {
+      if (repo.localPath == null && repo.remoteUrl != null) {
+        bases.push({ id: repo.id, name: repo.name, remoteUrl: repo.remoteUrl, tags: repo.tags,
+          favorite: repo.favorite, addedAt: repo.addedAt,
+          ...(repo.description ? { description: repo.description } : {}), ...(repo.notes ? { notes: repo.notes } : {}) });
+      } else {
+        projects.push({ id: repo.id, name: repo.name, ...(repo.description ? { description: repo.description } : {}), ...(repo.localPath ? { localPath: repo.localPath } : {}),
+          ...(repo.remoteUrl ? { remoteUrl: repo.remoteUrl } : {}), tags: repo.tags, favorite: repo.favorite, skillIds: [], baseIds: [],
+          ...(repo.notes ? { notes: repo.notes } : {}), addedAt: repo.addedAt });
+      }
+    }
+    return LibraryFileSchema.parse({
+      version: 2, repos: [], skills: [], bases, projects,
+      settings: { ...old.settings, basesRoot: join(homedir(), 'BASES'), skillFolders: defaultSettings(old.settings.reposRoot).skillFolders }
+    });
+  }
+  if (version === 2) {
+    const settings = record['settings'] != null && typeof record['settings'] === 'object'
+      ? record['settings'] as Record<string, unknown> : {};
+    const parsed = LibraryFileSchema.parse({
+      ...record,
+      settings: { ...defaultSettings(String(settings['reposRoot'] ?? '')), ...settings }
+    });
+    return { ...parsed, settings: { ...defaultSettings(parsed.settings.reposRoot), ...parsed.settings } };
   }
   if (version == null || typeof version === 'number') {
     // versões futuras: migrações vão aqui; por enquanto só aceitamos v1
@@ -39,6 +69,15 @@ function migrate(raw: unknown): LibraryFile {
   }
   throw new Error(`library.json inválido: version=${String(version)}`);
 }
+
+const zLegacyLibrary = z.object({
+  version: z.literal(1), repos: z.array(RepoSchema), settings: z.object({
+    reposRoot: z.string(), scanFolders: z.array(z.string()).default([]), githubToken: z.string().optional(),
+    editorCommand: z.string().default('code'), terminalPreference: z.string().default('auto'),
+    theme: z.enum(['dark', 'light']).default('dark'), viewMode: z.enum(['grid', 'list']).default('grid'),
+    checkUpdatesOnStart: z.boolean().default(true)
+  })
+});
 
 export class LibraryStore {
   private readonly filePath: string;
@@ -70,11 +109,15 @@ export class LibraryStore {
       return this.data;
     }
     try {
-      this.data = migrate(JSON.parse(raw));
+      const parsed = JSON.parse(raw) as unknown;
+      this.data = migrateLibrary(parsed);
+      if (parsed != null && typeof parsed === 'object' && (parsed as Record<string, unknown>)['version'] === 1) {
+        await this.save();
+      }
     } catch {
       try {
         const backupRaw = await fs.readFile(this.backupPath, 'utf-8');
-        this.data = migrate(JSON.parse(backupRaw));
+        this.data = migrateLibrary(JSON.parse(backupRaw));
         await this.save();
       } catch {
         this.data = emptyLibrary(this.data.settings.reposRoot);
@@ -112,6 +155,17 @@ export class LibraryStore {
 
   getRepo(id: string): Repo | undefined {
     return this.data.repos.find((r) => r.id === id);
+  }
+
+  listSkills(): Skill[] { return this.data.skills; }
+  listBases(): BaseItem[] { return this.data.bases; }
+  listProjects(): ProjectRef[] { return this.data.projects; }
+
+  async replaceAssets(input: { skills?: Skill[]; bases?: BaseItem[]; projects?: ProjectRef[] }): Promise<LibraryFile> {
+    const next = { ...this.data, ...input };
+    this.data = LibraryFileSchema.parse(next);
+    await this.save();
+    return this.data;
   }
 
   async addRepo(repo: Repo): Promise<Repo> {

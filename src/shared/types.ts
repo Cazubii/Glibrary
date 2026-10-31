@@ -87,7 +87,9 @@ export interface Repo {
 
 export interface Settings {
   reposRoot: string; // pasta padrão para clonar; padrão: ~/Glibrary
-  scanFolders: string[]; // pastas que o scanner varre
+  scanFolders: string[];
+  basesRoot: string;
+  skillFolders: string[];
   githubToken?: string; // opcional; salvar com safeStorage
   editorCommand: string; // padrão: "code"
   terminalPreference: 'auto' | string;
@@ -96,9 +98,50 @@ export interface Settings {
   checkUpdatesOnStart: boolean;
 }
 
+export interface Skill {
+  id: string;
+  name: string;
+  description?: string;
+  path: string;
+  source: string;
+  tags: string[];
+  favorite: boolean;
+  addedAt: string;
+  updatedAt?: string;
+}
+
+export interface BaseItem {
+  id: string;
+  name: string;
+  description?: string;
+  remoteUrl?: string;
+  localPath?: string;
+  tags: string[];
+  favorite: boolean;
+  addedAt: string;
+  notes?: string;
+}
+
+export interface ProjectRef {
+  id: string;
+  name: string;
+  description?: string;
+  localPath?: string;
+  remoteUrl?: string;
+  tags: string[];
+  favorite: boolean;
+  skillIds: string[];
+  baseIds: string[];
+  notes?: string;
+  addedAt: string;
+}
+
 export interface LibraryFile {
-  version: 1;
+  version: 2;
   repos: Repo[];
+  skills: Skill[];
+  bases: BaseItem[];
+  projects: ProjectRef[];
   settings: Settings;
 }
 

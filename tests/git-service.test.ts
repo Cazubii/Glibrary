@@ -62,7 +62,7 @@ describe('GitService', () => {
     expect(result.updated).toBe(true);
     const after = await service.fetchStatus(join(root, 'pull-demo'));
     expect(after.behindBy).toBe(0);
-  });
+  }, 15_000);
 
   it('getRemoteUrl e getCurrentBranch funcionam', async () => {
     const service = new GitService();

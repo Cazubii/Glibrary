@@ -2,6 +2,9 @@ import type {
   DetectionResult,
   IpcResult,
   LibraryFile,
+  BaseItem,
+  ProjectRef,
+  Skill,
   LogLine,
   ProcessKind,
   Repo,
@@ -21,6 +24,18 @@ async function unwrap<T>(promise: Promise<unknown>): Promise<T> {
 }
 
 export const api = {
+  assetsGet: (): Promise<{ skills: Skill[]; bases: BaseItem[]; projects: ProjectRef[] }> =>
+    unwrap(window.api.invoke(IpcChannels.assetsGet)),
+  skillsScan: (): Promise<Skill[]> => unwrap(window.api.invoke(IpcChannels.skillsScan)),
+  skillRemove: (id: string): Promise<null> => unwrap(window.api.invoke(IpcChannels.skillRemove, { id })),
+  skillOpen: (id: string): Promise<null> => unwrap(window.api.invoke(IpcChannels.skillOpen, { id })),
+  baseAdd: (input: Pick<BaseItem, 'name'> & Partial<Pick<BaseItem, 'remoteUrl' | 'localPath' | 'description'>>): Promise<BaseItem> =>
+    unwrap(window.api.invoke(IpcChannels.baseAdd, input)),
+  baseRemove: (id: string): Promise<null> => unwrap(window.api.invoke(IpcChannels.baseRemove, { id })),
+  baseClone: (id: string): Promise<BaseItem> => unwrap(window.api.invoke(IpcChannels.baseClone, { id })),
+  projectUpdate: (id: string, patch: Pick<ProjectRef, 'skillIds' | 'baseIds'> & Partial<Pick<ProjectRef, 'notes'>>): Promise<ProjectRef> =>
+    unwrap(window.api.invoke(IpcChannels.projectUpdate, { id, ...patch })),
+  projectAdd: (path: string): Promise<ProjectRef> => unwrap(window.api.invoke(IpcChannels.projectAdd, { path })),
   libraryGet: (): Promise<LibraryFile> =>
     unwrap<LibraryFile>(window.api.invoke(IpcChannels.libraryGet)),
 

@@ -1,6 +1,7 @@
-# Glibrary: especificação completa para execução
+# Glibrary: especificação original da v1
 
-> **Para o agente executor (MiMo 2.6 Pro):** este arquivo é a fonte da verdade do projeto. Leia tudo antes de escrever código. Siga as fases **na ordem**, faça um commit por tarefa concluída e não invente funcionalidades fora deste documento. Se algo estiver ambíguo, escolha a opção mais simples que atenda aos critérios de aceite e registre a decisão em `docs/DECISOES.md`.
+> Documento histórico das fases 0–6. A aplicação evoluiu para o modelo v2 descrito no README,
+> `AGENTS.md` e `docs/DECISOES.md`; consulte esses arquivos antes de contribuir.
 
 ---
 

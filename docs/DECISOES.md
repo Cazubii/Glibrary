@@ -117,3 +117,25 @@ versionado.
 ## Sugestões
 
 (itens fora do escopo da v1 — não implementar, conforme seção 14 da spec)
+
+## 2026-10-30 — Fases 7–9 (biblioteca v2)
+
+### `library.json` v2 separa Skills, Bases e projetos de contexto
+Os repositórios v1 com pasta local migram para `ProjectRef`, preservando id, nome, descrição,
+caminho, URL, tags, favoritos e notas; as associações começam vazias. Itens sem pasta local e
+com URL remota migram para `BaseItem`, preservando seus metadados. A migração é gravada no
+primeiro carregamento bem-sucedido para não depender de uma edição posterior.
+
+### Pastas de Skills padrão e descoberta por `SKILL.md`
+As origens padrão são `~/.claude/skills`, `~/.opencode/skills` e `~/.agents/skills`, com opção
+de adicionar outras pastas. A descoberta considera `SKILL.md` na raiz ou em pastas filhas
+diretas; lê `name` e `description` do frontmatter e nunca modifica o arquivo original.
+
+### Projetos não executam comandos na v2
+Os handlers de processos, scanner de repositórios e checagem de ferramentas deixaram de ser
+registrados no bootstrap. As implementações permanecem no código legado para referência e
+podem ser removidas após a compatibilidade de backups v1 deixar de precisar de `RepoSchema`.
+
+### Clone de Base usa a pasta configurada
+O clone vai para `settings.basesRoot`, inicializada como `~/BASES`. Remover uma Base da
+biblioteca não apaga a pasta local.

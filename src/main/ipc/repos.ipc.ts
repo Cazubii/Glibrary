@@ -12,10 +12,10 @@ import {
   RepoUpdateInputSchema,
   RepoRemoveInputSchema,
   SettingsPatchSchema,
-  LibraryFileSchema
 } from '../../shared/schemas';
 import { IpcChannels } from '../../shared/ipc-channels';
 import type { LibraryStore } from '../services/library-store';
+import { migrateLibrary } from '../services/library-store';
 import type { GitService } from '../services/git-service';
 import { detectProject } from '../services/detector';
 import { applyDetection } from '../services/detector/apply';
@@ -126,7 +126,7 @@ export function registerRepoIpc(
         : await dialog.showOpenDialog(options);
       if (result.canceled || result.filePaths.length === 0) return ok(0);
       const raw = JSON.parse(await readFile(result.filePaths[0], 'utf8')) as unknown;
-      const file = LibraryFileSchema.parse(raw);
+      const file = migrateLibrary(raw);
       const existing = store.listRepos();
       const knownUrls = new Set(
         existing.filter((r) => r.remoteUrl != null).map((r) => normalizeGitUrl(r.remoteUrl as string)),
@@ -149,6 +149,17 @@ export function registerRepoIpc(
         await store.addRepo(exists ? { ...repo, id: randomUUID() } : repo);
         imported += 1;
       }
+      const current = store.get();
+      const appendUnique = <T extends { id: string }>(existingItems: T[], incoming: T[]): T[] => {
+        const ids = new Set(existingItems.map((item) => item.id));
+        imported += incoming.filter((item) => !ids.has(item.id)).length;
+        return [...existingItems, ...incoming.filter((item) => !ids.has(item.id))];
+      };
+      await store.replaceAssets({
+        skills: appendUnique(current.skills, file.skills),
+        bases: appendUnique(current.bases, file.bases),
+        projects: appendUnique(current.projects, file.projects)
+      });
       return ok(imported);
     } catch (e) {
       return fail(e);

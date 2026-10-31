@@ -33,10 +33,30 @@ describe('LibraryStore', () => {
   it('cria library.json vazio no primeiro load', async () => {
     const store = new LibraryStore(dir, join(dir, 'repos'));
     const lib = await store.load();
-    expect(lib.version).toBe(1);
+    expect(lib.version).toBe(2);
     expect(lib.repos).toEqual([]);
     const raw = await fs.readFile(join(dir, 'library.json'), 'utf-8');
-    expect(JSON.parse(raw).version).toBe(1);
+    expect(JSON.parse(raw).version).toBe(2);
+  });
+
+  it('migra a v1 preservando projetos locais e convertendo URLs sem pasta em bases', async () => {
+    const legacy = {
+      version: 1,
+      repos: [
+        { id: 'local-1', name: 'App local', localPath: join(dir, 'app'), status: 'cloned', tags: ['web'], favorite: true, addedAt: '2026-01-01T00:00:00.000Z' },
+        { id: 'remote-1', name: 'Starter kit', remoteUrl: 'https://github.com/example/starter-kit.git', status: 'not_cloned', tags: ['template'], favorite: false, notes: 'Origem remota', addedAt: '2026-01-02T00:00:00.000Z' }
+      ],
+      settings: { reposRoot: join(dir, 'repos'), scanFolders: [], editorCommand: 'code', terminalPreference: 'auto', theme: 'dark', viewMode: 'grid', checkUpdatesOnStart: true }
+    };
+    await fs.writeFile(join(dir, 'library.json'), JSON.stringify(legacy), 'utf-8');
+
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    const library = await store.load();
+
+    expect(library.version).toBe(2);
+    expect(library.projects).toMatchObject([{ id: 'local-1', name: 'App local', localPath: join(dir, 'app'), tags: ['web'], favorite: true }]);
+    expect(library.bases).toMatchObject([{ id: 'remote-1', name: 'Starter kit', remoteUrl: 'https://github.com/example/starter-kit.git', notes: 'Origem remota' }]);
+    expect(JSON.parse(await fs.readFile(join(dir, 'library.json'), 'utf-8')).version).toBe(2);
   });
 
   it('persiste repos e recarrega após "reiniciar"', async () => {

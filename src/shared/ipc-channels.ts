@@ -32,7 +32,16 @@ export const IpcChannels = {
   toolsCheck: 'tools:check',
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
-  dialogPickFolder: 'dialog:pickFolder'
+  dialogPickFolder: 'dialog:pickFolder',
+  assetsGet: 'assets:get',
+  skillsScan: 'skills:scan',
+  skillRemove: 'skills:remove',
+  skillOpen: 'skills:open',
+  baseAdd: 'bases:add',
+  baseClone: 'bases:clone',
+  baseRemove: 'bases:remove',
+  projectUpdate: 'projects:update',
+  projectAdd: 'projects:add'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

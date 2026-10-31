@@ -91,6 +91,8 @@ export const RepoSchema = z.object({
 
 export const SettingsSchema = z.object({
   reposRoot: z.string().min(1),
+  basesRoot: z.string().min(1).default('BASES'),
+  skillFolders: z.array(z.string()).default([]),
   scanFolders: z.array(z.string()),
   githubToken: z.string().optional(),
   editorCommand: z.string().min(1),
@@ -101,8 +103,23 @@ export const SettingsSchema = z.object({
 })
 
 export const LibraryFileSchema = z.object({
-  version: z.literal(1),
-  repos: z.array(RepoSchema),
+  version: z.literal(2),
+  repos: z.array(RepoSchema).default([]),
+  skills: z.array(z.object({
+    id: z.string().min(1), name: z.string().min(1), description: z.string().optional(),
+    path: z.string().min(1), source: z.string().min(1), tags: z.array(z.string()),
+    favorite: z.boolean(), addedAt: z.string(), updatedAt: z.string().optional()
+  })).default([]),
+  bases: z.array(z.object({
+    id: z.string().min(1), name: z.string().min(1), description: z.string().optional(),
+    remoteUrl: z.string().optional(), localPath: z.string().optional(), tags: z.array(z.string()),
+    favorite: z.boolean(), addedAt: z.string(), notes: z.string().optional()
+  })).default([]),
+  projects: z.array(z.object({
+    id: z.string().min(1), name: z.string().min(1), description: z.string().optional(), localPath: z.string().optional(),
+    remoteUrl: z.string().optional(), tags: z.array(z.string()).default([]), favorite: z.boolean().default(false), skillIds: z.array(z.string()).default([]),
+    baseIds: z.array(z.string()).default([]), notes: z.string().optional(), addedAt: z.string()
+  })).default([]),
   settings: SettingsSchema
 })
 

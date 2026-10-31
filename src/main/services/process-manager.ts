@@ -215,38 +215,47 @@ export class ProcessManager {
   }
 
   private async finish(entry: RunEntry, code: number): Promise<void> {
-    this.active.delete(entry.repoId);
-    entry.logStream?.end();
+    try {
+      const logStream = entry.logStream;
+      if (logStream != null) {
+        logStream.end();
+        if (!logStream.closed) {
+          await new Promise<void>((resolve) => logStream.once('close', resolve));
+        }
+      }
 
-    const repo = this.store.getRepo(entry.repoId);
-    if (repo == null) return;
+      const repo = this.store.getRepo(entry.repoId);
+      if (repo == null) return;
 
-    const patch: Partial<Repo> = {};
-    if (entry.kind === 'install') {
-      if (code === 0) {
-        patch.status = 'installed';
-        patch.installedAt = new Date().toISOString();
-      } else {
-        patch.status = 'error';
+      const patch: Partial<Repo> = {};
+      if (entry.kind === 'install') {
+        if (code === 0) {
+          patch.status = 'installed';
+          patch.installedAt = new Date().toISOString();
+        } else {
+          patch.status = 'error';
+          patch.lastError = entry.stderrTail.join('\n');
+        }
+      } else if (entry.kind === 'start') {
+        if (entry.stopRequested || code === 0) {
+          patch.status = 'installed';
+        } else {
+          patch.status = 'error';
+          patch.lastError = entry.stderrTail.join('\n');
+        }
+      } else if (code !== 0) {
         patch.lastError = entry.stderrTail.join('\n');
       }
-    } else if (entry.kind === 'start') {
-      if (entry.stopRequested || code === 0) {
-        patch.status = 'installed';
-      } else {
-        patch.status = 'error';
-        patch.lastError = entry.stderrTail.join('\n');
-      }
-    } else if (code !== 0) {
-      patch.lastError = entry.stderrTail.join('\n');
-    }
 
-    if (Object.keys(patch).length > 0) {
-      await this.store.updateRepo(entry.repoId, patch);
-      if (patch.status != null) {
-        this.emit(IpcChannels.repoStatusChanged, { id: entry.repoId, status: patch.status });
+      if (Object.keys(patch).length > 0) {
+        await this.store.updateRepo(entry.repoId, patch);
+        if (patch.status != null) {
+          this.emit(IpcChannels.repoStatusChanged, { id: entry.repoId, status: patch.status });
+        }
       }
+      this.emit(IpcChannels.processExit, { id: entry.repoId, code });
+    } finally {
+      this.active.delete(entry.repoId);
     }
-    this.emit(IpcChannels.processExit, { id: entry.repoId, code });
   }
 }
