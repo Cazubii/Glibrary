@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FolderPlus, Plus, RefreshCw, Trash2, FolderOpen, Layers3, WandSparkles, BriefcaseBusiness } from 'lucide-react';
 import type { BaseItem, ProjectRef, Skill } from '@shared/types';
+import { countTags, matchesTags, sameTag } from '@shared/tags';
 import { api } from '../lib/api';
 import { useLibraryStore } from '../store/library';
+import TagChips from '../components/TagChips';
+import TagManagerDialog from '../components/TagManagerDialog';
 
 type Section = 'skills' | 'bases' | 'projects';
 type Assets = { skills: Skill[]; bases: BaseItem[]; projects: ProjectRef[] };
 const empty: Assets = { skills: [], bases: [], projects: [] };
+const sections: Section[] = ['skills', 'bases', 'projects'];
 
 interface Props { onError: (message: string) => void }
 export default function AssetLibraryPage({ onError }: Props): React.JSX.Element {
@@ -18,6 +22,12 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
   const [baseUrl, setBaseUrl] = useState('');
   const [basePath, setBasePath] = useState('');
   const [showBaseForm, setShowBaseForm] = useState(false);
+  const [selected, setSelected] = useState<Record<Section, string[]>>({
+    skills: [],
+    bases: [],
+    projects: []
+  });
+  const [manageOpen, setManageOpen] = useState(false);
   const settings = useLibraryStore((s) => s.settings);
   const updateSettings = useLibraryStore((s) => s.updateSettings);
   const refresh = useCallback(async () => { try { setAssets(await api.assetsGet()); } catch (e) { onError(e instanceof Error ? e.message : String(e)); } }, [onError]);
@@ -53,9 +63,86 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   };
 
-  const filteredSkills = useMemo(() => assets.skills.filter((s) => `${s.name} ${s.description ?? ''} ${s.source}`.toLowerCase().includes(query.toLowerCase())), [assets.skills, query]);
-  const filteredBases = useMemo(() => assets.bases.filter((b) => `${b.name} ${b.description ?? ''} ${b.remoteUrl ?? ''}`.toLowerCase().includes(query.toLowerCase())), [assets.bases, query]);
-  const filteredProjects = useMemo(() => assets.projects.filter((p) => `${p.name} ${p.localPath ?? ''} ${p.notes ?? ''}`.toLowerCase().includes(query.toLowerCase())), [assets.projects, query]);
+  const sectionTags = useMemo(
+    () => ({
+      skills: countTags(assets.skills),
+      bases: countTags(assets.bases),
+      projects: countTags(assets.projects)
+    }),
+    [assets]
+  );
+  const globalTags = useMemo(
+    () => countTags([...assets.skills, ...assets.bases, ...assets.projects]),
+    [assets]
+  );
+
+  const toggleTag = (name: string): void =>
+    setSelected((prev) => ({
+      ...prev,
+      [section]: prev[section].some((tag) => sameTag(tag, name))
+        ? prev[section].filter((tag) => !sameTag(tag, name))
+        : [...prev[section], name]
+    }));
+  const clearTags = (): void => setSelected((prev) => ({ ...prev, [section]: [] }));
+
+  const handleRenameTag = async (from: string, to: string): Promise<void> => {
+    try {
+      await api.tagsRename(from, to);
+      setSelected((prev) => {
+        const next = { ...prev };
+        for (const key of sections) {
+          next[key] = next[key].map((tag) => (sameTag(tag, from) ? to : tag));
+        }
+        return next;
+      });
+      await refresh();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+      throw e;
+    }
+  };
+
+  const handleDeleteTag = async (name: string): Promise<void> => {
+    try {
+      await api.tagsDelete(name);
+      setSelected((prev) => {
+        const next = { ...prev };
+        for (const key of sections) {
+          next[key] = next[key].filter((tag) => !sameTag(tag, name));
+        }
+        return next;
+      });
+      await refresh();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+      throw e;
+    }
+  };
+
+  const selectedTags = selected[section];
+  const matchQuery = (text: string): boolean =>
+    text.toLowerCase().includes(query.toLowerCase());
+  const filteredSkills = useMemo(
+    () =>
+      assets.skills.filter(
+        (s) => matchesTags(s.tags, selectedTags) && matchQuery(`${s.name} ${s.description ?? ''} ${s.source}`)
+      ),
+    [assets.skills, selectedTags, query]
+  );
+  const filteredBases = useMemo(
+    () =>
+      assets.bases.filter(
+        (b) => matchesTags(b.tags, selectedTags) && matchQuery(`${b.name} ${b.description ?? ''} ${b.remoteUrl ?? ''}`)
+      ),
+    [assets.bases, selectedTags, query]
+  );
+  const filteredProjects = useMemo(
+    () =>
+      assets.projects.filter(
+        (p) => matchesTags(p.tags, selectedTags) && matchQuery(`${p.name} ${p.localPath ?? ''} ${p.notes ?? ''}`)
+      ),
+    [assets.projects, selectedTags, query]
+  );
   const tab = (key: Section, label: string, icon: React.ReactNode): React.JSX.Element => <button type="button" onClick={() => setSection(key)} className={`flex items-center gap-2 rounded px-3 py-2 text-sm ${section === key ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}>{icon}{label}<span className="text-xs opacity-60">{assets[key].length}</span></button>;
 
   return <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -65,6 +152,13 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
     </header>
     <nav className="flex gap-2 border-b border-steam-elevated/30 px-6 py-3">{tab('skills', 'Skills', <WandSparkles size={16}/>)}{tab('bases', 'Bases', <Layers3 size={16}/>)}{tab('projects', 'Projetos', <BriefcaseBusiness size={16}/>)}</nav>
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
+      <TagChips
+        tags={sectionTags[section]}
+        selected={selectedTags}
+        onToggle={toggleTag}
+        onClear={clearTags}
+        onManage={() => setManageOpen(true)}
+      />
       {section === 'skills' && <>
         <div className="mb-5 flex items-center gap-2"><p className="mr-auto text-sm text-steam-text/60">{assets.skills.length} skills descobertas em arquivos SKILL.md</p><button disabled={busy} type="button" onClick={() => void addFolder()} className="flex items-center gap-2 rounded border border-steam-elevated px-3 py-2 text-sm hover:bg-steam-panel"><FolderPlus size={15}/>Adicionar origem</button><button disabled={busy} type="button" onClick={() => void scanSkills()} className="flex items-center gap-2 rounded bg-steam-accent px-3 py-2 text-sm font-semibold text-steam-bg disabled:opacity-50"><RefreshCw size={15} className={busy ? 'animate-spin' : ''}/> {busy ? 'Buscando…' : 'Sincronizar'}</button></div>
         {filteredSkills.length ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{filteredSkills.map((skill) => <article key={skill.id} className="rounded border border-steam-elevated bg-steam-panel p-4"><div className="flex items-start gap-3"><WandSparkles size={18} className="mt-0.5 shrink-0 text-steam-accent"/><div className="min-w-0 flex-1"><h2 className="font-semibold">{skill.name}</h2><p className="mt-1 line-clamp-2 text-sm text-steam-text/60">{skill.description ?? 'Sem descrição no cabeçalho de SKILL.md.'}</p><p className="mt-3 truncate text-xs text-steam-text/40" title={skill.path}>{skill.source}</p></div></div><div className="mt-4 flex gap-2"><button type="button" onClick={() => void api.skillOpen(skill.id).catch((e: unknown) => onError(String(e)))} className="flex items-center gap-1 rounded bg-steam-elevated px-2 py-1 text-xs hover:text-steam-accent"><FolderOpen size={13}/>Abrir skill</button><button type="button" onClick={() => void api.skillRemove(skill.id).then(refresh).catch((e: unknown) => onError(String(e)))} aria-label={`Remover ${skill.name}`} className="ml-auto rounded p-1 text-steam-text/40 hover:text-red-400"><Trash2 size={14}/></button></div></article>)}</div> : <Empty text={settings?.skillFolders.length ? 'Nenhum SKILL.md foi encontrado nas origens configuradas.' : 'Adicione uma pasta que contenha SKILL.md para importar suas skills.'}/>} 
@@ -79,6 +173,14 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
         {filteredProjects.length ? <div className="space-y-3">{filteredProjects.map((project) => <ProjectCard key={project.id} project={project} assets={assets} onSave={async (patch) => { try { await api.projectUpdate(project.id, patch); await refresh(); } catch (e) { onError(String(e)); } }}/>)}</div> : <Empty text="A migração não encontrou projetos. Os repositórios locais da biblioteca v1 aparecem aqui como contexto."/>}
       </>}
     </div>
+    {manageOpen && (
+      <TagManagerDialog
+        tags={globalTags}
+        onRename={handleRenameTag}
+        onDelete={handleDeleteTag}
+        onClose={() => setManageOpen(false)}
+      />
+    )}
   </main>;
 }
 
