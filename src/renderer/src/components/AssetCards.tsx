@@ -27,6 +27,7 @@ function TagArea({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        onMouseDown={(e) => e.stopPropagation()}
         className="flex flex-wrap items-center gap-1.5 text-left"
       >
         {tags.length === 0 ? (
@@ -133,7 +134,8 @@ export function BaseCard({
   onTagsChange,
   onFavorite,
   onClone,
-  onRemove
+  onRemove,
+  basesRoot
 }: {
   base: BaseItem;
   allTags: string[];
@@ -141,6 +143,7 @@ export function BaseCard({
   onFavorite: () => void;
   onClone: () => void;
   onRemove: () => void;
+  basesRoot?: string;
 }): React.JSX.Element {
   return (
     <article className="rounded border border-steam-elevated bg-steam-panel p-4">
@@ -162,7 +165,7 @@ export function BaseCard({
             onClick={onClone}
             className="rounded bg-steam-elevated px-2 py-1 text-xs hover:text-steam-accent"
           >
-            Clonar para ~/BASES
+            Clonar para {basesRoot ?? '~/BASES'}
           </button>
         )}
         <button

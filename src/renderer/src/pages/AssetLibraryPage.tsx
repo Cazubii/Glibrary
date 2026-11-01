@@ -273,6 +273,7 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
                 key={base.id}
                 base={base}
                 allTags={allTagNames}
+                basesRoot={settings?.basesRoot}
                 onTagsChange={(tags) => void updateBaseTags(base, tags)}
                 onFavorite={() => void toggleBaseFavorite(base)}
                 onClone={() =>
