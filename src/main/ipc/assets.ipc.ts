@@ -28,7 +28,12 @@ const BaseInput = z.object({
 const ProjectInput = z.object({ path: z.string().min(1) });
 const RemoveInput = z.object({ id: z.string().min(1) });
 function ok<T>(data: T): IpcResult<T> { return { ok: true, data }; }
-function fail(error: unknown): IpcResult<never> { return { ok: false, error: error instanceof Error ? error.message : String(error) }; }
+function fail(error: unknown): IpcResult<never> {
+  if (error instanceof z.ZodError) {
+    return { ok: false, error: error.issues.map((issue) => issue.message).join('; ') };
+  }
+  return { ok: false, error: error instanceof Error ? error.message : String(error) };
+}
 
 export function registerAssetsIpc(store: LibraryStore, git: GitService): void {
   ipcMain.handle(IpcChannels.libraryGet, async () => ok(store.get()));
