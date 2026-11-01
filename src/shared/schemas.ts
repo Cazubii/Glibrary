@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isSafeDirectoryName } from './validators';
 
 export const CommandSpecSchema = z.object({
   command: z.string().min(1),
@@ -102,26 +103,97 @@ export const SettingsSchema = z.object({
   checkUpdatesOnStart: z.boolean()
 })
 
+export const SkillSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  path: z.string().min(1),
+  source: z.string().min(1),
+  tags: z.array(z.string()),
+  favorite: z.boolean(),
+  addedAt: z.string(),
+  updatedAt: z.string().optional()
+});
+
+export const BaseItemSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  remoteUrl: z.string().optional(),
+  localPath: z.string().optional(),
+  tags: z.array(z.string()),
+  favorite: z.boolean(),
+  addedAt: z.string(),
+  notes: z.string().optional()
+});
+
+export const ProjectRefSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  localPath: z.string().optional(),
+  remoteUrl: z.string().optional(),
+  tags: z.array(z.string()).default([]),
+  favorite: z.boolean().default(false),
+  skillIds: z.array(z.string()).default([]),
+  baseIds: z.array(z.string()).default([]),
+  notes: z.string().optional(),
+  addedAt: z.string()
+});
+
 export const LibraryFileSchema = z.object({
   version: z.literal(2),
   repos: z.array(RepoSchema).default([]),
-  skills: z.array(z.object({
-    id: z.string().min(1), name: z.string().min(1), description: z.string().optional(),
-    path: z.string().min(1), source: z.string().min(1), tags: z.array(z.string()),
-    favorite: z.boolean(), addedAt: z.string(), updatedAt: z.string().optional()
-  })).default([]),
-  bases: z.array(z.object({
-    id: z.string().min(1), name: z.string().min(1), description: z.string().optional(),
-    remoteUrl: z.string().optional(), localPath: z.string().optional(), tags: z.array(z.string()),
-    favorite: z.boolean(), addedAt: z.string(), notes: z.string().optional()
-  })).default([]),
-  projects: z.array(z.object({
-    id: z.string().min(1), name: z.string().min(1), description: z.string().optional(), localPath: z.string().optional(),
-    remoteUrl: z.string().optional(), tags: z.array(z.string()).default([]), favorite: z.boolean().default(false), skillIds: z.array(z.string()).default([]),
-    baseIds: z.array(z.string()).default([]), notes: z.string().optional(), addedAt: z.string()
-  })).default([]),
+  skills: z.array(SkillSchema).default([]),
+  bases: z.array(BaseItemSchema).default([]),
+  projects: z.array(ProjectRefSchema).default([]),
   settings: SettingsSchema
-})
+});
+
+export const SkillUpdateInputSchema = z.object({
+  id: z.string().min(1),
+  patch: z
+    .object({
+      tags: z.array(z.string()).optional(),
+      favorite: z.boolean().optional()
+    })
+    .strict()
+});
+
+export const BaseUpdateInputSchema = z.object({
+  id: z.string().min(1),
+  patch: z
+    .object({
+      name: z
+        .string()
+        .trim()
+        .min(1)
+        .refine(isSafeDirectoryName, 'Nome de base inválido')
+        .optional(),
+      description: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      favorite: z.boolean().optional()
+    })
+    .strict()
+});
+
+export const ProjectUpdateInputSchema = z
+  .object({
+    id: z.string().min(1),
+    skillIds: z.array(z.string()).optional(),
+    baseIds: z.array(z.string()).optional(),
+    notes: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    favorite: z.boolean().optional()
+  })
+  .strict();
+
+export const TagRenameInputSchema = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1)
+});
+
+export const TagNameInputSchema = z.object({ name: z.string().min(1) });
 
 export const RepoPatchSchema = RepoSchema.partial().omit({ id: true });
 

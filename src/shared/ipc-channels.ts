@@ -41,7 +41,11 @@ export const IpcChannels = {
   baseClone: 'bases:clone',
   baseRemove: 'bases:remove',
   projectUpdate: 'projects:update',
-  projectAdd: 'projects:add'
+  projectAdd: 'projects:add',
+  skillUpdate: 'skills:update',
+  baseUpdate: 'bases:update',
+  tagsRename: 'tags:rename',
+  tagsDelete: 'tags:delete'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
