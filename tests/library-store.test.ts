@@ -253,4 +253,78 @@ describe('LibraryStore', () => {
     });
     await expect(store.updateProject('nope', {})).rejects.toThrow();
   });
+
+  it('updateSkill aplica favorite:false e tags vazias, e descarta tags só de espaço', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.replaceAssets({
+      skills: [makeSkill({ id: 's1', tags: ['docs'], favorite: true })]
+    });
+    const updated = await store.updateSkill('s1', { favorite: false, tags: ['  ', ''] });
+    expect(updated.favorite).toBe(false);
+    expect(updated.tags).toEqual([]);
+  });
+
+  it('updateProject limpa associações com lista vazia', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.replaceAssets({
+      projects: [makeProject({ id: 'p1', skillIds: ['s1'], baseIds: ['b1'] })]
+    });
+    const updated = await store.updateProject('p1', { skillIds: [], baseIds: [] });
+    expect(updated.skillIds).toEqual([]);
+    expect(updated.baseIds).toEqual([]);
+  });
+
+  it('renameTag reescreve a tag nos três tipos e persiste', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.replaceAssets({
+      skills: [makeSkill({ id: 's1', tags: ['docs', 'web'] })],
+      bases: [makeBase({ id: 'b1', tags: ['Docs'] })],
+      projects: [makeProject({ id: 'p1', tags: ['docs'] })]
+    });
+    await store.renameTag('docs', 'documentação');
+    const lib = await new LibraryStore(dir, join(dir, 'repos')).load();
+    expect(lib.skills[0].tags).toEqual(['documentação', 'web']);
+    expect(lib.bases[0].tags).toEqual(['documentação']);
+    expect(lib.projects[0].tags).toEqual(['documentação']);
+  });
+
+  it('renameTag altera só a grafia quando o destino é a mesma tag', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.replaceAssets({ skills: [makeSkill({ id: 's1', tags: ['docs'] })] });
+    await store.renameTag('docs', 'Docs');
+    expect(store.listSkills()[0].tags).toEqual(['Docs']);
+  });
+
+  it('renameTag lança erro para tag inexistente ou destino duplicado', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.replaceAssets({ skills: [makeSkill({ id: 's1', tags: ['docs', 'web'] })] });
+    await expect(store.renameTag('nope', 'x')).rejects.toThrow('Tag não encontrada');
+    await expect(store.renameTag('docs', 'WEB')).rejects.toThrow('Tag já existe');
+  });
+
+  it('deleteTag remove a tag de todos os tipos e persiste', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.replaceAssets({
+      skills: [makeSkill({ id: 's1', tags: ['docs', 'web'] })],
+      bases: [makeBase({ id: 'b1', tags: ['DOCS'] })],
+      projects: [makeProject({ id: 'p1', tags: ['docs'] })]
+    });
+    await store.deleteTag('docs');
+    const lib = await new LibraryStore(dir, join(dir, 'repos')).load();
+    expect(lib.skills[0].tags).toEqual(['web']);
+    expect(lib.bases[0].tags).toEqual([]);
+    expect(lib.projects[0].tags).toEqual([]);
+  });
+
+  it('deleteTag lança erro para tag inexistente', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await expect(store.deleteTag('nope')).rejects.toThrow('Tag não encontrada');
+  });
 });

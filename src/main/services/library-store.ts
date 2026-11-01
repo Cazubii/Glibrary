@@ -11,7 +11,7 @@ import {
   SettingsPatchSchema,
   SkillSchema
 } from '../../shared/schemas';
-import { normalizeTagList } from '../../shared/tags';
+import { normalizeTag, normalizeTagList, tagKey } from '../../shared/tags';
 import { applyStartupCorrections } from '../../shared/status';
 
 const LIBRARY_FILE = 'library.json';
@@ -233,6 +233,40 @@ export class LibraryStore {
     this.data.projects[index] = merged;
     await this.save();
     return merged;
+  }
+
+  async renameTag(from: string, to: string): Promise<void> {
+    const source = normalizeTag(from);
+    const target = normalizeTag(to);
+    if (source == null || target == null) throw new Error('Tag inválida');
+    const keyFrom = tagKey(source);
+    const keyTo = tagKey(target);
+    const all = [...this.data.skills, ...this.data.bases, ...this.data.projects];
+    const hasKey = (key: string): boolean =>
+      all.some((item) => item.tags.some((tag) => tagKey(tag) === key));
+    if (!hasKey(keyFrom)) throw new Error(`Tag não encontrada: ${source}`);
+    if (keyTo !== keyFrom && hasKey(keyTo)) throw new Error(`Tag já existe: ${target}`);
+    const rewrite = (tags: string[]): string[] =>
+      normalizeTagList(tags.map((tag) => (tagKey(tag) === keyFrom ? target : tag)));
+    this.data.skills = this.data.skills.map((item) => ({ ...item, tags: rewrite(item.tags) }));
+    this.data.bases = this.data.bases.map((item) => ({ ...item, tags: rewrite(item.tags) }));
+    this.data.projects = this.data.projects.map((item) => ({ ...item, tags: rewrite(item.tags) }));
+    await this.save();
+  }
+
+  async deleteTag(name: string): Promise<void> {
+    const target = normalizeTag(name);
+    if (target == null) throw new Error('Tag inválida');
+    const key = tagKey(target);
+    const all = [...this.data.skills, ...this.data.bases, ...this.data.projects];
+    if (!all.some((item) => item.tags.some((tag) => tagKey(tag) === key))) {
+      throw new Error(`Tag não encontrada: ${target}`);
+    }
+    const strip = (tags: string[]): string[] => tags.filter((tag) => tagKey(tag) !== key);
+    this.data.skills = this.data.skills.map((item) => ({ ...item, tags: strip(item.tags) }));
+    this.data.bases = this.data.bases.map((item) => ({ ...item, tags: strip(item.tags) }));
+    this.data.projects = this.data.projects.map((item) => ({ ...item, tags: strip(item.tags) }));
+    await this.save();
   }
 
   async addRepo(repo: Repo): Promise<Repo> {
