@@ -40,6 +40,10 @@ describe('BaseUpdateInputSchema', () => {
     expect(() => BaseUpdateInputSchema.parse({ id: 'b1', patch: { name: 'a/b' } })).toThrow();
     expect(() => BaseUpdateInputSchema.parse({ id: 'b1', patch: { name: 'con' } })).toThrow();
   });
+
+  it('normaliza espaços do nome', () => {
+    expect(BaseUpdateInputSchema.parse({ id: 'b1', patch: { name: ' starter ' } }).patch.name).toBe('starter');
+  });
 });
 
 describe('ProjectUpdateInputSchema', () => {

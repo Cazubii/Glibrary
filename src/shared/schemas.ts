@@ -150,32 +150,36 @@ export const LibraryFileSchema = z.object({
   settings: SettingsSchema
 });
 
-export const SkillUpdateInputSchema = z.object({
-  id: z.string().min(1),
-  patch: z
-    .object({
-      tags: z.array(z.string()).optional(),
-      favorite: z.boolean().optional()
-    })
-    .strict()
-});
+export const SkillUpdateInputSchema = z
+  .object({
+    id: z.string().min(1),
+    patch: z
+      .object({
+        tags: z.array(z.string()).optional(),
+        favorite: z.boolean().optional()
+      })
+      .strict()
+  })
+  .strict();
 
-export const BaseUpdateInputSchema = z.object({
-  id: z.string().min(1),
-  patch: z
-    .object({
-      name: z
-        .string()
-        .trim()
-        .min(1)
-        .refine(isSafeDirectoryName, 'Nome de base inválido')
-        .optional(),
-      description: z.string().optional(),
-      tags: z.array(z.string()).optional(),
-      favorite: z.boolean().optional()
-    })
-    .strict()
-});
+export const BaseUpdateInputSchema = z
+  .object({
+    id: z.string().min(1),
+    patch: z
+      .object({
+        name: z
+          .string()
+          .trim()
+          .min(1)
+          .refine(isSafeDirectoryName, 'Nome de base inválido')
+          .optional(),
+        description: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+        favorite: z.boolean().optional()
+      })
+      .strict()
+  })
+  .strict();
 
 export const ProjectUpdateInputSchema = z
   .object({
@@ -188,12 +192,14 @@ export const ProjectUpdateInputSchema = z
   })
   .strict();
 
-export const TagRenameInputSchema = z.object({
-  from: z.string().min(1),
-  to: z.string().min(1)
-});
+export const TagRenameInputSchema = z
+  .object({
+    from: z.string().min(1),
+    to: z.string().min(1)
+  })
+  .strict();
 
-export const TagNameInputSchema = z.object({ name: z.string().min(1) });
+export const TagNameInputSchema = z.object({ name: z.string().min(1) }).strict();
 
 export const RepoPatchSchema = RepoSchema.partial().omit({ id: true });
 
