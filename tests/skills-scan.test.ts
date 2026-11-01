@@ -47,6 +47,7 @@ describe('discoverSkills', () => {
     const skills = await discoverSkills([root], []);
     expect(skills.map((s) => s.name).sort()).toEqual(['Filha', 'Raiz']);
     expect(skills.every((s) => s.source === root)).toBe(true);
+    expect(skills.find((s) => s.name === 'Raiz')).toMatchObject({ tags: [], favorite: false });
   });
 
   it('preserva id, tags e favorite de skills existentes na ressincronização', async () => {
@@ -72,6 +73,37 @@ describe('discoverSkills', () => {
       addedAt: '2026-01-01T00:00:00.000Z'
     });
     expect(skills[0].updatedAt).toBeTruthy();
+  });
+
+  it('rescan atualiza name/description do frontmatter e preserva id, tags e favorite', async () => {
+    const root = join(dir, 'skills');
+    const skillDir = await writeSkill(root, 'demo', '---\nname: Antiga\n---\n');
+    const existing: Skill[] = [
+      {
+        id: 'id-fixo',
+        name: 'Antiga',
+        path: skillDir,
+        source: root,
+        tags: ['docs'],
+        favorite: true,
+        addedAt: '2026-01-01T00:00:00.000Z'
+      }
+    ];
+    await fs.writeFile(
+      join(skillDir, 'SKILL.md'),
+      '---\nname: Nova\ndescription: Atualizada\n---\n',
+      'utf-8'
+    );
+    const skills = await discoverSkills([root], existing);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]).toMatchObject({
+      id: 'id-fixo',
+      name: 'Nova',
+      description: 'Atualizada',
+      tags: ['docs'],
+      favorite: true,
+      addedAt: '2026-01-01T00:00:00.000Z'
+    });
   });
 
   it('ignora pastas inexistentes e não varre subpastas além das diretas', async () => {
