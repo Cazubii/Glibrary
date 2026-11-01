@@ -4,7 +4,9 @@ import type { TagCount } from '@shared/tags';
 
 interface Props {
   tags: TagCount[];
+  /** Rejeita em caso de falha (toast é do chamador); o editor permanece aberto para correção. */
   onRename: (from: string, to: string) => Promise<void>;
+  /** Rejeita em caso de falha (toast é do chamador); a confirmação permanece aberta. */
   onDelete: (name: string) => Promise<void>;
   onClose: () => void;
 }
@@ -58,6 +60,7 @@ export default function TagManagerDialog({
                       setBusy(true);
                       void onRename(name, draft.trim())
                         .then(() => setEditing(null))
+                        .catch(() => undefined)
                         .finally(() => setBusy(false));
                     }}
                     disabled={busy || draft.trim() === '' || draft.trim() === name}
@@ -96,6 +99,7 @@ export default function TagManagerDialog({
                           setBusy(true);
                           void onDelete(name)
                             .then(() => setConfirming(null))
+                            .catch(() => undefined)
                             .finally(() => setBusy(false));
                         }}
                         disabled={busy}

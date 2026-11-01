@@ -76,6 +76,23 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
     [assets]
   );
 
+  useEffect(() => {
+    setSelected((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const key of sections) {
+        const kept = next[key].filter((tag) =>
+          sectionTags[key].some((entry) => sameTag(entry.name, tag))
+        );
+        if (kept.length !== next[key].length) {
+          next[key] = kept;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [sectionTags]);
+
   const toggleTag = (name: string): void =>
     setSelected((prev) => ({
       ...prev,
