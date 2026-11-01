@@ -246,8 +246,20 @@ export class LibraryStore {
       all.some((item) => item.tags.some((tag) => tagKey(tag) === key));
     if (!hasKey(keyFrom)) throw new Error(`Tag não encontrada: ${source}`);
     if (keyTo !== keyFrom && hasKey(keyTo)) throw new Error(`Tag já existe: ${target}`);
-    const rewrite = (tags: string[]): string[] =>
-      normalizeTagList(tags.map((tag) => (tagKey(tag) === keyFrom ? target : tag)));
+    const rewrite = (tags: string[]): string[] => {
+      const out: string[] = [];
+      let replaced = false;
+      for (const tag of tags) {
+        if (tagKey(tag) !== keyFrom) {
+          out.push(tag);
+          continue;
+        }
+        if (replaced) continue;
+        replaced = true;
+        out.push(target);
+      }
+      return out;
+    };
     this.data.skills = this.data.skills.map((item) => ({ ...item, tags: rewrite(item.tags) }));
     this.data.bases = this.data.bases.map((item) => ({ ...item, tags: rewrite(item.tags) }));
     this.data.projects = this.data.projects.map((item) => ({ ...item, tags: rewrite(item.tags) }));

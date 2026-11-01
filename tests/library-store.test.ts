@@ -327,4 +327,33 @@ describe('LibraryStore', () => {
     await store.load();
     await expect(store.deleteTag('nope')).rejects.toThrow('Tag não encontrada');
   });
+
+  it('renameTag deduplica só as entradas renomeadas e preserva as demais', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.replaceAssets({
+      skills: [makeSkill({ id: 's1', tags: ['docs', 'Docs', 'web'] })],
+      bases: [makeBase({ id: 'b1', tags: ['docs', 'Docs'] })]
+    });
+    await store.renameTag('docs', 'manual');
+    expect(store.listSkills()[0].tags).toEqual(['manual', 'web']);
+    expect(store.listBases()[0].tags).toEqual(['manual']);
+  });
+
+  it('renameTag não altera tags não relacionadas', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.replaceAssets({
+      skills: [makeSkill({ id: 's1', tags: ['docs', 'Docs', 'web'] })]
+    });
+    await store.renameTag('web', 'site');
+    expect(store.listSkills()[0].tags).toEqual(['docs', 'Docs', 'site']);
+  });
+
+  it('renameTag rejeita destino vazio', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.replaceAssets({ skills: [makeSkill({ id: 's1', tags: ['docs'] })] });
+    await expect(store.renameTag('docs', '   ')).rejects.toThrow('Tag inválida');
+  });
 });
