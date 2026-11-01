@@ -350,6 +350,19 @@ describe('LibraryStore', () => {
     expect(store.listSkills()[0].tags).toEqual(['docs', 'Docs', 'site']);
   });
 
+  it('saves concorrentes não se sobrescrevem nem corrompem o arquivo', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.replaceAssets({ skills: [makeSkill({ id: 's1', name: 'Demo', tags: [] })] });
+    await Promise.all([
+      store.updateSkill('s1', { tags: ['a'] }),
+      store.updateSkill('s1', { favorite: true })
+    ]);
+    const lib = await new LibraryStore(dir, join(dir, 'repos')).load();
+    expect(lib.skills[0].tags).toEqual(['a']);
+    expect(lib.skills[0].favorite).toBe(true);
+  });
+
   it('renameTag rejeita destino vazio', async () => {
     const store = new LibraryStore(dir, join(dir, 'repos'));
     await store.load();

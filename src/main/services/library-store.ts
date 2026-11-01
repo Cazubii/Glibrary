@@ -92,6 +92,7 @@ export class LibraryStore {
   private readonly backupPath: string;
   private readonly tmpPath: string;
   private data: LibraryFile;
+  private saveQueue: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly baseDir: string,
@@ -136,10 +137,15 @@ export class LibraryStore {
   }
 
   async save(): Promise<void> {
-    const json = JSON.stringify(this.data, null, 2);
-    await fs.writeFile(this.tmpPath, json, 'utf-8');
-    await fs.rename(this.tmpPath, this.filePath);
-    await fs.copyFile(this.filePath, this.backupPath);
+    const run = async (): Promise<void> => {
+      const json = JSON.stringify(this.data, null, 2);
+      await fs.writeFile(this.tmpPath, json, 'utf-8');
+      await fs.rename(this.tmpPath, this.filePath);
+      await fs.copyFile(this.filePath, this.backupPath);
+    };
+    const next = this.saveQueue.then(run, run);
+    this.saveQueue = next;
+    await next;
   }
 
   get(): LibraryFile {
