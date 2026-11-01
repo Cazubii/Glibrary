@@ -3,7 +3,15 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { z } from 'zod';
 import type { BaseItem, LibraryFile, ProjectRef, Repo, Settings, Skill } from '../../shared/types';
-import { LibraryFileSchema, RepoSchema, SettingsPatchSchema } from '../../shared/schemas';
+import {
+  BaseItemSchema,
+  LibraryFileSchema,
+  ProjectRefSchema,
+  RepoSchema,
+  SettingsPatchSchema,
+  SkillSchema
+} from '../../shared/schemas';
+import { normalizeTagList } from '../../shared/tags';
 import { applyStartupCorrections } from '../../shared/status';
 
 const LIBRARY_FILE = 'library.json';
@@ -166,6 +174,65 @@ export class LibraryStore {
     this.data = LibraryFileSchema.parse(next);
     await this.save();
     return this.data;
+  }
+
+  async updateSkill(
+    id: string,
+    patch: { tags?: string[]; favorite?: boolean }
+  ): Promise<Skill> {
+    const index = this.data.skills.findIndex((item) => item.id === id);
+    if (index === -1) throw new Error(`Skill não encontrada: ${id}`);
+    const merged = SkillSchema.parse({
+      ...this.data.skills[index],
+      ...(patch.tags != null ? { tags: normalizeTagList(patch.tags) } : {}),
+      ...(patch.favorite != null ? { favorite: patch.favorite } : {})
+    });
+    this.data.skills[index] = merged;
+    await this.save();
+    return merged;
+  }
+
+  async updateBase(
+    id: string,
+    patch: { name?: string; description?: string; tags?: string[]; favorite?: boolean }
+  ): Promise<BaseItem> {
+    const index = this.data.bases.findIndex((item) => item.id === id);
+    if (index === -1) throw new Error(`Base não encontrada: ${id}`);
+    const merged = BaseItemSchema.parse({
+      ...this.data.bases[index],
+      ...(patch.name != null ? { name: patch.name } : {}),
+      ...(patch.description != null ? { description: patch.description } : {}),
+      ...(patch.tags != null ? { tags: normalizeTagList(patch.tags) } : {}),
+      ...(patch.favorite != null ? { favorite: patch.favorite } : {})
+    });
+    this.data.bases[index] = merged;
+    await this.save();
+    return merged;
+  }
+
+  async updateProject(
+    id: string,
+    patch: {
+      skillIds?: string[];
+      baseIds?: string[];
+      notes?: string;
+      tags?: string[];
+      favorite?: boolean;
+    }
+  ): Promise<ProjectRef> {
+    const index = this.data.projects.findIndex((item) => item.id === id);
+    if (index === -1) throw new Error(`Projeto não encontrado: ${id}`);
+    const merged = ProjectRefSchema.parse({
+      ...this.data.projects[index],
+      ...(patch.skillIds != null ? { skillIds: patch.skillIds } : {}),
+      ...(patch.baseIds != null ? { baseIds: patch.baseIds } : {}),
+      ...(patch.notes != null ? { notes: patch.notes } : {}),
+      ...(patch.tags != null ? { tags: normalizeTagList(patch.tags) } : {}),
+      ...(patch.favorite != null ? { favorite: patch.favorite } : {})
+    });
+    this.data.projects[index] = merged;
+    await this.save();
+    return merged;
   }
 
   async addRepo(repo: Repo): Promise<Repo> {

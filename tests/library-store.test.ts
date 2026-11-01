@@ -3,7 +3,7 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { LibraryStore, emptyLibrary } from '../src/main/services/library-store';
-import type { Repo } from '../src/shared/types';
+import type { BaseItem, ProjectRef, Repo, Skill } from '../src/shared/types';
 
 let dir: string;
 let counter = 0;
@@ -15,6 +15,45 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
     status: 'cloned',
     tags: [],
     favorite: false,
+    addedAt: new Date().toISOString(),
+    ...overrides
+  };
+}
+
+function makeSkill(overrides: Partial<Skill> = {}): Skill {
+  return {
+    id: `skill-${counter++}`,
+    name: 'demo',
+    path: join(dir, 'skills', 'demo'),
+    source: join(dir, 'skills'),
+    tags: [],
+    favorite: false,
+    addedAt: new Date().toISOString(),
+    ...overrides
+  };
+}
+
+function makeBase(overrides: Partial<BaseItem> = {}): BaseItem {
+  return {
+    id: `base-${counter++}`,
+    name: 'starter',
+    remoteUrl: 'https://github.com/example/starter.git',
+    tags: [],
+    favorite: false,
+    addedAt: new Date().toISOString(),
+    ...overrides
+  };
+}
+
+function makeProject(overrides: Partial<ProjectRef> = {}): ProjectRef {
+  return {
+    id: `proj-${counter++}`,
+    name: 'app',
+    localPath: join(dir, 'app'),
+    tags: [],
+    favorite: false,
+    skillIds: [],
+    baseIds: [],
     addedAt: new Date().toISOString(),
     ...overrides
   };
@@ -146,5 +185,72 @@ describe('LibraryStore', () => {
     const store = new LibraryStore(dir, join(dir, 'repos'));
     await store.load();
     await expect(store.updateRepo('nope', { favorite: true })).rejects.toThrow();
+  });
+
+  it('updateSkill persiste tags e favorite com normalização', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.replaceAssets({ skills: [makeSkill({ id: 's1', name: 'Demo', tags: ['old'] })] });
+    const updated = await store.updateSkill('s1', {
+      tags: [' Docs ', 'docs', 'deploy'],
+      favorite: true
+    });
+    expect(updated.tags).toEqual(['Docs', 'deploy']);
+    expect(updated.favorite).toBe(true);
+    const lib = await new LibraryStore(dir, join(dir, 'repos')).load();
+    expect(lib.skills[0]).toMatchObject({ tags: ['Docs', 'deploy'], favorite: true });
+  });
+
+  it('updateSkill mantém campos não alterados e lança para id inexistente', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.replaceAssets({
+      skills: [makeSkill({ id: 's1', name: 'Demo', description: 'd' })]
+    });
+    const updated = await store.updateSkill('s1', { favorite: true });
+    expect(updated.name).toBe('Demo');
+    expect(updated.description).toBe('d');
+    expect(updated.tags).toEqual([]);
+    await expect(store.updateSkill('nope', { favorite: true })).rejects.toThrow();
+  });
+
+  it('updateBase persiste nome, descrição, tags e favorite', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.replaceAssets({ bases: [makeBase({ id: 'b1', name: 'starter' })] });
+    const updated = await store.updateBase('b1', {
+      name: 'template',
+      description: 'd',
+      tags: ['x'],
+      favorite: true
+    });
+    expect(updated).toMatchObject({
+      name: 'template',
+      description: 'd',
+      tags: ['x'],
+      favorite: true
+    });
+    await expect(store.updateBase('nope', {})).rejects.toThrow();
+  });
+
+  it('updateProject persiste tags, favorite, associações e notas', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.replaceAssets({ projects: [makeProject({ id: 'p1', name: 'app' })] });
+    const updated = await store.updateProject('p1', {
+      skillIds: ['s1'],
+      baseIds: ['b1'],
+      notes: 'ok',
+      tags: ['web'],
+      favorite: true
+    });
+    expect(updated).toMatchObject({
+      skillIds: ['s1'],
+      baseIds: ['b1'],
+      notes: 'ok',
+      tags: ['web'],
+      favorite: true
+    });
+    await expect(store.updateProject('nope', {})).rejects.toThrow();
   });
 });
