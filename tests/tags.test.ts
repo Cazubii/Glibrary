@@ -17,6 +17,10 @@ describe('normalizeTag', () => {
     expect(normalizeTag('')).toBeNull();
     expect(normalizeTag('   ')).toBeNull();
   });
+
+  it('colapsa tabulações em espaço único', () => {
+    expect(normalizeTag('a\tb')).toBe('a b');
+  });
 });
 
 describe('tagKey e sameTag', () => {
@@ -25,6 +29,11 @@ describe('tagKey e sameTag', () => {
     expect(sameTag(' docs ', 'DOCS')).toBe(true);
     expect(sameTag('docs', 'deploy')).toBe(false);
     expect(tagKey(' Docs ')).toBe('docs');
+  });
+
+  it('considera espaços internos múltiplos equivalentes', () => {
+    expect(sameTag('docs  de', 'docs de')).toBe(true);
+    expect(tagKey('  a \t b ')).toBe('a b');
   });
 });
 
@@ -61,5 +70,9 @@ describe('countTags', () => {
 
   it('ignora tags vazias', () => {
     expect(countTags([{ tags: ['  ', 'docs'] }])).toEqual([{ name: 'docs', count: 1 }]);
+  });
+
+  it('devolve lista vazia para lista sem itens', () => {
+    expect(countTags([])).toEqual([]);
   });
 });

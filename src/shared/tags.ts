@@ -9,7 +9,7 @@ export function normalizeTag(input: string): string | null {
 }
 
 export function tagKey(tag: string): string {
-  return tag.trim().toLowerCase();
+  return tag.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 export function sameTag(a: string, b: string): boolean {
