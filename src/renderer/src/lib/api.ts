@@ -33,8 +33,22 @@ export const api = {
     unwrap(window.api.invoke(IpcChannels.baseAdd, input)),
   baseRemove: (id: string): Promise<null> => unwrap(window.api.invoke(IpcChannels.baseRemove, { id })),
   baseClone: (id: string): Promise<BaseItem> => unwrap(window.api.invoke(IpcChannels.baseClone, { id })),
-  projectUpdate: (id: string, patch: Pick<ProjectRef, 'skillIds' | 'baseIds'> & Partial<Pick<ProjectRef, 'notes'>>): Promise<ProjectRef> =>
+  projectUpdate: (
+    id: string,
+    patch: Partial<Pick<ProjectRef, 'skillIds' | 'baseIds' | 'notes' | 'tags' | 'favorite'>>
+  ): Promise<ProjectRef> =>
     unwrap(window.api.invoke(IpcChannels.projectUpdate, { id, ...patch })),
+  skillUpdate: (id: string, patch: { tags?: string[]; favorite?: boolean }): Promise<Skill> =>
+    unwrap(window.api.invoke(IpcChannels.skillUpdate, { id, patch })),
+  baseUpdate: (
+    id: string,
+    patch: { name?: string; description?: string; tags?: string[]; favorite?: boolean }
+  ): Promise<BaseItem> =>
+    unwrap(window.api.invoke(IpcChannels.baseUpdate, { id, patch })),
+  tagsRename: (from: string, to: string): Promise<null> =>
+    unwrap(window.api.invoke(IpcChannels.tagsRename, { from, to })),
+  tagsDelete: (name: string): Promise<null> =>
+    unwrap(window.api.invoke(IpcChannels.tagsDelete, { name })),
   projectAdd: (path: string): Promise<ProjectRef> => unwrap(window.api.invoke(IpcChannels.projectAdd, { path })),
   libraryGet: (): Promise<LibraryFile> =>
     unwrap<LibraryFile>(window.api.invoke(IpcChannels.libraryGet)),
