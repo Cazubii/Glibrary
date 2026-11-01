@@ -18,6 +18,7 @@ export default function TagManagerDialog({
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
@@ -54,9 +55,13 @@ export default function TagManagerDialog({
                   <button
                     type="button"
                     onClick={() => {
-                      void onRename(name, draft).then(() => setEditing(null));
+                      setBusy(true);
+                      void onRename(name, draft.trim())
+                        .then(() => setEditing(null))
+                        .finally(() => setBusy(false));
                     }}
-                    className="rounded bg-steam-accent px-2 py-1 text-xs text-steam-bg"
+                    disabled={busy || draft.trim() === '' || draft.trim() === name}
+                    className="rounded bg-steam-accent px-2 py-1 text-xs text-steam-bg disabled:opacity-50"
                   >
                     Salvar
                   </button>
@@ -75,6 +80,7 @@ export default function TagManagerDialog({
                   <button
                     type="button"
                     onClick={() => {
+                      setConfirming(null);
                       setEditing(name);
                       setDraft(name);
                     }}
@@ -87,9 +93,13 @@ export default function TagManagerDialog({
                       <button
                         type="button"
                         onClick={() => {
-                          void onDelete(name).then(() => setConfirming(null));
+                          setBusy(true);
+                          void onDelete(name)
+                            .then(() => setConfirming(null))
+                            .finally(() => setBusy(false));
                         }}
-                        className="rounded bg-red-500/80 px-2 py-1 text-xs text-white"
+                        disabled={busy}
+                        className="rounded bg-steam-error px-2 py-1 text-xs text-white disabled:opacity-50"
                       >
                         Confirmar
                       </button>

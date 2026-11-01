@@ -26,6 +26,7 @@ export default function TagChips({
             key={name}
             type="button"
             onClick={() => onToggle(name)}
+            aria-pressed={active}
             className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs ${
               active
                 ? 'border-steam-accent bg-steam-accent/20 text-steam-accent'
