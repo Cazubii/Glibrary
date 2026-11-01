@@ -139,3 +139,22 @@ podem ser removidas após a compatibilidade de backups v1 deixar de precisar de 
 ### Clone de Base usa a pasta configurada
 O clone vai para `settings.basesRoot`, inicializada como `~/BASES`. Remover uma Base da
 biblioteca não apaga a pasta local.
+
+## 2026-11-01 — Tags de Skills/Bases/Projetos
+
+### Identidade case-insensitive com preservação da primeira grafia
+`Docs` e `docs` são a mesma tag; a grafia do primeiro uso é a gravada. Renomear para a
+mesma tag com grafia diferente é permitido (ajuste de caixa); renomear para OUTRA tag
+existente é erro, sem merge implícito.
+
+### Tags vivem nos itens, sem lista própria em library.json
+Cada item guarda `tags: string[]`; uma tag sem itens apenas não aparece nos chips.
+Evita migração de dados e estado duplicado.
+
+### skill:update e base:update aninhados; project:update estende o contrato plano
+Os canais novos usam `{ id, patch }`; o `project:update` existente permanece plano
+(`{ id, ...campos }`) e ganha `tags`/`favorite`.
+
+### Saves do LibraryStore serializados
+Atualizações rápidas (edições de tags em sequência) enfileiram `save()` numa cadeia de
+promises para não intercalar escrita/renomeação do `library.json.tmp`.
