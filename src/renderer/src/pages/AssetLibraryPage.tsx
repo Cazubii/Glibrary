@@ -147,9 +147,9 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
       onError(e instanceof Error ? e.message : String(e));
     }
   };
-  const toggleSkillFavorite = async (skill: Skill): Promise<void> => {
+  const setSkillFavorite = async (skill: Skill, favorite: boolean): Promise<void> => {
     try {
-      await api.skillUpdate(skill.id, { favorite: !skill.favorite });
+      await api.skillUpdate(skill.id, { favorite });
       await refresh();
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
@@ -163,9 +163,9 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
       onError(e instanceof Error ? e.message : String(e));
     }
   };
-  const toggleBaseFavorite = async (base: BaseItem): Promise<void> => {
+  const setBaseFavorite = async (base: BaseItem, favorite: boolean): Promise<void> => {
     try {
-      await api.baseUpdate(base.id, { favorite: !base.favorite });
+      await api.baseUpdate(base.id, { favorite });
       await refresh();
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
@@ -179,9 +179,9 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
       onError(e instanceof Error ? e.message : String(e));
     }
   };
-  const toggleProjectFavorite = async (project: ProjectRef): Promise<void> => {
+  const setProjectFavorite = async (project: ProjectRef, favorite: boolean): Promise<void> => {
     try {
-      await api.projectUpdate(project.id, { favorite: !project.favorite });
+      await api.projectUpdate(project.id, { favorite });
       await refresh();
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
@@ -238,7 +238,7 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
                 skill={skill}
                 allTags={allTagNames}
                 onTagsChange={(tags) => void updateSkillTags(skill, tags)}
-                onFavorite={() => void toggleSkillFavorite(skill)}
+                onFavorite={(next) => void setSkillFavorite(skill, next)}
                 onOpen={() =>
                   void api
                     .skillOpen(skill.id)
@@ -275,7 +275,7 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
                 allTags={allTagNames}
                 basesRoot={settings?.basesRoot}
                 onTagsChange={(tags) => void updateBaseTags(base, tags)}
-                onFavorite={() => void toggleBaseFavorite(base)}
+                onFavorite={(next) => void setBaseFavorite(base, next)}
                 onClone={() =>
                   void api
                     .baseClone(base.id)
@@ -314,7 +314,7 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
                   }
                 }}
                 onTagsChange={(tags) => void updateProjectTags(project, tags)}
-                onFavorite={() => void toggleProjectFavorite(project)}
+                onFavorite={(next) => void setProjectFavorite(project, next)}
               />
             ))}
           </div>

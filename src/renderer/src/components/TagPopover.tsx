@@ -45,7 +45,9 @@ export default function TagPopover({
   const commit = (): void => {
     const tag = normalizeTag(draft);
     if (tag == null) return;
-    if (!currentTags.some((current) => sameTag(current, tag))) onAdd(tag);
+    if (!currentTags.some((current) => sameTag(current, tag))) {
+      onAdd(allTags.find((existing) => sameTag(existing, tag)) ?? tag);
+    }
     setDraft('');
   };
   return (

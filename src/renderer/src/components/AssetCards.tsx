@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   BriefcaseBusiness,
   FolderOpen,
@@ -22,21 +22,39 @@ function TagArea({
   onChange: (tags: string[]) => void;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
+  const wasOpen = useRef(false);
+  const [localTags, setLocalTags] = useState(tags);
+  useEffect(() => {
+    setLocalTags(tags);
+  }, [tags]);
+  const emit = (next: string[]): void => {
+    setLocalTags(next);
+    onChange(next);
+  };
   return (
     <div className="relative mt-3">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        onMouseDown={(e) => e.stopPropagation()}
+        onMouseDown={() => {
+          wasOpen.current = open;
+        }}
+        onClick={() => {
+          if (wasOpen.current) {
+            wasOpen.current = false;
+            setOpen(false);
+          } else {
+            setOpen(true);
+          }
+        }}
         className="flex flex-wrap items-center gap-1.5 text-left"
       >
-        {tags.length === 0 ? (
+        {localTags.length === 0 ? (
           <span className="flex items-center gap-1 rounded-full border border-dashed border-steam-elevated px-2 py-0.5 text-xs text-steam-text/40">
             <Tag size={11} />
             Adicionar tag
           </span>
         ) : (
-          tags.map((tag) => (
+          localTags.map((tag) => (
             <span key={tag} className="rounded-full bg-steam-elevated px-2 py-0.5 text-xs text-steam-text/70">
               {tag}
             </span>
@@ -45,10 +63,10 @@ function TagArea({
       </button>
       {open && (
         <TagPopover
-          currentTags={tags}
+          currentTags={localTags}
           allTags={allTags}
-          onAdd={(tag) => onChange([...tags, tag])}
-          onRemove={(tag) => onChange(tags.filter((current) => !sameTag(current, tag)))}
+          onAdd={(tag) => emit([...localTags, tag])}
+          onRemove={(tag) => emit(localTags.filter((current) => !sameTag(current, tag)))}
           onClose={() => setOpen(false)}
         />
       )}
@@ -61,16 +79,24 @@ function StarButton({
   onClick
 }: {
   active: boolean;
-  onClick: () => void;
+  onClick: (next: boolean) => void;
 }): React.JSX.Element {
+  const [local, setLocal] = useState(active);
+  useEffect(() => {
+    setLocal(active);
+  }, [active]);
   return (
     <button
       type="button"
-      onClick={onClick}
-      aria-label={active ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-      className={`rounded p-1 ${active ? 'text-steam-accent' : 'text-steam-text/40 hover:text-steam-accent'}`}
+      onClick={() => {
+        const next = !local;
+        setLocal(next);
+        onClick(next);
+      }}
+      aria-label={local ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+      className={`rounded p-1 ${local ? 'text-steam-accent' : 'text-steam-text/40 hover:text-steam-accent'}`}
     >
-      <Star size={15} fill={active ? 'currentColor' : 'none'} />
+      <Star size={15} fill={local ? 'currentColor' : 'none'} />
     </button>
   );
 }
@@ -86,7 +112,7 @@ export function SkillCard({
   skill: Skill;
   allTags: string[];
   onTagsChange: (tags: string[]) => void;
-  onFavorite: () => void;
+  onFavorite: (next: boolean) => void;
   onOpen: () => void;
   onRemove: () => void;
 }): React.JSX.Element {
@@ -140,7 +166,7 @@ export function BaseCard({
   base: BaseItem;
   allTags: string[];
   onTagsChange: (tags: string[]) => void;
-  onFavorite: () => void;
+  onFavorite: (next: boolean) => void;
   onClone: () => void;
   onRemove: () => void;
   basesRoot?: string;
@@ -194,7 +220,7 @@ export function ProjectCard({
   allTags: string[];
   onSave: (patch: { skillIds: string[]; baseIds: string[]; notes?: string }) => Promise<void>;
   onTagsChange: (tags: string[]) => void;
-  onFavorite: () => void;
+  onFavorite: (next: boolean) => void;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState(project.notes ?? '');
