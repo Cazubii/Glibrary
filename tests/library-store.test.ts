@@ -24,6 +24,7 @@ function makeSkill(overrides: Partial<Skill> = {}): Skill {
   return {
     id: `skill-${counter++}`,
     name: 'demo',
+    category: 'codigo',
     path: join(dir, 'skills', 'demo'),
     source: join(dir, 'skills'),
     tags: [],
@@ -53,6 +54,7 @@ function makeProject(overrides: Partial<ProjectRef> = {}): ProjectRef {
     tags: [],
     favorite: false,
     skillIds: [],
+    agentIds: [],
     baseIds: [],
     addedAt: new Date().toISOString(),
     ...overrides
@@ -239,6 +241,7 @@ describe('LibraryStore', () => {
     await store.replaceAssets({ projects: [makeProject({ id: 'p1', name: 'app' })] });
     const updated = await store.updateProject('p1', {
       skillIds: ['s1'],
+      agentIds: ['a1'],
       baseIds: ['b1'],
       notes: 'ok',
       tags: ['web'],
@@ -246,6 +249,7 @@ describe('LibraryStore', () => {
     });
     expect(updated).toMatchObject({
       skillIds: ['s1'],
+      agentIds: ['a1'],
       baseIds: ['b1'],
       notes: 'ok',
       tags: ['web'],
@@ -269,10 +273,11 @@ describe('LibraryStore', () => {
     const store = new LibraryStore(dir, join(dir, 'repos'));
     await store.load();
     await store.replaceAssets({
-      projects: [makeProject({ id: 'p1', skillIds: ['s1'], baseIds: ['b1'] })]
+      projects: [makeProject({ id: 'p1', skillIds: ['s1'], agentIds: ['a1'], baseIds: ['b1'] })]
     });
-    const updated = await store.updateProject('p1', { skillIds: [], baseIds: [] });
+    const updated = await store.updateProject('p1', { skillIds: [], agentIds: [], baseIds: [] });
     expect(updated.skillIds).toEqual([]);
+    expect(updated.agentIds).toEqual([]);
     expect(updated.baseIds).toEqual([]);
   });
 
@@ -368,5 +373,72 @@ describe('LibraryStore', () => {
     await store.load();
     await store.replaceAssets({ skills: [makeSkill({ id: 's1', tags: ['docs'] })] });
     await expect(store.renameTag('docs', '   ')).rejects.toThrow('Tag inválida');
+  });
+});
+
+describe('LibraryStore — kits e uso', () => {
+  it('cria e edita coleções, rejeitando nome duplicado', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    const kit = await store.addKit({ name: 'Stack React', skillIds: [] });
+    expect(store.listKits()).toHaveLength(1);
+    const updated = await store.updateKit(kit.id, { name: 'Stack React 2', tags: ['frontend', 'web'], description: '' });
+    expect(updated).toMatchObject({ name: 'Stack React 2', tags: ['frontend', 'web'] });
+    expect(updated.description).toBeUndefined();
+    await expect(store.addKit({ name: 'stack react 2' })).rejects.toThrow('Coleção já existe');
+    await store.removeKit(kit.id);
+    expect(store.listKits()).toHaveLength(0);
+  });
+
+  it('applyKit une associações no projeto e herda tags dos itens (opt-out funciona)', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.replaceAssets({
+      skills: [makeSkill({ id: 's1', tags: ['docs'] })],
+      agents: [{ id: 'a1', name: 'Agente', category: 'codigo', path: join(dir, 'a'), file: join(dir, 'a', 'x.md'), source: join(dir, 'a'), tags: ['qa'], favorite: false, addedAt: new Date().toISOString() }]
+    });
+    await store.replaceAssets({ projects: [makeProject({ id: 'p1', tags: ['web'], skillIds: ['s0'] })] });
+    const kit = await store.addKit({ name: 'Kit QA', skillIds: ['s1'], agentIds: ['a1'], tags: ['kit-tag'] });
+
+    const withInherit = await store.applyKit(kit.id, 'p1', true);
+    expect(withInherit.skillIds).toEqual(['s0', 's1']);
+    expect(withInherit.agentIds).toEqual(['a1']);
+    expect(withInherit.tags).toEqual(['web', 'docs', 'qa', 'kit-tag']);
+
+    const withoutInherit = await store.applyKit(kit.id, 'p1', false);
+    expect(withoutInherit.tags).toEqual(['web', 'docs', 'qa', 'kit-tag']);
+    expect(withoutInherit.skillIds).toEqual(['s0', 's1']);
+
+    await expect(store.applyKit('nao-existe', 'p1', true)).rejects.toThrow('Coleção não encontrada');
+    await expect(store.applyKit(kit.id, 'p404', true)).rejects.toThrow('Projeto não encontrado');
+
+    await store.removeKit(kit.id);
+    expect(store.listKits()).toHaveLength(0);
+  });
+
+  it('applyKit lança se a coleção usa item removido, e usage grava/mantém últimos 500', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.replaceAssets({ skills: [makeSkill({ id: 's1' })], projects: [makeProject({ id: 'p1' })] });
+    const kit = await store.addKit({ name: 'Kit quebrado', skillIds: ['fantasma'] });
+    await expect(store.applyKit(kit.id, 'p1', true)).rejects.toThrow('não existem mais');
+
+    const event1 = await store.recordUsage('skill', 's1');
+    expect(event1.kind).toBe('skill');
+    await expect(store.recordUsage('skill', 'fantasma')).rejects.toThrow('não encontrada');
+    await expect(store.recordUsage('agent', 'fantasma')).rejects.toThrow('não encontrado');
+
+    for (let i = 0; i < 505; i += 1) {
+      await store.recordUsage('skill', 's1');
+    }
+    expect(store.listUsage()).toHaveLength(500);
+    expect(store.listUsage()[0].at.localeCompare(event1.at)).toBeGreaterThanOrEqual(0);
+  }, 20000);
+
+  it('persistencia v2 aceita kits/usage e defaultSettings tem inheritTags', () => {
+    const lib = emptyLibrary('C:/repos');
+    expect(lib.kits).toEqual([]);
+    expect(lib.usage).toEqual([]);
+    expect(lib.settings.inheritTags).toBe(true);
   });
 });

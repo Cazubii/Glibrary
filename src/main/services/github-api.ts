@@ -27,7 +27,7 @@ export function decodeToken(stored: string | undefined): string | undefined {
   }
 }
 
-function fetchJson(url: string, token?: string): Promise<unknown> {
+export function fetchJson(url: string, token?: string): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const request = net.request({ url, method: 'GET' });
     if (token != null && token !== '') {
@@ -84,3 +84,34 @@ export async function fetchRepoMeta(
 export function opengraphCoverUrl(owner: string, repo: string): string {
   return `https://opengraph.githubassets.com/1/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
 }
+
+/** Baixa o conteúdo cru de um arquivo (ex.: raw.githubusercontent.com). */
+export function fetchText(url: string, token?: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const request = net.request({ url, method: 'GET' });
+    if (token != null && token !== '') {
+      request.setHeader('Authorization', `Bearer ${token}`);
+    }
+    request.setHeader('User-Agent', 'Glibrary');
+    let body = '';
+    request.on('response', (response) => {
+      response.on('data', (chunk: Buffer) => {
+        body += chunk.toString('utf-8');
+      });
+      response.on('end', () => {
+        if (response.statusCode === 403 || response.statusCode === 429) {
+          reject(new Error('Limite de acesso ao GitHub atingido. Tente mais tarde ou adicione um token.'));
+          return;
+        }
+        if (response.statusCode !== 200) {
+          reject({ statusCode: response.statusCode, message: `GitHub: HTTP ${response.statusCode}` });
+          return;
+        }
+        resolve(body);
+      });
+    });
+    request.on('error', (err) => reject(new Error(err.message)));
+    request.end();
+  });
+}
+

@@ -158,3 +158,105 @@ Os canais novos usam `{ id, patch }`; o `project:update` existente permanece pla
 ### Saves do LibraryStore serializados
 Atualizações rápidas (edições de tags em sequência) enfileiram `save()` numa cadeia de
 promises para não intercalar escrita/renomeação do `library.json.tmp`.
+
+## 2026-11-04 — Categorias e separação Skill/Agent
+
+### Agents como entidade própria descoberta por pastas dedicadas
+Novo tipo `Agent` em `library.json` (campo `agents`), descoberto por `agents:scan` nas
+`agentFolders` (padrão: `~/.claude/agents`, `~/.opencode/agent`, `~/.agents/agents`). Cada
+arquivo `.md` (raiz ou subpastas, exceto `SKILL.md`) vira um agente; `name`/`description`/
+`category` vêm do frontmatter ou do nome do arquivo. Skills permanecem restritas a
+`SKILL.md` — os dois domínios nunca se misturam.
+
+### Categoria é lista fixa com default, não tag
+Categorias (`AssetCategory`: design, banco de dados, código, frontend, backend, testes,
+devops, documentação, outros) são um enum fechado com default `outros`, aplicado a Skills e
+Agents. Valor desconhecido no frontmatter cai em `outros` em vez de invalidar o item. O
+arquivo continua em `version: 2`: os campos novos têm default no schema Zod, então v2
+existente migra sem bump de versão. A categoria é projetável (chips de filtro por aba) e
+editável no cartão; tags seguem livres para o resto.
+
+### Agentes não entram na engrenagem de associação de projetos
+`agent:remove` fica independente (sem limpeza de `skillIds` em projetos) e `tags:rename`/
+`tags:delete` passam a percorrer Skills, Agents, Bases e Projetos juntos.
+
+## 2026-11-04 — Top repos do GitHub
+
+### "Top" via Search API com janela de 30 dias, não endpoint de trending
+A API do GitHub não expõe trending. Usamos `search/repositories` com
+`created:>=<hoje-30d>&sort=stars&per_page=25` como aproximação de "em alta". O limite é de 25
+repositórios por busca; o token (via `safeStorage`) é usado quando configurado.
+
+### Busca no startup em segundo plano com broadcast; lista cacheada em library.json
+`refreshTopReposAndBroadcast` roda ~1,5s após `whenReady` (não bloqueia a janela), grava em
+`topRepos` (campo novo com default vazio — continua `version: 2`) e envia
+`topRepos:changed` para todas as janelas. Falha de rede/limite de API é silenciosa no
+startup: a aba mantém a última lista persistida e o usuário pode "Atualizar agora" na aba.
+
+### Adicionar ao catálogo não clona
+O card de top repo adiciona o item via `repo:addByUrl` (`clone: false`), indo para o catálogo
+como repos não clonado; clonagem fica como ação posterior padrão do Repos.
+
+## 2026-11-04 — Dashboard de uso
+
+### Agents associáveis a projetos (`agentIds`)
+Para medir "agents que uso", `ProjectRef` ganhou `agentIds` (default `[]` — migração de `v2`
+existente é automática pelo default no schema). `projects:update` aceita e valida `agentIds`
+como já fazia com `skillIds`/`baseIds`; `agents:remove` limpa associações nos projetos.
+
+### Agregação pura em `shared/dashboard.ts` (sem IPC novo)
+O dashboard reusa `assets:get` (dados já carregados) e calcula tudo no renderer com
+`computeDashboardData`: top-10 de skills/agents por nº de projetos, distribuição de usos por
+`AssetCategory`, cobertura (`projectsWithSkills/Agents`), itens sem uso, tags de projetos e
+projetos mais antigos com suas contagens. Função pura = testável sem Electron/janela.
+
+### Gráficos em SVG/CSS próprios em vez de biblioteca (recharts etc.)
+Barras horizontais e rosca de categorias são componentes SVG puros (`components/charts.tsx`).
+Evita dependência nova (React 19 + peso bundle) e usa as cores do tema.
+
+## 2026-11-04 — Big batch: notificações, import do GitHub, coleções, validação
+
+### Eventos de uso e gráfico mensal em vez de rastrear uso implícito
+"Usar" é multívoco; optamos por registrar eventos explícitos (`usage[]` na v2, cap 500): abrir
+uma Skill (`skills:open`) ou Agent (`agents:open`) grava `{ kind, assetId, at }`. `skills:scan`
+e `agents:scan` agora devolvem `{ items, issues }` para alimentar o painel de validação. Exibir
+"alternativas" do dashboard por categoria/favoritos é uma opção filtros (segundo argumento de
+`computeDashboardData`), não um estado separado.
+
+### Import de SKILL.md/agents direto do repo do GitHub (sem clonar o repo inteiro)
+`skills:import` baixa o `SKILL.md` da raiz (raw.githubusercontent, branch default com fallback
+`HEAD`) para `<skillFolders[0]>/<repo>/SKILL.md`; `agents:import` lista `contents/.claude/agents`
+(ou `agents/`) pela API de conteúdo e baixa os `.md` (cap 10) para `<agentFolders[0]>/<repo>`.
+Sem violar a regra de nem sempre clonar: import filtrado e barato.
+
+### Coleções (kits) como associações derivadas, não tags disfarçadas
+`Kit { skillIds, agentIds, baseIds, tags }` na v2. `kits:apply` faz união das associações no
+projeto; a herança de tags segue `settings.inheritTags` (default true) e pode ser desligada por
+aplicação. `tags` do projeto passam a ganhar as tags dos itens ao associar manualmente no card
+de projeto (mesma setting). Projetos ganham o campo `agentIds` que o dashboard já usava.
+
+### Verificação de desatualização no startup: fetch sob demanda, com limite
+O banner da Biblioteca no startup chama `repo:fetchStatus` para no máximo 12 repos clonados
+(instalação) e mostra "Puxar todos" quando há commits atrás; desativável em
+`settings.checkUpdatesOnStart`. Sem fetch global no bootstrap para não travar o startup com
+12 chamadas de rede executadas em série, todas com falha tolerada por repo.
+
+### Top GitHub já na biblioteca e duplicação evitada por URL normalizada
+A página compara `topRepo.remoteUrl` (e URLs de repos/bases) via `normalizeGitUrl`; cards de
+itens existentes ficam desabilitados. Import skill/agents marcados por repo evita repetir.
+
+### Export do dashboard passa pelo dialog do main (não pelo renderer)
+`dashboard:export` recebe o Markdown (compartilhado, puro: `buildDashboardMarkdown`) e usa
+`dialog.showSaveDialog` + `writeFile` no processo main — o renderer continua sem acesso a fs.
+
+## 2026-11-04 — Busca GitHub por tema
+
+### "Melhor repo para meu problema" = search/repositories com sort=stars
+Página própria (navegação "Busca") com consulta livre: `GET search/repositories?q=<tema>
+[+language:X]&sort=stars&order=desc&per_page≤50`. Diferente do "Top GitHub" (repos criados
+nos últimos 30 dias), a busca responde à pergunta "qual é o mais bem avaliado para X".
+Reutilizamos `parseTopReposResponse` (mesma resposta da busca de em alta) e o `TopRepoCard`
+com as ações existentes: adicionar ao catálogo, importar skill/agents e comparação por
+`normalizeGitUrl` para marcar o que já está na biblioteca. Sem token o GitHub permite
+10 buscas/min; token (safeStorage) sobe para 30/min.
+

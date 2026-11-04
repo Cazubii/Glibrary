@@ -37,15 +37,32 @@ export const IpcChannels = {
   skillsScan: 'skills:scan',
   skillRemove: 'skills:remove',
   skillOpen: 'skills:open',
+  skillImport: 'skills:import',
+  agentsScan: 'agents:scan',
+  agentRemove: 'agents:remove',
+  agentOpen: 'agents:open',
+  agentImport: 'agents:import',
+  kitAdd: 'kits:add',
+  kitUpdate: 'kits:update',
+  kitRemove: 'kits:remove',
+  kitApply: 'kits:apply',
+  usageList: 'usage:list',
+  dashboardExport: 'dashboard:export',
   baseAdd: 'bases:add',
   baseClone: 'bases:clone',
   baseRemove: 'bases:remove',
   projectUpdate: 'projects:update',
   projectAdd: 'projects:add',
   skillUpdate: 'skills:update',
+  agentUpdate: 'agents:update',
   baseUpdate: 'bases:update',
   tagsRename: 'tags:rename',
-  tagsDelete: 'tags:delete'
+  tagsDelete: 'tags:delete',
+  topReposGet: 'topRepos:get',
+  topReposRefresh: 'topRepos:refresh',
+  topReposChanged: 'topRepos:changed',
+  githubSearch: 'github:search',
+  githubAgentSearch: 'github:agentSearch'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

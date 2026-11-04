@@ -2,9 +2,13 @@ import type {
   DetectionResult,
   IpcResult,
   LibraryFile,
+  Agent,
+  AgentsScanResult,
   BaseItem,
+  Kit,
   ProjectRef,
   Skill,
+  SkillsScanResult,
   LogLine,
   ProcessKind,
   Repo,
@@ -12,7 +16,10 @@ import type {
   ScanFolderSuggestion,
   ScanProgress,
   ScannedRepo,
-  Settings
+  Settings,
+  TopRepos,
+  TopRepo,
+  UsageEvent
 } from '../../../shared/types';
 import type { ToolStatus } from '../../../shared/tools';
 import { IpcChannels } from '../../../shared/ipc-channels';
@@ -24,22 +31,65 @@ async function unwrap<T>(promise: Promise<unknown>): Promise<T> {
 }
 
 export const api = {
-  assetsGet: (): Promise<{ skills: Skill[]; bases: BaseItem[]; projects: ProjectRef[] }> =>
-    unwrap(window.api.invoke(IpcChannels.assetsGet)),
-  skillsScan: (): Promise<Skill[]> => unwrap(window.api.invoke(IpcChannels.skillsScan)),
+  assetsGet: (): Promise<{
+    skills: Skill[];
+    agents: Agent[];
+    bases: BaseItem[];
+    projects: ProjectRef[];
+    kits: Kit[];
+    usage: UsageEvent[];
+  }> => unwrap(window.api.invoke(IpcChannels.assetsGet)),
+  skillsScan: (): Promise<SkillsScanResult> => unwrap(window.api.invoke(IpcChannels.skillsScan)),
   skillRemove: (id: string): Promise<null> => unwrap(window.api.invoke(IpcChannels.skillRemove, { id })),
   skillOpen: (id: string): Promise<null> => unwrap(window.api.invoke(IpcChannels.skillOpen, { id })),
+  skillImport: (url: string): Promise<Skill> =>
+    unwrap(window.api.invoke(IpcChannels.skillImport, { url })),
+  agentsScan: (): Promise<AgentsScanResult> => unwrap(window.api.invoke(IpcChannels.agentsScan)),
+  agentRemove: (id: string): Promise<null> => unwrap(window.api.invoke(IpcChannels.agentRemove, { id })),
+  agentOpen: (id: string): Promise<null> => unwrap(window.api.invoke(IpcChannels.agentOpen, { id })),
+  agentImport: (url: string): Promise<Agent[]> =>
+    unwrap(window.api.invoke(IpcChannels.agentImport, { url })),
+  kitAdd: (input: {
+    name: string;
+    description?: string;
+    skillIds?: string[];
+    agentIds?: string[];
+    baseIds?: string[];
+    tags?: string[];
+  }): Promise<Kit> => unwrap(window.api.invoke(IpcChannels.kitAdd, input)),
+  kitUpdate: (id: string, patch: {
+    name?: string;
+    description?: string;
+    skillIds?: string[];
+    agentIds?: string[];
+    baseIds?: string[];
+    tags?: string[];
+  }): Promise<Kit> => unwrap(window.api.invoke(IpcChannels.kitUpdate, { id, ...patch })),
+  kitRemove: (id: string): Promise<null> => unwrap(window.api.invoke(IpcChannels.kitRemove, { id })),
+  kitApply: (kitId: string, projectId: string, inheritTags?: boolean): Promise<ProjectRef> =>
+    unwrap(
+      window.api.invoke(
+        IpcChannels.kitApply,
+        { kitId, projectId, ...(inheritTags != null ? { inheritTags } : {}) }
+      )
+    ),
+  dashboardExport: (content: string, suggestedName = 'dashboard.md'): Promise<string | null> =>
+    unwrap(window.api.invoke(IpcChannels.dashboardExport, { content, suggestedName })),
+  settingsSet: (patch: Partial<Settings>): Promise<Settings> =>
+    unwrap(window.api.invoke(IpcChannels.settingsSet, patch)),
   baseAdd: (input: Pick<BaseItem, 'name'> & Partial<Pick<BaseItem, 'remoteUrl' | 'localPath' | 'description'>>): Promise<BaseItem> =>
     unwrap(window.api.invoke(IpcChannels.baseAdd, input)),
   baseRemove: (id: string): Promise<null> => unwrap(window.api.invoke(IpcChannels.baseRemove, { id })),
   baseClone: (id: string): Promise<BaseItem> => unwrap(window.api.invoke(IpcChannels.baseClone, { id })),
   projectUpdate: (
     id: string,
-    patch: Partial<Pick<ProjectRef, 'skillIds' | 'baseIds' | 'notes' | 'tags' | 'favorite'>>
+    patch: Partial<Pick<ProjectRef, 'skillIds' | 'agentIds' | 'baseIds' | 'notes' | 'tags' | 'favorite'>>
   ): Promise<ProjectRef> =>
     unwrap(window.api.invoke(IpcChannels.projectUpdate, { id, ...patch })),
-  skillUpdate: (id: string, patch: { tags?: string[]; favorite?: boolean }): Promise<Skill> =>
+  skillUpdate: (id: string, patch: { category?: Skill['category']; tags?: string[]; favorite?: boolean }): Promise<Skill> =>
     unwrap(window.api.invoke(IpcChannels.skillUpdate, { id, patch })),
+  agentUpdate: (id: string, patch: { category?: Agent['category']; tags?: string[]; favorite?: boolean }): Promise<Agent> =>
+    unwrap(window.api.invoke(IpcChannels.agentUpdate, { id, patch })),
   baseUpdate: (
     id: string,
     patch: { name?: string; description?: string; tags?: string[]; favorite?: boolean }
@@ -49,6 +99,20 @@ export const api = {
     unwrap(window.api.invoke(IpcChannels.tagsRename, { from, to })),
   tagsDelete: (name: string): Promise<null> =>
     unwrap(window.api.invoke(IpcChannels.tagsDelete, { name })),
+  topReposGet: (): Promise<TopRepos> => unwrap(window.api.invoke(IpcChannels.topReposGet)),
+  githubSearch: (query: string, language?: string, limit = 25): Promise<{ fetchedAt: string; totalCount: number; repos: TopRepo[] }> =>
+    unwrap(
+      window.api.invoke(IpcChannels.githubSearch, {
+        query,
+        ...(language ? { language } : {}),
+        limit
+      })
+    ),
+  topReposRefresh: (): Promise<TopRepos> => unwrap(window.api.invoke(IpcChannels.topReposRefresh)),
+  onTopReposChanged: (listener: (payload: IpcResult<TopRepos>) => void) =>
+    window.api.on(IpcChannels.topReposChanged, (payload: unknown) => {
+      listener(payload as IpcResult<TopRepos>);
+    }),
   projectAdd: (path: string): Promise<ProjectRef> => unwrap(window.api.invoke(IpcChannels.projectAdd, { path })),
   libraryGet: (): Promise<LibraryFile> =>
     unwrap<LibraryFile>(window.api.invoke(IpcChannels.libraryGet)),
@@ -181,9 +245,6 @@ export const api = {
 
   settingsGet: (): Promise<Settings> =>
     unwrap<Settings>(window.api.invoke(IpcChannels.settingsGet)),
-
-  settingsSet: (patch: Partial<Settings>): Promise<Settings> =>
-    unwrap<Settings>(window.api.invoke(IpcChannels.settingsSet, patch)),
 
   onStatusChanged: (listener: (payload: { id: string; status: Repo['status'] }) => void) =>
     window.api.on(IpcChannels.repoStatusChanged, (payload: unknown) => {

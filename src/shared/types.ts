@@ -1,3 +1,24 @@
+import type { AssetCategory } from './categories';
+
+export type { AssetCategory } from './categories';
+
+export interface TopRepo {
+  owner: string;
+  name: string;
+  remoteUrl: string;
+  description?: string;
+  stars: number;
+  language?: string;
+  topics?: string[];
+  pushedAt?: string;
+  createdAt?: string;
+}
+
+export interface TopRepos {
+  fetchedAt: string; // ISO da última busca; '' = nunca buscado
+  repos: TopRepo[];
+}
+
 export type RepoStatus =
   | 'not_cloned' // só no catálogo (tem URL, não tem pasta)
   | 'cloning'
@@ -90,19 +111,71 @@ export interface Settings {
   scanFolders: string[];
   basesRoot: string;
   skillFolders: string[];
+  agentFolders: string[]; // pastas com arquivos .md de agentes
   githubToken?: string; // opcional; salvar com safeStorage
   editorCommand: string; // padrão: "code"
   terminalPreference: 'auto' | string;
   theme: 'dark' | 'light'; // padrão: dark (estilo Steam)
   viewMode: 'grid' | 'list';
   checkUpdatesOnStart: boolean;
+  inheritTags: boolean; // projetos herdam tags dos skills/agents/bases associados
+}
+
+export interface UsageEvent {
+  id: string;
+  kind: 'skill' | 'agent';
+  assetId: string;
+  at: string; // ISO
+}
+
+export interface Kit {
+  id: string;
+  name: string;
+  description?: string;
+  skillIds: string[];
+  agentIds: string[];
+  baseIds: string[];
+  tags: string[];
+  addedAt: string;
+}
+
+export interface ScanIssue {
+  type: 'skill' | 'agent';
+  path: string;
+  name?: string;
+  reason: string;
+}
+
+export interface SkillsScanResult {
+  skills: Skill[];
+  issues: ScanIssue[];
+}
+
+export interface AgentsScanResult {
+  agents: Agent[];
+  issues: ScanIssue[];
 }
 
 export interface Skill {
   id: string;
   name: string;
   description?: string;
+  category: AssetCategory;
   path: string;
+  source: string;
+  tags: string[];
+  favorite: boolean;
+  addedAt: string;
+  updatedAt?: string;
+}
+
+export interface Agent {
+  id: string;
+  name: string;
+  description?: string;
+  category: AssetCategory;
+  path: string; // pasta do agente
+  file: string; // arquivo .md que o define
   source: string;
   tags: string[];
   favorite: boolean;
@@ -131,6 +204,7 @@ export interface ProjectRef {
   tags: string[];
   favorite: boolean;
   skillIds: string[];
+  agentIds: string[];
   baseIds: string[];
   notes?: string;
   addedAt: string;
@@ -140,8 +214,12 @@ export interface LibraryFile {
   version: 2;
   repos: Repo[];
   skills: Skill[];
+  agents: Agent[];
   bases: BaseItem[];
   projects: ProjectRef[];
+  kits: Kit[];
+  usage: UsageEvent[];
+  topRepos: TopRepos;
   settings: Settings;
 }
 

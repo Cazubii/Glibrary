@@ -44,6 +44,9 @@ comportamento devem incluir testes apropriados e documentação quando necessár
 
 ## Estado da biblioteca
 
-O modelo v2 separa `skills`, `bases` e `projects` no arquivo persistente. Na migração v1, itens
-com pasta local se tornam projetos de contexto; entradas com URL remota sem pasta local se
-tornam Bases. O bootstrap atual não registra os handlers antigos de execução de projetos.
+O modelo v2 separa `skills`, `agents`, `bases` e `projects` no arquivo persistente. Skills são
+descobertas por `SKILL.md` em `settings.skillFolders`; Agents são arquivos `.md` de agente em
+`settings.agentFolders`; Skills e Agents carregam uma `category` fixa (default `outros`).
+Na migração v1, itens com pasta local se tornam projetos de contexto; entradas com URL remota
+sem pasta local se tornam Bases. O bootstrap atual não registra os handlers antigos de
+execução de projetos.

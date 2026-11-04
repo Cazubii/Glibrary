@@ -1,0 +1,229 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Flame, Layers3, BarChart3, Download, Star } from 'lucide-react';
+import type { Agent, AssetCategory, BaseItem, ProjectRef, Skill, UsageEvent } from '@shared/types';
+import { ASSET_CATEGORIES, ASSET_CATEGORY_LABELS } from '@shared/categories';
+import { buildDashboardMarkdown, computeDashboardData, computeMonthlyUsage } from '@shared/dashboard';
+import { DonutChart, HBarChart } from '../components/charts';
+import { api } from '../lib/api';
+
+type Section = 'skills' | 'agents';
+
+interface Props { onError: (message: string) => void; onSuccess: (message: string) => void }
+export default function DashboardPage({ onError, onSuccess }: Props): React.JSX.Element {
+  const [assets, setAssets] = useState<{
+    skills: Skill[];
+    agents: Agent[];
+    bases: BaseItem[];
+    projects: ProjectRef[];
+    usage: UsageEvent[];
+  } | null>(null);
+  const [section, setSection] = useState<Section>('skills');
+  const [selectedCategories, setSelectedCategories] = useState<AssetCategory[]>([]);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    api.assetsGet()
+      .then((data) => {
+        if (!cancelled) setAssets({ skills: data.skills, agents: data.agents, bases: data.bases, projects: data.projects, usage: data.usage });
+      })
+      .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
+    return () => { cancelled = true; };
+  }, [onError]);
+
+  const toggleCategory = (category: AssetCategory): void => {
+    setSelectedCategories((current) =>
+      current.includes(category) ? current.filter((item) => item !== category) : [...current, category]
+    );
+  };
+
+  const data = useMemo(
+    () =>
+      assets
+        ? computeDashboardData(assets.skills, assets.agents, assets.bases, assets.projects, {
+            categories: selectedCategories,
+            favoritesOnly
+          })
+        : null,
+    [assets, selectedCategories, favoritesOnly]
+  );
+
+  if (!data || !assets) {
+    return <main className="flex flex-1 items-center justify-center text-sm text-steam-text/50">Carregando dashboard…</main>;
+  }
+
+  const summary = data.summary;
+  const statCards = [
+    { label: 'Projetos', value: summary.projects },
+    { label: 'Skills', value: summary.skills },
+    { label: 'Agents', value: summary.agents },
+    { label: 'Bases', value: summary.bases },
+    { label: 'Favoritos', value: summary.favorites },
+    { label: 'Skills sem uso', value: summary.unusedSkills },
+    { label: 'Agents sem uso', value: summary.unusedAgents }
+  ];
+
+  const usageItems = section === 'skills'
+    ? data.mostUsedSkills.map((item) => ({ label: item.name, value: item.count, hint: item.category }))
+    : data.mostUsedAgents.map((item) => ({ label: item.name, value: item.count, hint: item.category }));
+  const usageEmpty = section === 'skills'
+    ? 'Adicione Skills a seus projetos para ver o uso aqui.'
+    : 'Adicione Agents a seus projetos para ver o uso aqui.';
+  const coverage = (section === 'skills' ? summary.projectsWithSkills : summary.projectsWithAgents);
+
+  return (
+    <main className="flex min-w-0 flex-1 flex-col overflow-y-auto p-6">
+      <header className="mb-6 flex items-center">
+        <div>
+          <h1 className="text-xl font-semibold">Dashboard</h1>
+          <p className="mt-1 text-xs text-steam-text/50">Uso de Skills e Agents nos seus projetos, saúde da biblioteca e contextos.</p>
+        </div>
+        <button
+          type="button"
+          onClick={async () => {
+            const markdown = buildDashboardMarkdown(data, assets.usage);
+            try {
+              const path = await api.dashboardExport(markdown);
+              if (path) onSuccess(`Dashboard exportado: ${path}`);
+            } catch (e) {
+              onError(e instanceof Error ? e.message : String(e));
+            }
+          }}
+          className="ml-auto flex items-center gap-1.5 rounded border border-steam-elevated bg-steam-panel px-3 py-1.5 text-xs hover:bg-steam-elevated/40"
+        >
+          <Download size={14} />
+          Exportar Markdown
+        </button>
+      </header>
+
+      <header className="mb-6 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-steam-text/40">Filtros</span>
+        {ASSET_CATEGORIES.map((category) => (
+          <button
+            type="button"
+            key={category}
+            onClick={() => toggleCategory(category)}
+            className={`rounded-full border px-2.5 py-0.5 text-xs ${selectedCategories.includes(category) ? 'border-steam-accent bg-steam-elevated text-steam-accent' : 'border-steam-elevated text-steam-text/60 hover:bg-steam-panel'}`}
+          >
+            {ASSET_CATEGORY_LABELS[category]}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setFavoritesOnly((f) => !f)}
+          className={`ml-auto flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs ${favoritesOnly ? 'border-steam-accent bg-steam-elevated text-steam-accent' : 'border-steam-elevated text-steam-text/60 hover:bg-steam-panel'}`}
+        >
+          <Star size={12} />
+          Favoritos
+        </button>
+        {(selectedCategories.length > 0 || favoritesOnly) && (
+          <button type="button" onClick={() => { setSelectedCategories([]); setFavoritesOnly(false); }} className="text-xs text-steam-text/50 underline hover:text-steam-accent">
+            Limpar
+          </button>
+        )}
+      </header>
+
+      <section className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+        {statCards.map((card) => (
+          <div key={card.label} className="rounded border border-steam-elevated bg-steam-panel p-4">
+            <p className="text-xs uppercase tracking-wide text-steam-text/40">{card.label}</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-steam-text">{card.value}</p>
+          </div>
+        ))}
+      </section>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <section className="rounded border border-steam-elevated bg-steam-panel p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <Flame size={16} className="text-steam-accent" />
+            <h2 className="text-sm font-semibold">Mais usados nos projetos</h2>
+            <div className="ml-auto flex gap-1 text-xs">
+              <button type="button" onClick={() => setSection('skills')} className={`rounded px-2 py-1 ${section === 'skills' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}>Skills</button>
+              <button type="button" onClick={() => setSection('agents')} className={`rounded px-2 py-1 ${section === 'agents' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}>Agents</button>
+            </div>
+          </div>
+          <HBarChart items={usageItems} emptyText={usageEmpty} />
+          <p className="mt-3 text-xs text-steam-text/40">
+            {coverage} de {summary.projects} projetos com {section === 'skills' ? 'Skills' : 'Agents'} associados · top 10
+          </p>
+        </section>
+
+        <section className="rounded border border-steam-elevated bg-steam-panel p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <BarChart3 size={16} className="text-steam-accent" />
+            <h2 className="text-sm font-semibold">Aberturas de Skills/Agents por mês</h2>
+          </div>
+          <HBarChart
+            items={computeMonthlyUsage(assets.usage, new Date()).map((entry) => ({ label: entry.label, value: entry.count }))}
+            emptyText="Nenhuma abertura registrada ainda."
+          />
+          <p className="mt-3 text-xs text-steam-text/40">Cada abertura (Abrir) de uma Skill ou Agent gera um evento nos últimos 6 meses.</p>
+        </section>
+
+        <section className="rounded border border-steam-elevated bg-steam-panel p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <Layers3 size={16} className="text-steam-accent" />
+            <h2 className="text-sm font-semibold">Uso por categoria</h2>
+          </div>
+          <DonutChart
+            items={data.categoryDistribution.map((c) => ({ label: c.label, value: c.count }))}
+            emptyText="Sem uso registrado ainda."
+          />
+        </section>
+
+        <section className="rounded border border-steam-elevated bg-steam-panel p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <BarChart3 size={16} className="text-steam-accent" />
+            <h2 className="text-sm font-semibold">Projetos antigos e cobertura</h2>
+          </div>
+          {data.oldestProjects.length ? (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase text-steam-text/40">
+                  <th className="pb-2">Projeto</th>
+                  <th className="pb-2 text-right">Skills</th>
+                  <th className="pb-2 text-right">Agents</th>
+                  <th className="pb-2 text-right">Desde</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.oldestProjects.map((project) => (
+                  <tr key={project.id} className="border-t border-steam-elevated/50">
+                    <td className="truncate py-2 pr-2 text-steam-text/80" title={project.name}>{project.name}</td>
+                    <td className="py-2 text-right tabular-nums">{project.skillCount}</td>
+                    <td className="py-2 text-right tabular-nums">{project.agentCount}</td>
+                    <td className="py-2 pl-2 text-right text-xs text-steam-text/40">{new Date(project.addedAt).toLocaleDateString('pt-BR')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="flex h-40 items-center justify-center rounded border border-dashed border-steam-elevated text-sm text-steam-text/40">
+              Nenhum projeto cadastrado ainda.
+            </p>
+          )}
+        </section>
+
+        <section className="rounded border border-steam-elevated bg-steam-panel p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <Layers3 size={16} className="text-steam-accent" />
+            <h2 className="text-sm font-semibold">Tags mais usadas (projetos)</h2>
+          </div>
+          {data.topTags.length ? (
+            <div className="flex flex-wrap gap-2">
+              {data.topTags.map((tag) => (
+                <span key={tag.tag} className="flex items-center gap-1.5 rounded-full border border-steam-elevated bg-steam-bg px-3 py-1 text-xs text-steam-text/70">
+                  #{tag.tag}
+                  <span className="opacity-60">{tag.count}</span>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="flex h-40 items-center justify-center rounded border border-dashed border-steam-elevated text-sm text-steam-text/40">
+              Nenhuma tag em projetos.
+            </p>
+          )}
+        </section>
+      </div>
+    </main>
+  );
+}

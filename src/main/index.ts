@@ -2,7 +2,7 @@ import { app, BrowserWindow, shell } from 'electron';
 import { join } from 'path';
 import { LibraryStore } from './services/library-store';
 import { GitService } from './services/git-service';
-import { registerAssetsIpc } from './ipc/assets.ipc';
+import { registerAssetsIpc, refreshTopReposAndBroadcast } from './ipc/assets.ipc';
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -26,6 +26,11 @@ void app.whenReady().then(async () => {
   await store.load();
   registerAssetsIpc(store, new GitService());
   createWindow();
+  // Atualiza os top repos do GitHub em segundo plano; erros ficam silenciosos
+  // (offline/limite da API não impedem o uso — a lista anterior continua na aba).
+  setTimeout(() => {
+    void refreshTopReposAndBroadcast(store).catch(() => undefined);
+  }, 1500);
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 

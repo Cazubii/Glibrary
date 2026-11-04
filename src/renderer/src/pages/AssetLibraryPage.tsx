@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FolderPlus, Plus, RefreshCw, Layers3, WandSparkles, BriefcaseBusiness } from 'lucide-react';
-import type { BaseItem, ProjectRef, Skill } from '@shared/types';
+import { AlertCircle, FolderPlus, Plus, RefreshCw, Layers3, WandSparkles, Bot, BriefcaseBusiness, Flame } from 'lucide-react';
+import type { Agent, AssetCategory, BaseItem, ProjectRef, ScanIssue, Skill, TopRepo, TopRepos } from '@shared/types';
 import { countTags, matchesTags, sameTag } from '@shared/tags';
+import { normalizeGitUrl } from '@shared/git-utils';
 import { api } from '../lib/api';
 import { useLibraryStore } from '../store/library';
 import TagChips from '../components/TagChips';
+import CategoryChips from '../components/CategoryChips';
 import TagManagerDialog from '../components/TagManagerDialog';
-import { BaseCard, ProjectCard, SkillCard } from '../components/AssetCards';
+import OutdatedBanner from '../components/OutdatedBanner';
+import { AgentCard, BaseCard, ProjectCard, SkillCard, TopRepoCard } from '../components/AssetCards';
 
-type Section = 'skills' | 'bases' | 'projects';
-type Assets = { skills: Skill[]; bases: BaseItem[]; projects: ProjectRef[] };
-const empty: Assets = { skills: [], bases: [], projects: [] };
-const sections: Section[] = ['skills', 'bases', 'projects'];
+type Section = 'skills' | 'agents' | 'bases' | 'projects' | 'top';
+type Assets = { skills: Skill[]; agents: Agent[]; bases: BaseItem[]; projects: ProjectRef[]; top: TopRepos };
+const empty: Assets = { skills: [], agents: [], bases: [], projects: [], top: { fetchedAt: '', repos: [] } };
+const sections: Array<Exclude<Section, 'top'>> = ['skills', 'agents', 'bases', 'projects'];
+const unwrapTop = (payload: unknown, fallback: TopRepos): TopRepos =>
+  (payload as { ok?: boolean; data?: TopRepos })?.ok === true && (payload as { data?: TopRepos }).data
+    ? ((payload as { data: TopRepos }).data)
+    : fallback;
 
 interface Props { onError: (message: string) => void }
 export default function AssetLibraryPage({ onError }: Props): React.JSX.Element {
@@ -19,20 +26,103 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
   const [assets, setAssets] = useState<Assets>(empty);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
+  const [addingRepo, setAddingRepo] = useState<Set<string>>(new Set());
+  const [importBusy, setImportBusy] = useState<'skill' | 'agents' | null>(null);
+  const [skillImported, setSkillImported] = useState<Set<string>>(new Set());
+  const [agentsImported, setAgentsImported] = useState<Set<string>>(new Set());
   const [baseName, setBaseName] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [basePath, setBasePath] = useState('');
   const [showBaseForm, setShowBaseForm] = useState(false);
   const [selected, setSelected] = useState<Record<Section, string[]>>({
     skills: [],
+    agents: [],
     bases: [],
-    projects: []
+    projects: [],
+    top: []
   });
   const [manageOpen, setManageOpen] = useState(false);
+  const [scanIssues, setScanIssues] = useState<ScanIssue[]>([]);
+  const [knownUrls, setKnownUrls] = useState<string[]>([]);
+  const [categories, setCategories] = useState<Record<Extract<Section, 'skills' | 'agents'>, AssetCategory[]>>({
+    skills: [],
+    agents: []
+  });
   const settings = useLibraryStore((s) => s.settings);
   const updateSettings = useLibraryStore((s) => s.updateSettings);
-  const refresh = useCallback(async () => { try { setAssets(await api.assetsGet()); } catch (e) { onError(e instanceof Error ? e.message : String(e)); } }, [onError]);
+  const refresh = useCallback(async () => {
+    try {
+      const data = await api.assetsGet();
+      setAssets((prev) => ({ ...prev, ...data }));
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  }, [onError]);
   useEffect(() => { void refresh(); }, [refresh]);
+  const loadTop = useCallback(async () => {
+    try {
+      const top = await api.topReposGet();
+      setAssets((prev) => ({ ...prev, top }));
+    }
+    catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  }, [onError]);
+  useEffect(() => { void loadTop(); }, [loadTop]);
+  const refreshKnown = useCallback(async () => {
+    try {
+      const lib = await api.libraryGet();
+      setKnownUrls([...lib.repos.map((repo) => repo.remoteUrl), ...lib.bases.map((base) => base.remoteUrl)].filter((url): url is string => Boolean(url)));
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  }, [onError]);
+  useEffect(() => { void refreshKnown(); }, [refreshKnown]);
+  const knownSet = useMemo(() => new Set(knownUrls.map((url) => normalizeGitUrl(url))), [knownUrls]);
+  useEffect(
+    () => api.onTopReposChanged((payload) => setAssets((prev) => ({ ...prev, top: unwrapTop(payload, prev.top) }))),
+    []
+  );
+
+  const refreshTop = async (): Promise<void> => {
+    setBusy(true);
+    try {
+      const top = await api.topReposRefresh();
+      setAssets((prev) => ({ ...prev, top }));
+    }
+    catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+
+  const addTopRepo = async (repo: TopRepo): Promise<void> => {
+    try {
+      await api.repoAddByUrl(repo.remoteUrl, false, `${repo.owner}/${repo.name}`);
+      setAddingRepo((prev) => new Set(prev).add(repo.remoteUrl));
+      await refreshKnown();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const importSkillFromTop = async (repo: TopRepo): Promise<void> => {
+    setImportBusy('skill');
+    try {
+      await api.skillImport(repo.remoteUrl);
+      setSkillImported((prev) => new Set(prev).add(repo.remoteUrl));
+      await refresh();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setImportBusy(null);
+    }
+  };
+
+  const importAgentsFromTop = async (repo: TopRepo): Promise<void> => {
+    setImportBusy('agents');
+    try {
+      await api.agentImport(repo.remoteUrl);
+      setAgentsImported((prev) => new Set(prev).add(repo.remoteUrl));
+      await refresh();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setImportBusy(null);
+    }
+  };
 
   const scanSkills = async (): Promise<void> => {
     const folders = settings?.skillFolders ?? [];
@@ -42,8 +132,42 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
       await updateSettings({ skillFolders: [selected] });
     }
     setBusy(true);
-    try { await api.skillsScan(); await refresh(); }
+    try {
+      const result = await api.skillsScan();
+      setScanIssues(result.issues);
+      await refresh();
+    }
     catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+
+  const scanAgents = async (): Promise<void> => {
+    const folders = settings?.agentFolders ?? [];
+    if (folders.length === 0) {
+      const selected = await api.dialogPickFolder();
+      if (!selected) return;
+      await updateSettings({ agentFolders: [selected] });
+    }
+    setBusy(true);
+    try {
+      const result = await api.agentsScan();
+      setScanIssues(result.issues);
+      await refresh();
+    }
+    catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+
+  const addAgentFolder = async (): Promise<void> => {
+    try {
+      const selected = await api.dialogPickFolder(); if (!selected) return;
+      const folders = settings?.agentFolders ?? [];
+      if (!folders.includes(selected)) await updateSettings({ agentFolders: [...folders, selected] });
+      setBusy(true);
+      const result = await api.agentsScan();
+      setScanIssues(result.issues);
+      await refresh();
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   };
 
@@ -52,7 +176,10 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
       const selected = await api.dialogPickFolder(); if (!selected) return;
       const folders = settings?.skillFolders ?? [];
       if (!folders.includes(selected)) await updateSettings({ skillFolders: [...folders, selected] });
-      setBusy(true); await api.skillsScan(); await refresh();
+      setBusy(true);
+      const result = await api.skillsScan();
+      setScanIssues(result.issues);
+      await refresh();
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   };
@@ -67,13 +194,21 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
   const sectionTags = useMemo(
     () => ({
       skills: countTags(assets.skills),
+      agents: countTags(assets.agents),
       bases: countTags(assets.bases),
       projects: countTags(assets.projects)
     }),
     [assets]
   );
   const globalTags = useMemo(
-    () => countTags([...assets.skills, ...assets.bases, ...assets.projects]),
+    () => countTags([...assets.skills, ...assets.agents, ...assets.bases, ...assets.projects]),
+    [assets]
+  );
+  const categoryCounts = useMemo(
+    () => ({
+      skills: countAssetCategories(assets.skills),
+      agents: countAssetCategories(assets.agents)
+    }),
     [assets]
   );
 
@@ -139,17 +274,19 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
 
   const allTagNames = useMemo(() => globalTags.map((tag) => tag.name), [globalTags]);
 
-  const updateSkillTags = async (skill: Skill, tags: string[]): Promise<void> => {
+  const updateSkillTags = async (skill: Skill, patch: { tags?: string[]; favorite?: boolean; category?: AssetCategory }): Promise<void> => {
     try {
-      await api.skillUpdate(skill.id, { tags });
+      await api.skillUpdate(skill.id, patch);
       await refresh();
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     }
   };
-  const setSkillFavorite = async (skill: Skill, favorite: boolean): Promise<void> => {
+  const setSkillFavorite = async (skill: Skill, favorite: boolean): Promise<void> => updateSkillTags(skill, { favorite });
+  const setSkillCategory = async (skill: Skill, category: AssetCategory): Promise<void> => updateSkillTags(skill, { category });
+  const updateAgent = async (agent: Agent, patch: { tags?: string[]; favorite?: boolean; category?: AssetCategory }): Promise<void> => {
     try {
-      await api.skillUpdate(skill.id, { favorite });
+      await api.agentUpdate(agent.id, patch);
       await refresh();
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
@@ -189,14 +326,28 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
   };
 
   const selectedTags = selected[section];
+  const assetCategories = section === 'skills' ? categories.skills : section === 'agents' ? categories.agents : [];
   const matchQuery = (text: string): boolean =>
     text.toLowerCase().includes(query.toLowerCase());
   const filteredSkills = useMemo(
     () =>
       assets.skills.filter(
-        (s) => matchesTags(s.tags, selectedTags) && matchQuery(`${s.name} ${s.description ?? ''} ${s.source}`)
+        (s) =>
+          matchesTags(s.tags, selectedTags) &&
+          (assetCategories.length === 0 || assetCategories.includes(s.category)) &&
+          matchQuery(`${s.name} ${s.description ?? ''} ${s.source}`)
       ),
-    [assets.skills, selectedTags, query]
+    [assets.skills, selectedTags, assetCategories, query]
+  );
+  const filteredAgents = useMemo(
+    () =>
+      assets.agents.filter(
+        (a) =>
+          matchesTags(a.tags, selectedTags) &&
+          (assetCategories.length === 0 || assetCategories.includes(a.category)) &&
+          matchQuery(`${a.name} ${a.description ?? ''} ${a.source}`)
+      ),
+    [assets.agents, selectedTags, assetCategories, query]
   );
   const filteredBases = useMemo(
     () =>
@@ -212,22 +363,68 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
       ),
     [assets.projects, selectedTags, query]
   );
-  const tab = (key: Section, label: string, icon: React.ReactNode): React.JSX.Element => <button type="button" onClick={() => setSection(key)} className={`flex items-center gap-2 rounded px-3 py-2 text-sm ${section === key ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}>{icon}{label}<span className="text-xs opacity-60">{assets[key].length}</span></button>;
+  const filteredTop = useMemo(
+    () =>
+      assets.top.repos.filter((r) =>
+        matchQuery(`${r.owner}/${r.name} ${r.description ?? ''} ${r.language ?? ''} ${(r.topics ?? []).join(' ')}`)
+      ),
+    [assets.top.repos, query]
+  );
+  const tab = (key: Section, label: string, icon: React.ReactNode, count: number): React.JSX.Element => <button type="button" onClick={() => setSection(key)} className={`flex items-center gap-2 rounded px-3 py-2 text-sm ${section === key ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}>{icon}{label}<span className="text-xs opacity-60">{count}</span></button>;
+
+  const toggleCategory = (sectionKey: Extract<Section, 'skills' | 'agents'>, category: AssetCategory): void =>
+    setCategories((prev) => {
+      const current = prev[sectionKey];
+      return {
+        ...prev,
+        [sectionKey]: current.includes(category)
+          ? current.filter((c) => c !== category)
+          : [...current, category]
+      };
+    });
+  const clearCategories = (sectionKey: Extract<Section, 'skills' | 'agents'>): void =>
+    setCategories((prev) => ({ ...prev, [sectionKey]: [] }));
 
   return <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
     <header className="flex items-center gap-4 border-b border-steam-elevated/50 px-6 py-4">
-      <div><h1 className="text-xl font-semibold">Biblioteca</h1><p className="mt-1 text-xs text-steam-text/50">Skills reutilizáveis, repositórios-base e projetos que os utilizam.</p></div>
+      <div><h1 className="text-xl font-semibold">Biblioteca</h1><p className="mt-1 text-xs text-steam-text/50">Skills, agentes, repositórios-base e projetos que os utilizam.</p></div>
       <label className="ml-auto"><span className="sr-only">Buscar na biblioteca</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar… (Ctrl+K)" id="library-search" className="w-64 rounded border border-steam-elevated bg-steam-panel px-3 py-2 text-sm outline-none focus:border-steam-accent" /></label>
     </header>
-    <nav className="flex gap-2 border-b border-steam-elevated/30 px-6 py-3">{tab('skills', 'Skills', <WandSparkles size={16}/>)}{tab('bases', 'Bases', <Layers3 size={16}/>)}{tab('projects', 'Projetos', <BriefcaseBusiness size={16}/>)}</nav>
+    <nav className="flex gap-2 border-b border-steam-elevated/30 px-6 py-3">{tab('skills', 'Skills', <WandSparkles size={16}/>, assets.skills.length)}{tab('agents', 'Agents', <Bot size={16}/>, assets.agents.length)}{tab('bases', 'Bases', <Layers3 size={16}/>, assets.bases.length)}{tab('projects', 'Projetos', <BriefcaseBusiness size={16}/>, assets.projects.length)}{tab('top', 'Top GitHub', <Flame size={16}/>, assets.top.repos.length)}</nav>
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
-      <TagChips
-        tags={sectionTags[section]}
-        selected={selectedTags}
-        onToggle={toggleTag}
-        onClear={clearTags}
-        onManage={() => setManageOpen(true)}
-      />
+      <OutdatedBanner onError={onError} />
+      {scanIssues.length > 0 && (section === 'skills' || section === 'agents') && (
+        <div className="mb-4 rounded border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+          <p className="flex items-center gap-2 font-medium text-amber-200">
+            <AlertCircle size={14} />
+            {scanIssues.length} problema(s) de validação no frontmatter:
+          </p>
+          <ul className="mt-2 space-y-1 text-xs text-amber-100/80">
+            {scanIssues.map((issue, index) => (
+              <li key={`${issue.path}-${index}`}>
+                <span className="font-mono">{issue.name ?? issue.path}</span> — {issue.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {(section === 'skills' || section === 'agents') && (
+        <CategoryChips
+          counts={categoryCounts[section]}
+          selected={categories[section]}
+          onToggle={(category) => toggleCategory(section, category)}
+          onClear={() => clearCategories(section)}
+        />
+      )}
+      {section !== 'top' && (
+        <TagChips
+          tags={sectionTags[section]}
+          selected={selectedTags}
+          onToggle={toggleTag}
+          onClear={clearTags}
+          onManage={() => setManageOpen(true)}
+        />
+      )}
       {section === 'skills' && <>
         <div className="mb-5 flex items-center gap-2"><p className="mr-auto text-sm text-steam-text/60">{assets.skills.length} skills descobertas em arquivos SKILL.md</p><button disabled={busy} type="button" onClick={() => void addFolder()} className="flex items-center gap-2 rounded border border-steam-elevated px-3 py-2 text-sm hover:bg-steam-panel"><FolderPlus size={15}/>Adicionar origem</button><button disabled={busy} type="button" onClick={() => void scanSkills()} className="flex items-center gap-2 rounded bg-steam-accent px-3 py-2 text-sm font-semibold text-steam-bg disabled:opacity-50"><RefreshCw size={15} className={busy ? 'animate-spin' : ''}/> {busy ? 'Buscando…' : 'Sincronizar'}</button></div>
         {filteredSkills.length ? (
@@ -237,7 +434,8 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
                 key={skill.id}
                 skill={skill}
                 allTags={allTagNames}
-                onTagsChange={(tags) => void updateSkillTags(skill, tags)}
+                onTagsChange={(tags) => void updateSkillTags(skill, { tags })}
+                onCategoryChange={(category) => void setSkillCategory(skill, category)}
                 onFavorite={(next) => void setSkillFavorite(skill, next)}
                 onOpen={() =>
                   void api
@@ -259,6 +457,42 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
               settings?.skillFolders.length
                 ? 'Nenhum SKILL.md foi encontrado nas origens configuradas.'
                 : 'Adicione uma pasta que contenha SKILL.md para importar suas skills.'
+            }
+          />
+        )}
+      </>}
+      {section === 'agents' && <>
+        <div className="mb-5 flex items-center gap-2"><p className="mr-auto text-sm text-steam-text/60">{assets.agents.length} agentes descobertos em arquivos .md de agente</p><button disabled={busy} type="button" onClick={() => void addAgentFolder()} className="flex items-center gap-2 rounded border border-steam-elevated px-3 py-2 text-sm hover:bg-steam-panel"><FolderPlus size={15}/>Adicionar origem</button><button disabled={busy} type="button" onClick={() => void scanAgents()} className="flex items-center gap-2 rounded bg-steam-accent px-3 py-2 text-sm font-semibold text-steam-bg disabled:opacity-50"><RefreshCw size={15} className={busy ? 'animate-spin' : ''}/> {busy ? 'Buscando…' : 'Sincronizar'}</button></div>
+        {filteredAgents.length ? (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {filteredAgents.map((agent) => (
+              <AgentCard
+                key={agent.id}
+                agent={agent}
+                allTags={allTagNames}
+                onTagsChange={(tags) => void updateAgent(agent, { tags })}
+                onCategoryChange={(category) => void updateAgent(agent, { category })}
+                onFavorite={(next) => void updateAgent(agent, { favorite: next })}
+                onOpen={() =>
+                  void api
+                    .agentOpen(agent.id)
+                    .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
+                }
+                onRemove={() =>
+                  void api
+                    .agentRemove(agent.id)
+                    .then(refresh)
+                    .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
+                }
+              />
+            ))}
+          </div>
+        ) : (
+          <Empty
+            text={
+              settings?.agentFolders.length
+                ? 'Nenhum arquivo .md de agente foi encontrado nas origens configuradas.'
+                : 'Adicione uma pasta com arquivos .md de agentes (ex.: .claude/agents) para importá-los.'
             }
           />
         )}
@@ -305,6 +539,7 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
                 project={project}
                 assets={assets}
                 allTags={allTagNames}
+                inheritTags={settings?.inheritTags ?? true}
                 onSave={async (patch) => {
                   try {
                     await api.projectUpdate(project.id, patch);
@@ -322,6 +557,34 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
           <Empty text="A migração não encontrou projetos. Os repositórios locais da biblioteca v1 aparecem aqui como contexto." />
         )}
       </>}
+      {section === 'top' && <>
+        <div className="mb-5 flex items-center gap-2">
+          <p className="mr-auto text-sm text-steam-text/60">
+            Repositórios em alta no GitHub (criados nos últimos 30 dias, ordenados por estrelas).
+            {assets.top.fetchedAt && <> Última busca em {new Date(assets.top.fetchedAt).toLocaleString('pt-BR')}.</>}
+          </p>
+          <button disabled={busy} type="button" onClick={() => void refreshTop()} className="flex items-center gap-2 rounded bg-steam-accent px-3 py-2 text-sm font-semibold text-steam-bg disabled:opacity-50"><RefreshCw size={15} className={busy ? 'animate-spin' : ''}/> {busy ? 'Buscando…' : 'Atualizar agora'}</button>
+        </div>
+        {filteredTop.length ? (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {filteredTop.map((repo) => (
+              <TopRepoCard
+                key={`${repo.owner}/${repo.name}`}
+                repo={repo}
+                added={addingRepo.has(repo.remoteUrl) || knownSet.has(normalizeGitUrl(repo.remoteUrl))}
+                onAdd={() => void addTopRepo(repo)}
+                onImportSkill={() => void importSkillFromTop(repo)}
+                onImportAgents={() => void importAgentsFromTop(repo)}
+                importBusy={importBusy}
+                skillImported={skillImported.has(repo.remoteUrl)}
+                agentsImported={agentsImported.has(repo.remoteUrl)}
+              />
+            ))}
+          </div>
+        ) : (
+          <Empty text={assets.top.fetchedAt ? 'Nenhum repositório encontrado para os critérios atuais.' : 'A lista ainda não foi buscada. Clique em "Atualizar agora".'} />
+        )}
+      </>}
     </div>
     {manageOpen && (
       <TagManagerDialog
@@ -335,3 +598,9 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
 }
 
 function Empty({ text }: { text: string }): React.JSX.Element { return <div className="flex min-h-64 flex-1 items-center justify-center rounded border border-dashed border-steam-elevated p-8 text-center text-sm text-steam-text/50">{text}</div>; }
+
+function countAssetCategories(items: { category: AssetCategory }[]): Partial<Record<AssetCategory, number>> {
+  const counts: Partial<Record<AssetCategory, number>> = {};
+  for (const item of items) counts[item.category] = (counts[item.category] ?? 0) + 1;
+  return counts;
+}

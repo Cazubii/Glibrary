@@ -1,15 +1,20 @@
 import { promises as fs } from 'fs';
+import { randomUUID } from 'crypto';
 import { join } from 'path';
 import { homedir } from 'os';
 import { z } from 'zod';
-import type { BaseItem, LibraryFile, ProjectRef, Repo, Settings, Skill } from '../../shared/types';
+import type { Agent, BaseItem, Kit, LibraryFile, ProjectRef, Repo, Settings, Skill, UsageEvent } from '../../shared/types';
 import {
+  AgentSchema,
   BaseItemSchema,
+  KitInputSchema,
+  KitSchema,
   LibraryFileSchema,
   ProjectRefSchema,
   RepoSchema,
   SettingsPatchSchema,
-  SkillSchema
+  SkillSchema,
+  TopReposSchema
 } from '../../shared/schemas';
 import { normalizeTag, normalizeTagList, tagKey } from '../../shared/tags';
 import { applyStartupCorrections } from '../../shared/status';
@@ -23,17 +28,19 @@ export function defaultSettings(reposRoot: string): Settings {
     reposRoot,
     basesRoot: join(homedir(), 'BASES'),
     skillFolders: [join(homedir(), '.claude', 'skills'), join(homedir(), '.opencode', 'skills'), join(homedir(), '.agents', 'skills')],
+    agentFolders: [join(homedir(), '.claude', 'agents'), join(homedir(), '.opencode', 'agent'), join(homedir(), '.agents', 'agents')],
     scanFolders: [],
     editorCommand: 'code',
     terminalPreference: 'auto',
     theme: 'dark',
     viewMode: 'grid',
-    checkUpdatesOnStart: true
+    checkUpdatesOnStart: true,
+    inheritTags: true
   };
 }
 
 export function emptyLibrary(reposRoot: string): LibraryFile {
-  return { version: 2, repos: [], skills: [], bases: [], projects: [], settings: defaultSettings(reposRoot) };
+  return { version: 2, repos: [], skills: [], agents: [], bases: [], projects: [], kits: [], usage: [], topRepos: { fetchedAt: '', repos: [] }, settings: defaultSettings(reposRoot) };
 }
 
 export function migrateLibrary(raw: unknown): LibraryFile {
@@ -53,7 +60,7 @@ export function migrateLibrary(raw: unknown): LibraryFile {
           ...(repo.description ? { description: repo.description } : {}), ...(repo.notes ? { notes: repo.notes } : {}) });
       } else {
         projects.push({ id: repo.id, name: repo.name, ...(repo.description ? { description: repo.description } : {}), ...(repo.localPath ? { localPath: repo.localPath } : {}),
-          ...(repo.remoteUrl ? { remoteUrl: repo.remoteUrl } : {}), tags: repo.tags, favorite: repo.favorite, skillIds: [], baseIds: [],
+          ...(repo.remoteUrl ? { remoteUrl: repo.remoteUrl } : {}), tags: repo.tags, favorite: repo.favorite, skillIds: [], agentIds: [], baseIds: [],
           ...(repo.notes ? { notes: repo.notes } : {}), addedAt: repo.addedAt });
       }
     }
@@ -166,16 +173,135 @@ export class LibraryStore {
   listRepos(): Repo[] {
     return this.data.repos;
   }
+  listKits(): Kit[] { return this.data.kits; }
+  getKit(id: string): Kit | undefined { return this.data.kits.find((kit) => kit.id === id); }
+  listUsage(): UsageEvent[] { return this.data.usage; }
 
+  async addKit(input: { name: string; description?: string; skillIds?: string[]; agentIds?: string[]; baseIds?: string[]; tags?: string[] }): Promise<Kit> {
+    const parsed = KitInputSchema.parse(input);
+    if (this.data.kits.some((kit) => kit.name.trim().toLowerCase() === parsed.name.toLowerCase())) {
+      throw new Error(`Coleção já existe: ${parsed.name}`);
+    }
+    const kit = KitSchema.parse({
+      id: randomUUID(),
+      name: parsed.name,
+      ...(parsed.description ? { description: parsed.description } : {}),
+      skillIds: parsed.skillIds ?? [],
+      agentIds: parsed.agentIds ?? [],
+      baseIds: parsed.baseIds ?? [],
+      tags: parsed.tags ?? [],
+      addedAt: new Date().toISOString()
+    });
+    this.data.kits.push(kit);
+    await this.save();
+    return kit;
+  }
+
+  async updateKit(
+    id: string,
+    patch: { name?: string; description?: string; skillIds?: string[]; agentIds?: string[]; baseIds?: string[]; tags?: string[] }
+  ): Promise<Kit> {
+    const index = this.data.kits.findIndex((kit) => kit.id === id);
+    if (index === -1) throw new Error(`Coleção não encontrada: ${id}`);
+    const current = this.data.kits[index];
+    const name = patch.name != null ? patch.name.trim() : current.name;
+    if (this.data.kits.some((kit) => kit.id !== id && kit.name.trim().toLowerCase() === name.toLowerCase())) {
+      throw new Error(`Coleção já existe: ${name}`);
+    }
+    const merged = KitSchema.parse({
+      ...current,
+      ...(patch.name != null ? { name } : {}),
+      ...(patch.description !== undefined ? { description: patch.description === '' ? undefined : patch.description } : {}),
+      ...(patch.skillIds != null ? { skillIds: patch.skillIds } : {}),
+      ...(patch.agentIds != null ? { agentIds: patch.agentIds } : {}),
+      ...(patch.baseIds != null ? { baseIds: patch.baseIds } : {}),
+      ...(patch.tags != null ? { tags: normalizeTagList(patch.tags) } : {})
+    });
+    this.data.kits[index] = merged;
+    await this.save();
+    return merged;
+  }
+
+  async removeKit(id: string): Promise<void> {
+    const index = this.data.kits.findIndex((kit) => kit.id === id);
+    if (index === -1) throw new Error(`Coleção não encontrada: ${id}`);
+    this.data.kits.splice(index, 1);
+    await this.save();
+  }
+
+  /** Aplica uma coleção a um projeto: união de skill/agent/base ids + (opcional) herança de tags. */
+  async applyKit(
+    kitId: string,
+    projectId: string,
+    inheritTags: boolean
+  ): Promise<ProjectRef> {
+    const kit = this.data.kits.find((item) => item.id === kitId);
+    if (!kit) throw new Error(`Coleção não encontrada: ${kitId}`);
+    const index = this.data.projects.findIndex((item) => item.id === projectId);
+    if (index === -1) throw new Error(`Projeto não encontrado: ${projectId}`);
+    const project = this.data.projects[index];
+    const known = new Set([
+      ...this.data.skills.map((s) => s.id),
+      ...this.data.agents.map((a) => a.id),
+      ...this.data.bases.map((b) => b.id)
+    ]);
+    if ([...kit.skillIds, ...kit.agentIds, ...kit.baseIds].some((id) => !known.has(id))) {
+      throw new Error('A coleção usa itens que não existem mais');
+    }
+    const mergedTags: string[] = [];
+    for (const tag of project.tags) mergedTags.push(tag);
+    if (inheritTags) {
+      const byId = new Map<string, { tags: string[] }>();
+      for (const skill of this.data.skills) byId.set(skill.id, skill);
+      for (const agent of this.data.agents) byId.set(agent.id, agent);
+      for (const base of this.data.bases) byId.set(base.id, base);
+      for (const id of [...kit.skillIds, ...kit.agentIds, ...kit.baseIds]) {
+        const asset = byId.get(id);
+        if (!asset) continue;
+        for (const tag of asset.tags) mergedTags.push(tag);
+      }
+      for (const tag of kit.tags) mergedTags.push(tag);
+    }
+    const merged = ProjectRefSchema.parse({
+      ...project,
+      skillIds: [...new Set([...project.skillIds, ...kit.skillIds])],
+      agentIds: [...new Set([...project.agentIds, ...kit.agentIds])],
+      baseIds: [...new Set([...project.baseIds, ...kit.baseIds])],
+      tags: normalizeTagList(mergedTags)
+    });
+    this.data.projects[index] = merged;
+    await this.save();
+    return merged;
+  }
+
+  /** Registra um evento de uso (abrir skill/agent). Mantém no máximo 500 eventos. */
+  async recordUsage(kind: 'skill' | 'agent', assetId: string): Promise<UsageEvent> {
+    const exists = kind === 'skill'
+      ? this.data.skills.some((skill) => skill.id === assetId)
+      : this.data.agents.some((agent) => agent.id === assetId);
+    if (!exists) throw new Error(`${kind === 'skill' ? 'Skill não encontrada' : 'Agente não encontrado'}: ${assetId}`);
+    const event: UsageEvent = { id: randomUUID(), kind, assetId, at: new Date().toISOString() };
+    this.data.usage = [...this.data.usage, event].slice(-500);
+    await this.save();
+    return event;
+  }
   getRepo(id: string): Repo | undefined {
     return this.data.repos.find((r) => r.id === id);
   }
 
   listSkills(): Skill[] { return this.data.skills; }
+  listAgents(): Agent[] { return this.data.agents; }
   listBases(): BaseItem[] { return this.data.bases; }
   listProjects(): ProjectRef[] { return this.data.projects; }
+  getTopRepos() { return this.data.topRepos; }
 
-  async replaceAssets(input: { skills?: Skill[]; bases?: BaseItem[]; projects?: ProjectRef[] }): Promise<LibraryFile> {
+  /** Substitui a lista de top repos (busca do GitHub no startup ou manual). */
+  async setTopRepos(next: { fetchedAt: string; repos: LibraryFile['topRepos']['repos'] }): Promise<void> {
+    this.data.topRepos = TopReposSchema.parse(next);
+    await this.save();
+  }
+
+  async replaceAssets(input: { skills?: Skill[]; agents?: Agent[]; bases?: BaseItem[]; projects?: ProjectRef[]; kits?: Kit[] }): Promise<LibraryFile> {
     const next = { ...this.data, ...input };
     this.data = LibraryFileSchema.parse(next);
     await this.save();
@@ -184,16 +310,34 @@ export class LibraryStore {
 
   async updateSkill(
     id: string,
-    patch: { tags?: string[]; favorite?: boolean }
+    patch: { category?: Skill['category']; tags?: string[]; favorite?: boolean }
   ): Promise<Skill> {
     const index = this.data.skills.findIndex((item) => item.id === id);
     if (index === -1) throw new Error(`Skill não encontrada: ${id}`);
     const merged = SkillSchema.parse({
       ...this.data.skills[index],
+      ...(patch.category != null ? { category: patch.category } : {}),
       ...(patch.tags != null ? { tags: normalizeTagList(patch.tags) } : {}),
       ...(patch.favorite != null ? { favorite: patch.favorite } : {})
     });
     this.data.skills[index] = merged;
+    await this.save();
+    return merged;
+  }
+
+  async updateAgent(
+    id: string,
+    patch: { category?: Agent['category']; tags?: string[]; favorite?: boolean }
+  ): Promise<Agent> {
+    const index = this.data.agents.findIndex((item) => item.id === id);
+    if (index === -1) throw new Error(`Agente não encontrado: ${id}`);
+    const merged = AgentSchema.parse({
+      ...this.data.agents[index],
+      ...(patch.category != null ? { category: patch.category } : {}),
+      ...(patch.tags != null ? { tags: normalizeTagList(patch.tags) } : {}),
+      ...(patch.favorite != null ? { favorite: patch.favorite } : {})
+    });
+    this.data.agents[index] = merged;
     await this.save();
     return merged;
   }
@@ -220,6 +364,7 @@ export class LibraryStore {
     id: string,
     patch: {
       skillIds?: string[];
+      agentIds?: string[];
       baseIds?: string[];
       notes?: string;
       tags?: string[];
@@ -231,6 +376,7 @@ export class LibraryStore {
     const merged = ProjectRefSchema.parse({
       ...this.data.projects[index],
       ...(patch.skillIds != null ? { skillIds: patch.skillIds } : {}),
+      ...(patch.agentIds != null ? { agentIds: patch.agentIds } : {}),
       ...(patch.baseIds != null ? { baseIds: patch.baseIds } : {}),
       ...(patch.notes != null ? { notes: patch.notes } : {}),
       ...(patch.tags != null ? { tags: normalizeTagList(patch.tags) } : {}),
@@ -247,7 +393,7 @@ export class LibraryStore {
     if (source == null || target == null) throw new Error('Tag inválida');
     const keyFrom = tagKey(source);
     const keyTo = tagKey(target);
-    const all = [...this.data.skills, ...this.data.bases, ...this.data.projects];
+    const all = [...this.data.skills, ...this.data.agents, ...this.data.bases, ...this.data.projects];
     const hasKey = (key: string): boolean =>
       all.some((item) => item.tags.some((tag) => tagKey(tag) === key));
     if (!hasKey(keyFrom)) throw new Error(`Tag não encontrada: ${source}`);
@@ -267,6 +413,7 @@ export class LibraryStore {
       return out;
     };
     this.data.skills = this.data.skills.map((item) => ({ ...item, tags: rewrite(item.tags) }));
+    this.data.agents = this.data.agents.map((item) => ({ ...item, tags: rewrite(item.tags) }));
     this.data.bases = this.data.bases.map((item) => ({ ...item, tags: rewrite(item.tags) }));
     this.data.projects = this.data.projects.map((item) => ({ ...item, tags: rewrite(item.tags) }));
     await this.save();
@@ -276,12 +423,13 @@ export class LibraryStore {
     const target = normalizeTag(name);
     if (target == null) throw new Error('Tag inválida');
     const key = tagKey(target);
-    const all = [...this.data.skills, ...this.data.bases, ...this.data.projects];
+    const all = [...this.data.skills, ...this.data.agents, ...this.data.bases, ...this.data.projects];
     if (!all.some((item) => item.tags.some((tag) => tagKey(tag) === key))) {
       throw new Error(`Tag não encontrada: ${target}`);
     }
     const strip = (tags: string[]): string[] => tags.filter((tag) => tagKey(tag) !== key);
     this.data.skills = this.data.skills.map((item) => ({ ...item, tags: strip(item.tags) }));
+    this.data.agents = this.data.agents.map((item) => ({ ...item, tags: strip(item.tags) }));
     this.data.bases = this.data.bases.map((item) => ({ ...item, tags: strip(item.tags) }));
     this.data.projects = this.data.projects.map((item) => ({ ...item, tags: strip(item.tags) }));
     await this.save();
