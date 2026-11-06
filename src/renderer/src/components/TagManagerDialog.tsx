@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Trash2, X } from 'lucide-react';
 import type { TagCount } from '@shared/tags';
 
@@ -21,18 +21,31 @@ export default function TagManagerDialog({
   const [draft, setDraft] = useState('');
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       role="dialog"
       aria-modal="true"
       aria-label="Gerenciar tags"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div className="w-full max-w-md rounded border border-steam-elevated bg-steam-panel p-5">
         <div className="flex items-center">
           <h2 className="text-lg font-semibold">Gerenciar tags</h2>
           <button
             type="button"
+            ref={closeRef}
             onClick={onClose}
             aria-label="Fechar"
             className="ml-auto rounded p-1 text-steam-text/50 hover:text-steam-text"

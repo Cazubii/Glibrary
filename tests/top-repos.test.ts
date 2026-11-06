@@ -98,4 +98,23 @@ describe('LibraryStore topRepos', () => {
     expect(lib2.topRepos.fetchedAt).toBe('2026-11-04T10:00:00.000Z');
     expect(lib2.topRepos.repos[0]).toMatchObject({ owner: 'acme', stars: 1234 });
   });
+
+  it('guarda caches separados por janela (7 e 30 dias) e sobrevive a reabrir', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    expect(store.getTopRepos(7).repos).toHaveLength(0);
+
+    await store.setTopRepos({
+      fetchedAt: '2026-11-04T10:00:00.000Z',
+      repos: parseTopReposResponse(SAMPLE),
+      windowDays: 7
+    });
+    expect(store.getTopRepos(7).repos).toHaveLength(2);
+    expect(store.getTopRepos(30).repos).toHaveLength(0);
+
+    const store2 = new LibraryStore(dir, join(dir, 'repos'));
+    await store2.load();
+    expect(store2.getTopRepos(7).fetchedAt).toBe('2026-11-04T10:00:00.000Z');
+    expect(store2.getTopRepos(7).repos[0]).toMatchObject({ owner: 'acme', stars: 1234 });
+  });
 });

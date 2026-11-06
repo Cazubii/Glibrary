@@ -99,7 +99,8 @@ export const api = {
     unwrap(window.api.invoke(IpcChannels.tagsRename, { from, to })),
   tagsDelete: (name: string): Promise<null> =>
     unwrap(window.api.invoke(IpcChannels.tagsDelete, { name })),
-  topReposGet: (): Promise<TopRepos> => unwrap(window.api.invoke(IpcChannels.topReposGet)),
+  topReposGet: (windowDays?: number): Promise<TopRepos> =>
+    unwrap(window.api.invoke(IpcChannels.topReposGet, { windowDays })),
   githubSearch: (query: string, language?: string, limit = 25): Promise<{ fetchedAt: string; totalCount: number; repos: TopRepo[] }> =>
     unwrap(
       window.api.invoke(IpcChannels.githubSearch, {
@@ -108,7 +109,8 @@ export const api = {
         limit
       })
     ),
-  topReposRefresh: (): Promise<TopRepos> => unwrap(window.api.invoke(IpcChannels.topReposRefresh)),
+  topReposRefresh: (windowDays?: number): Promise<TopRepos> =>
+    unwrap(window.api.invoke(IpcChannels.topReposRefresh, { windowDays })),
   onTopReposChanged: (listener: (payload: IpcResult<TopRepos>) => void) =>
     window.api.on(IpcChannels.topReposChanged, (payload: unknown) => {
       listener(payload as IpcResult<TopRepos>);

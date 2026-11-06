@@ -215,7 +215,12 @@ export const TopRepoSchema = z.object({
 
 export const TopReposSchema = z.object({
   fetchedAt: z.string().default(''),
-  repos: z.array(TopRepoSchema).default([])
+  repos: z.array(TopRepoSchema).default([]),
+  windowDays: z.number().int().min(1).max(90).optional()
+});
+
+export const TopWindowInputSchema = z.object({
+  windowDays: z.number().int().optional()
 });
 
 export const LibraryFileSchema = z.object({
@@ -228,6 +233,7 @@ export const LibraryFileSchema = z.object({
   kits: z.array(KitSchema).default([]),
   usage: z.array(UsageEventSchema).default([]),
   topRepos: TopReposSchema.default({ fetchedAt: '', repos: [] }),
+  topRepos7: TopReposSchema.default({ fetchedAt: '', repos: [] }),
   settings: SettingsSchema
 });
 

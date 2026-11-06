@@ -74,12 +74,12 @@ export default function OutdatedBanner({ onError, onSuccess }: Props): React.JSX
   }
   if (outdated.length === 0) return null;
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-3 rounded border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-      <AlertTriangle size={16} className="text-amber-400" />
-      <span className="font-medium text-amber-200">
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded border border-steam-warn/40 bg-steam-warn/10 px-4 py-3 text-sm">
+      <AlertTriangle size={16} className="text-steam-warn" />
+      <span className="font-medium text-steam-warn">
         {outdated.length} repositório(s) desatualizado(s):
       </span>
-      <span className="text-amber-100/80">
+      <span className="text-steam-text/80">
         {outdated.map((repo) => `${repo.name} (+${repo.behindBy ?? 0})`).join(', ')}
       </span>
       <button
@@ -88,7 +88,7 @@ export default function OutdatedBanner({ onError, onSuccess }: Props): React.JSX
         onClick={() => void pullAll()}
         className="ml-auto flex items-center gap-2 rounded bg-steam-accent px-3 py-1.5 text-xs font-semibold text-steam-bg disabled:opacity-50"
       >
-        <CloudDownload size={14} className={pulling ? 'animate-bounce' : ''} />
+        <CloudDownload size={14} className={pulling ? 'animate-spin' : ''} />
         {pulling ? 'Puxando…' : 'Puxar todos'}
       </button>
     </div>

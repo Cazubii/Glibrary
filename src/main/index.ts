@@ -30,6 +30,10 @@ void app.whenReady().then(async () => {
   // (offline/limite da API não impedem o uso — a lista anterior continua na aba).
   setTimeout(() => {
     void refreshTopReposAndBroadcast(store).catch(() => undefined);
+    // A lista de 7 dias só é buscada no startup quando o cache está vazio.
+    if (store.getTopRepos(7).fetchedAt === '') {
+      void refreshTopReposAndBroadcast(store, 7).catch(() => undefined);
+    }
   }, 1500);
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });

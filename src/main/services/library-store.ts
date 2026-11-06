@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { join } from 'path';
 import { homedir } from 'os';
 import { z } from 'zod';
-import type { Agent, BaseItem, Kit, LibraryFile, ProjectRef, Repo, Settings, Skill, UsageEvent } from '../../shared/types';
+import type { Agent, BaseItem, Kit, LibraryFile, ProjectRef, Repo, Settings, Skill, TopRepos, UsageEvent } from '../../shared/types';
 import {
   AgentSchema,
   BaseItemSchema,
@@ -40,7 +40,7 @@ export function defaultSettings(reposRoot: string): Settings {
 }
 
 export function emptyLibrary(reposRoot: string): LibraryFile {
-  return { version: 2, repos: [], skills: [], agents: [], bases: [], projects: [], kits: [], usage: [], topRepos: { fetchedAt: '', repos: [] }, settings: defaultSettings(reposRoot) };
+  return { version: 2, repos: [], skills: [], agents: [], bases: [], projects: [], kits: [], usage: [], topRepos: { fetchedAt: '', repos: [] }, topRepos7: { fetchedAt: '', repos: [], windowDays: 7 }, settings: defaultSettings(reposRoot) };
 }
 
 export function migrateLibrary(raw: unknown): LibraryFile {
@@ -293,11 +293,20 @@ export class LibraryStore {
   listAgents(): Agent[] { return this.data.agents; }
   listBases(): BaseItem[] { return this.data.bases; }
   listProjects(): ProjectRef[] { return this.data.projects; }
-  getTopRepos() { return this.data.topRepos; }
+  getTopRepos(windowDays = 30): TopRepos {
+    return windowDays === 7
+      ? (this.data.topRepos7 ?? { fetchedAt: '', repos: [], windowDays: 7 })
+      : this.data.topRepos;
+  }
 
-  /** Substitui a lista de top repos (busca do GitHub no startup ou manual). */
-  async setTopRepos(next: { fetchedAt: string; repos: LibraryFile['topRepos']['repos'] }): Promise<void> {
-    this.data.topRepos = TopReposSchema.parse(next);
+  /** Substitui a lista de top repos (busca do GitHub no startup ou manual), por janela de dias. */
+  async setTopRepos(next: { fetchedAt: string; repos: LibraryFile['topRepos']['repos']; windowDays?: number }): Promise<void> {
+    const parsed = TopReposSchema.parse(next);
+    if (parsed.windowDays === 7) {
+      this.data = LibraryFileSchema.parse({ ...this.data, topRepos7: parsed });
+    } else {
+      this.data.topRepos = parsed;
+    }
     await this.save();
   }
 

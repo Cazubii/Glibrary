@@ -8,6 +8,35 @@ body,
   height: 100%;
 }
 
+:root {
+  color-scheme: dark;
+  /* Steam dark — equivale a #171a21 #1b2838 #2a475e #c7d5e0 #66c0f4 #5ba32b #c94a4a #d8a031 */
+  --steam-bg: 222 18% 11%;
+  --steam-panel: 213 35% 16%;
+  --steam-elevated: 207 38% 27%;
+  --steam-text: 206 29% 83%;
+  --steam-accent: 202 86% 68%;
+  --steam-green: 96 58% 40%;
+  --steam-error: 0 54% 54%;
+  --steam-warn: 40 68% 52%;
+}
+
+html[data-theme='light'] {
+  color-scheme: light;
+  --steam-bg: 210 25% 96%;
+  --steam-panel: 0 0% 100%;
+  --steam-elevated: 207 42% 89%;
+  --steam-text: 207 25% 24%;
+  --steam-accent: 203 74% 38%;
+  --steam-green: 96 55% 30%;
+  --steam-error: 0 56% 43%;
+  --steam-warn: 41 72% 33%;
+}
+
+html[data-theme='light'] ::placeholder {
+  color: hsl(var(--steam-text) / 0.55);
+}
+
 body {
   margin: 0;
   font-family:
@@ -16,4 +45,8 @@ body {
     -apple-system,
     sans-serif;
   overflow: hidden;
+}
+
+#root {
+  transition: background-color 160ms ease-out, color 160ms ease-out;
 }

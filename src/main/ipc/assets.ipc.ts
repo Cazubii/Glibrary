@@ -14,7 +14,8 @@ import {
   SettingsPatchSchema,
   SkillUpdateInputSchema,
   TagNameInputSchema,
-  TagRenameInputSchema
+  TagRenameInputSchema,
+  TopWindowInputSchema
 } from '../../shared/schemas';
 import { isSafeDirectoryName } from '../../shared/validators';
 import type { LibraryStore } from '../services/library-store';
@@ -354,17 +355,19 @@ export function registerAssetsIpc(store: LibraryStore, git: GitService): void {
     }
   });
 
-  ipcMain.handle(IpcChannels.topReposGet, async (): Promise<IpcResult<TopRepos>> => {
+  ipcMain.handle(IpcChannels.topReposGet, async (_event, raw: unknown): Promise<IpcResult<TopRepos>> => {
     try {
-      return ok(store.getTopRepos());
+      const input = TopWindowInputSchema.default({}).parse(raw ?? {});
+      return ok(store.getTopRepos(input.windowDays ?? 30));
     } catch (e) {
       return fail(e);
     }
   });
 
-  ipcMain.handle(IpcChannels.topReposRefresh, async (): Promise<IpcResult<TopRepos>> => {
+  ipcMain.handle(IpcChannels.topReposRefresh, async (_event, raw: unknown): Promise<IpcResult<TopRepos>> => {
     try {
-      return ok(await refreshTopReposAndBroadcast(store));
+      const input = TopWindowInputSchema.default({}).parse(raw ?? {});
+      return ok(await refreshTopReposAndBroadcast(store, input.windowDays ?? 30));
     } catch (e) {
       return fail(e);
     }
@@ -397,14 +400,14 @@ export function registerAssetsIpc(store: LibraryStore, git: GitService): void {
   });
 }
 
-/** Busca a lista de repos em alta, persiste e avisa o renderer. */
-export async function refreshTopReposAndBroadcast(store: LibraryStore): Promise<TopRepos> {
+/** Busca a lista de repos em alta na janela pedida (7 ou 30 dias), persiste e avisa o renderer. */
+export async function refreshTopReposAndBroadcast(store: LibraryStore, windowDays = 30): Promise<TopRepos> {
   const token = decodeToken(store.getSettings().githubToken);
-  const fetched = await fetchTopRepos(fetchJson, { token, limit: 25, windowDays: 30 });
-  await store.setTopRepos(fetched);
-  const payload = ok(store.getTopRepos());
+  const fetched = await fetchTopRepos(fetchJson, { token, limit: 25, windowDays });
+  await store.setTopRepos({ ...fetched, windowDays });
+  const payload = ok(store.getTopRepos(windowDays));
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send(IpcChannels.topReposChanged, payload);
   }
-  return store.getTopRepos();
+  return store.getTopRepos(windowDays);
 }

@@ -17,7 +17,13 @@ export interface TopRepo {
 export interface TopRepos {
   fetchedAt: string; // ISO da última busca; '' = nunca buscado
   repos: TopRepo[];
+  /** Janela (em dias) desta lista; ausente = 30 (legado). */
+  windowDays?: number;
 }
+
+/** Janelas suportadas da aba Top GitHub. */
+export const TOP_WINDOWS = [7, 30] as const;
+export type TopWindow = (typeof TOP_WINDOWS)[number];
 
 export type RepoStatus =
   | 'not_cloned' // só no catálogo (tem URL, não tem pasta)
@@ -220,6 +226,8 @@ export interface LibraryFile {
   kits: Kit[];
   usage: UsageEvent[];
   topRepos: TopRepos;
+  /** Cache da lista de 7 dias; admitido opcional para library.json v2 existente. */
+  topRepos7?: TopRepos;
   settings: Settings;
 }
 

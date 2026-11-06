@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, FolderPlus, Plus, RefreshCw, Layers3, WandSparkles, Bot, BriefcaseBusiness, Flame } from 'lucide-react';
-import type { Agent, AssetCategory, BaseItem, ProjectRef, ScanIssue, Skill, TopRepo, TopRepos } from '@shared/types';
+import { AlertCircle, FolderPlus, Plus, RefreshCw, Layers3, WandSparkles, Bot, BriefcaseBusiness, Flame, X } from 'lucide-react';
+import type { Agent, AssetCategory, BaseItem, ProjectRef, ScanIssue, Skill, TopRepo, TopRepos, TopWindow } from '@shared/types';
+import { TOP_WINDOWS } from '@shared/types';
 import { countTags, matchesTags, sameTag } from '@shared/tags';
 import { normalizeGitUrl } from '@shared/git-utils';
 import { api } from '../lib/api';
@@ -8,22 +9,34 @@ import { useLibraryStore } from '../store/library';
 import TagChips from '../components/TagChips';
 import CategoryChips from '../components/CategoryChips';
 import TagManagerDialog from '../components/TagManagerDialog';
+import ConfirmDialog from '../components/ConfirmDialog';
 import OutdatedBanner from '../components/OutdatedBanner';
 import { AgentCard, BaseCard, ProjectCard, SkillCard, TopRepoCard } from '../components/AssetCards';
 
 type Section = 'skills' | 'agents' | 'bases' | 'projects' | 'top';
-type Assets = { skills: Skill[]; agents: Agent[]; bases: BaseItem[]; projects: ProjectRef[]; top: TopRepos };
-const empty: Assets = { skills: [], agents: [], bases: [], projects: [], top: { fetchedAt: '', repos: [] } };
+type Assets = { skills: Skill[]; agents: Agent[]; bases: BaseItem[]; projects: ProjectRef[] };
+type TopCache = Record<TopWindow, TopRepos>;
+const emptyTop = (windowDays: TopWindow): TopRepos => ({ fetchedAt: '', repos: [], windowDays });
+const empty: Assets = { skills: [], agents: [], bases: [], projects: [] };
 const sections: Array<Exclude<Section, 'top'>> = ['skills', 'agents', 'bases', 'projects'];
-const unwrapTop = (payload: unknown, fallback: TopRepos): TopRepos =>
+type RemoveKind = 'skill' | 'agent' | 'base';
+const unwrapTop = (payload: unknown): TopRepos | null =>
   (payload as { ok?: boolean; data?: TopRepos })?.ok === true && (payload as { data?: TopRepos }).data
     ? ((payload as { data: TopRepos }).data)
-    : fallback;
+    : null;
 
-interface Props { onError: (message: string) => void }
-export default function AssetLibraryPage({ onError }: Props): React.JSX.Element {
+interface Props {
+  onError: (message: string) => void;
+  onSuccess?: (message: string) => void;
+}
+export default function AssetLibraryPage({ onError, onSuccess }: Props): React.JSX.Element {
   const [section, setSection] = useState<Section>('skills');
   const [assets, setAssets] = useState<Assets>(empty);
+  const [topWindow, setTopWindow] = useState<TopWindow>(30);
+  const [topCache, setTopCache] = useState<TopCache>(() => ({
+    7: emptyTop(7),
+    30: emptyTop(30)
+  }));
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [addingRepo, setAddingRepo] = useState<Set<string>>(new Set());
@@ -44,6 +57,8 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
   const [manageOpen, setManageOpen] = useState(false);
   const [scanIssues, setScanIssues] = useState<ScanIssue[]>([]);
   const [knownUrls, setKnownUrls] = useState<string[]>([]);
+  const [pendingRemove, setPendingRemove] = useState<{ kind: RemoveKind; id: string; name: string } | null>(null);
+  const [cloningId, setCloningId] = useState<string | null>(null);
   const [categories, setCategories] = useState<Record<Extract<Section, 'skills' | 'agents'>, AssetCategory[]>>({
     skills: [],
     agents: []
@@ -56,11 +71,21 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
       setAssets((prev) => ({ ...prev, ...data }));
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   }, [onError]);
+  const respond = useCallback(
+    (message: string): void => {
+      if (onSuccess) onSuccess(message);
+      else onError(message);
+    },
+    [onError, onSuccess]
+  );
   useEffect(() => { void refresh(); }, [refresh]);
   const loadTop = useCallback(async () => {
     try {
-      const top = await api.topReposGet();
-      setAssets((prev) => ({ ...prev, top }));
+      const [seven, thirty] = await Promise.all([api.topReposGet(7), api.topReposGet(30)]);
+      setTopCache({
+        7: { ...seven, windowDays: 7 },
+        30: { ...thirty, windowDays: 30 }
+      });
     }
     catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   }, [onError]);
@@ -74,15 +99,20 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
   useEffect(() => { void refreshKnown(); }, [refreshKnown]);
   const knownSet = useMemo(() => new Set(knownUrls.map((url) => normalizeGitUrl(url))), [knownUrls]);
   useEffect(
-    () => api.onTopReposChanged((payload) => setAssets((prev) => ({ ...prev, top: unwrapTop(payload, prev.top) }))),
+    () => api.onTopReposChanged((payload) => {
+      const next = unwrapTop(payload);
+      if (!next) return;
+      const win: TopWindow = (next.windowDays ?? 30) === 7 ? 7 : 30;
+      setTopCache((prev) => ({ ...prev, [win]: { ...next, windowDays: win } }));
+    }),
     []
   );
 
   const refreshTop = async (): Promise<void> => {
     setBusy(true);
     try {
-      const top = await api.topReposRefresh();
-      setAssets((prev) => ({ ...prev, top }));
+      const top = await api.topReposRefresh(topWindow);
+      setTopCache((prev) => ({ ...prev, [topWindow]: { ...top, windowDays: topWindow } }));
     }
     catch (e) { onError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
@@ -92,6 +122,7 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
     try {
       await api.repoAddByUrl(repo.remoteUrl, false, `${repo.owner}/${repo.name}`);
       setAddingRepo((prev) => new Set(prev).add(repo.remoteUrl));
+      respond(`${repo.owner}/${repo.name} adicionado ao catálogo (não clonado).`);
       await refreshKnown();
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
@@ -103,6 +134,7 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
     try {
       await api.skillImport(repo.remoteUrl);
       setSkillImported((prev) => new Set(prev).add(repo.remoteUrl));
+      respond(`SKILL.md de ${repo.owner}/${repo.name} importado. Veja a aba Skills.`);
       await refresh();
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
@@ -114,8 +146,9 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
   const importAgentsFromTop = async (repo: TopRepo): Promise<void> => {
     setImportBusy('agents');
     try {
-      await api.agentImport(repo.remoteUrl);
+      const imported = await api.agentImport(repo.remoteUrl);
       setAgentsImported((prev) => new Set(prev).add(repo.remoteUrl));
+      respond(`${imported.length} agente(s) importados de ${repo.owner}/${repo.name}. Veja a aba Agents.`);
       await refresh();
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
@@ -136,6 +169,7 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
       const result = await api.skillsScan();
       setScanIssues(result.issues);
       await refresh();
+      respond(`Sincronização concluída: ${result.skills.length} skill(s).`);
     }
     catch (e) { onError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
@@ -153,6 +187,7 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
       const result = await api.agentsScan();
       setScanIssues(result.issues);
       await refresh();
+      respond(`Sincronização concluída: ${result.agents.length} agente(s).`);
     }
     catch (e) { onError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
@@ -180,15 +215,40 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
       const result = await api.skillsScan();
       setScanIssues(result.issues);
       await refresh();
+      respond(`Origem adicionada. Sincronização encontrou ${result.skills.length} skill(s).`);
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   };
 
   const addBase = async (): Promise<void> => {
     try {
-      await api.baseAdd({ name: baseName.trim(), ...(baseUrl.trim() ? { remoteUrl: baseUrl.trim() } : {}), ...(basePath ? { localPath: basePath } : {}) });
-      setBaseName(''); setBaseUrl(''); setBasePath(''); setShowBaseForm(false); await refresh();
+      const created = await api.baseAdd({ name: baseName.trim(), ...(baseUrl.trim() ? { remoteUrl: baseUrl.trim() } : {}), ...(basePath ? { localPath: basePath } : {}) });
+      setBaseName(''); setBaseUrl(''); setBasePath(''); setShowBaseForm(false);
+      respond(`Base "${created.name}" adicionada.`);
+      await refresh();
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  };
+
+  const cloneBase = async (base: BaseItem): Promise<void> => {
+    setCloningId(base.id);
+    try {
+      const updated = await api.baseClone(base.id);
+      respond(`Base "${base.name}" clonada${updated.localPath ? ` para ${updated.localPath}` : ''}.`);
+      await refresh();
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    finally { setCloningId(null); }
+  };
+
+  const performRemove = async (kind: RemoveKind, id: string): Promise<void> => {
+    try {
+      if (kind === 'skill') await api.skillRemove(id);
+      else if (kind === 'agent') await api.agentRemove(id);
+      else await api.baseRemove(id);
+      respond('Removido da biblioteca.');
+      await refresh();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const sectionTags = useMemo(
@@ -365,12 +425,25 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
   );
   const filteredTop = useMemo(
     () =>
-      assets.top.repos.filter((r) =>
+      topCache[topWindow].repos.filter((r) =>
         matchQuery(`${r.owner}/${r.name} ${r.description ?? ''} ${r.language ?? ''} ${(r.topics ?? []).join(' ')}`)
       ),
-    [assets.top.repos, query]
+    [topCache[topWindow].repos, query]
   );
-  const tab = (key: Section, label: string, icon: React.ReactNode, count: number): React.JSX.Element => <button type="button" onClick={() => setSection(key)} className={`flex items-center gap-2 rounded px-3 py-2 text-sm ${section === key ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}>{icon}{label}<span className="text-xs opacity-60">{count}</span></button>;
+  const filtersActive = query.trim() !== '' || selectedTags.length > 0 || ((section === 'skills' || section === 'agents') && categories[section].length > 0);
+  const countText = (filteredCount: number, total: number, noun: string): string =>
+    filtersActive
+      ? `${filteredCount} de ${total} ${noun}`
+      : `${total} ${noun}`;
+  const clearFilters = (): void => {
+    setQuery('');
+    setSelected((prev) => ({ ...prev, [section]: [] }));
+    if (section === 'skills' || section === 'agents') {
+      setCategories((prev) => ({ ...prev, [section]: [] }));
+    }
+  };
+  const noResultsAction = <button type="button" onClick={clearFilters} className="rounded border border-steam-elevated px-3 py-1.5 text-xs text-steam-text/70 hover:text-steam-accent">Limpar busca e filtros</button>;
+  const tab = (key: Section, label: string, icon: React.ReactNode, count: number): React.JSX.Element => <button type="button" onClick={() => setSection(key)} aria-pressed={section === key} className={`flex items-center gap-2 rounded px-3 py-2 text-sm ${section === key ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}>{icon}{label}<span className="text-xs opacity-60">{count}</span></button>;
 
   const toggleCategory = (sectionKey: Extract<Section, 'skills' | 'agents'>, category: AssetCategory): void =>
     setCategories((prev) => {
@@ -388,18 +461,38 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
   return <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
     <header className="flex items-center gap-4 border-b border-steam-elevated/50 px-6 py-4">
       <div><h1 className="text-xl font-semibold">Biblioteca</h1><p className="mt-1 text-xs text-steam-text/50">Skills, agentes, repositórios-base e projetos que os utilizam.</p></div>
-      <label className="ml-auto"><span className="sr-only">Buscar na biblioteca</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar… (Ctrl+K)" id="library-search" className="w-64 rounded border border-steam-elevated bg-steam-panel px-3 py-2 text-sm outline-none focus:border-steam-accent" /></label>
+      <label className="ml-auto relative">
+        <span className="sr-only">Buscar na biblioteca</span>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Escape') { setQuery(''); (e.target as HTMLInputElement).blur(); } }}
+          placeholder="Buscar… (Ctrl+K)"
+          id="library-search"
+          className={`w-64 rounded border bg-steam-panel px-3 py-2 pr-8 text-sm outline-none focus:border-steam-accent ${query ? 'border-steam-accent' : 'border-steam-elevated'}`}
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => setQuery('')}
+            aria-label="Limpar busca"
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-steam-text/40 hover:text-steam-text"
+          >
+            <X size={14} />
+          </button>
+        )}
+      </label>
     </header>
-    <nav className="flex gap-2 border-b border-steam-elevated/30 px-6 py-3">{tab('skills', 'Skills', <WandSparkles size={16}/>, assets.skills.length)}{tab('agents', 'Agents', <Bot size={16}/>, assets.agents.length)}{tab('bases', 'Bases', <Layers3 size={16}/>, assets.bases.length)}{tab('projects', 'Projetos', <BriefcaseBusiness size={16}/>, assets.projects.length)}{tab('top', 'Top GitHub', <Flame size={16}/>, assets.top.repos.length)}</nav>
+    <nav className="flex gap-2 border-b border-steam-elevated/30 px-6 py-3">{tab('skills', 'Skills', <WandSparkles size={16}/>, assets.skills.length)}{tab('agents', 'Agents', <Bot size={16}/>, assets.agents.length)}{tab('bases', 'Bases', <Layers3 size={16}/>, assets.bases.length)}{tab('projects', 'Projetos', <BriefcaseBusiness size={16}/>, assets.projects.length)}{tab('top', 'Top GitHub', <Flame size={16}/>, topCache[topWindow].repos.length)}</nav>
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
       <OutdatedBanner onError={onError} />
       {scanIssues.length > 0 && (section === 'skills' || section === 'agents') && (
-        <div className="mb-4 rounded border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-          <p className="flex items-center gap-2 font-medium text-amber-200">
+        <div className="mb-4 rounded border border-steam-warn/40 bg-steam-warn/10 px-4 py-3 text-sm">
+          <p className="flex items-center gap-2 font-medium text-steam-warn">
             <AlertCircle size={14} />
             {scanIssues.length} problema(s) de validação no frontmatter:
           </p>
-          <ul className="mt-2 space-y-1 text-xs text-amber-100/80">
+          <ul className="mt-2 space-y-1 text-xs text-steam-text/80">
             {scanIssues.map((issue, index) => (
               <li key={`${issue.path}-${index}`}>
                 <span className="font-mono">{issue.name ?? issue.path}</span> — {issue.reason}
@@ -426,7 +519,7 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
         />
       )}
       {section === 'skills' && <>
-        <div className="mb-5 flex items-center gap-2"><p className="mr-auto text-sm text-steam-text/60">{assets.skills.length} skills descobertas em arquivos SKILL.md</p><button disabled={busy} type="button" onClick={() => void addFolder()} className="flex items-center gap-2 rounded border border-steam-elevated px-3 py-2 text-sm hover:bg-steam-panel"><FolderPlus size={15}/>Adicionar origem</button><button disabled={busy} type="button" onClick={() => void scanSkills()} className="flex items-center gap-2 rounded bg-steam-accent px-3 py-2 text-sm font-semibold text-steam-bg disabled:opacity-50"><RefreshCw size={15} className={busy ? 'animate-spin' : ''}/> {busy ? 'Buscando…' : 'Sincronizar'}</button></div>
+        <div className="mb-5 flex items-center gap-2"><p className="mr-auto text-sm text-steam-text/60">{countText(filteredSkills.length, assets.skills.length, 'skills descobertas em arquivos SKILL.md')}</p><button disabled={busy} type="button" onClick={() => void addFolder()} className="flex items-center gap-2 rounded border border-steam-elevated px-3 py-2 text-sm hover:bg-steam-panel"><FolderPlus size={15}/>Adicionar origem</button><button disabled={busy} type="button" onClick={() => void scanSkills()} className="flex items-center gap-2 rounded bg-steam-accent px-3 py-2 text-sm font-semibold text-steam-bg disabled:opacity-50"><RefreshCw size={15} className={busy ? 'animate-spin' : ''}/> {busy ? 'Buscando…' : 'Sincronizar'}</button></div>
         {filteredSkills.length ? (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {filteredSkills.map((skill) => (
@@ -442,27 +535,25 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
                     .skillOpen(skill.id)
                     .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
                 }
-                onRemove={() =>
-                  void api
-                    .skillRemove(skill.id)
-                    .then(refresh)
-                    .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
-                }
+                onRemove={() => setPendingRemove({ kind: 'skill', id: skill.id, name: skill.name })}
               />
             ))}
           </div>
         ) : (
           <Empty
             text={
-              settings?.skillFolders.length
-                ? 'Nenhum SKILL.md foi encontrado nas origens configuradas.'
-                : 'Adicione uma pasta que contenha SKILL.md para importar suas skills.'
+              filtersActive
+                ? 'Nenhuma skill corresponde à busca e aos filtros selecionados.'
+                : settings?.skillFolders.length
+                  ? 'Nenhum SKILL.md foi encontrado nas origens configuradas.'
+                  : 'Adicione uma pasta que contenha SKILL.md para importar suas skills.'
             }
+            action={filtersActive ? noResultsAction : undefined}
           />
         )}
       </>}
       {section === 'agents' && <>
-        <div className="mb-5 flex items-center gap-2"><p className="mr-auto text-sm text-steam-text/60">{assets.agents.length} agentes descobertos em arquivos .md de agente</p><button disabled={busy} type="button" onClick={() => void addAgentFolder()} className="flex items-center gap-2 rounded border border-steam-elevated px-3 py-2 text-sm hover:bg-steam-panel"><FolderPlus size={15}/>Adicionar origem</button><button disabled={busy} type="button" onClick={() => void scanAgents()} className="flex items-center gap-2 rounded bg-steam-accent px-3 py-2 text-sm font-semibold text-steam-bg disabled:opacity-50"><RefreshCw size={15} className={busy ? 'animate-spin' : ''}/> {busy ? 'Buscando…' : 'Sincronizar'}</button></div>
+        <div className="mb-5 flex items-center gap-2"><p className="mr-auto text-sm text-steam-text/60">{countText(filteredAgents.length, assets.agents.length, 'agentes descobertos em arquivos .md de agente')}</p><button disabled={busy} type="button" onClick={() => void addAgentFolder()} className="flex items-center gap-2 rounded border border-steam-elevated px-3 py-2 text-sm hover:bg-steam-panel"><FolderPlus size={15}/>Adicionar origem</button><button disabled={busy} type="button" onClick={() => void scanAgents()} className="flex items-center gap-2 rounded bg-steam-accent px-3 py-2 text-sm font-semibold text-steam-bg disabled:opacity-50"><RefreshCw size={15} className={busy ? 'animate-spin' : ''}/> {busy ? 'Buscando…' : 'Sincronizar'}</button></div>
         {filteredAgents.length ? (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {filteredAgents.map((agent) => (
@@ -478,22 +569,20 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
                     .agentOpen(agent.id)
                     .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
                 }
-                onRemove={() =>
-                  void api
-                    .agentRemove(agent.id)
-                    .then(refresh)
-                    .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
-                }
+                onRemove={() => setPendingRemove({ kind: 'agent', id: agent.id, name: agent.name })}
               />
             ))}
           </div>
         ) : (
           <Empty
             text={
-              settings?.agentFolders.length
-                ? 'Nenhum arquivo .md de agente foi encontrado nas origens configuradas.'
-                : 'Adicione uma pasta com arquivos .md de agentes (ex.: .claude/agents) para importá-los.'
+              filtersActive
+                ? 'Nenhum agente corresponde à busca e aos filtros selecionados.'
+                : settings?.agentFolders.length
+                  ? 'Nenhum arquivo .md de agente foi encontrado nas origens configuradas.'
+                  : 'Adicione uma pasta com arquivos .md de agentes (ex.: .claude/agents) para importá-los.'
             }
+            action={filtersActive ? noResultsAction : undefined}
           />
         )}
       </>}
@@ -508,25 +597,23 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
                 base={base}
                 allTags={allTagNames}
                 basesRoot={settings?.basesRoot}
+                cloning={cloningId === base.id}
                 onTagsChange={(tags) => void updateBaseTags(base, tags)}
                 onFavorite={(next) => void setBaseFavorite(base, next)}
-                onClone={() =>
-                  void api
-                    .baseClone(base.id)
-                    .then(refresh)
-                    .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
-                }
-                onRemove={() =>
-                  void api
-                    .baseRemove(base.id)
-                    .then(refresh)
-                    .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
-                }
+                onClone={() => void cloneBase(base)}
+                onRemove={() => setPendingRemove({ kind: 'base', id: base.id, name: base.name })}
               />
             ))}
           </div>
         ) : (
-          <Empty text="Adicione uma base para reutilizar como início de novos projetos." />
+          <Empty
+            text={
+              filtersActive
+                ? 'Nenhuma base corresponde à busca e aos filtros selecionados.'
+                : 'Adicione uma base para reutilizar como início de novos projetos.'
+            }
+            action={filtersActive ? noResultsAction : undefined}
+          />
         )}
       </>}
       {section === 'projects' && <>
@@ -554,15 +641,35 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
             ))}
           </div>
         ) : (
-          <Empty text="A migração não encontrou projetos. Os repositórios locais da biblioteca v1 aparecem aqui como contexto." />
+          <Empty
+            text={
+              filtersActive
+                ? 'Nenhum projeto corresponde à busca e aos filtros selecionados.'
+                : 'A migração não encontrou projetos. Os repositórios locais da biblioteca v1 aparecem aqui como contexto.'
+            }
+            action={filtersActive ? noResultsAction : undefined}
+          />
         )}
       </>}
       {section === 'top' && <>
-        <div className="mb-5 flex items-center gap-2">
+        <div className="mb-5 flex flex-wrap items-center gap-2">
           <p className="mr-auto text-sm text-steam-text/60">
-            Repositórios em alta no GitHub (criados nos últimos 30 dias, ordenados por estrelas).
-            {assets.top.fetchedAt && <> Última busca em {new Date(assets.top.fetchedAt).toLocaleString('pt-BR')}.</>}
+            Repositórios em alta no GitHub (criados nos últimos {topWindow} dias, ordenados por estrelas).
+            {topCache[topWindow].fetchedAt && <> Última busca em {new Date(topCache[topWindow].fetchedAt).toLocaleString('pt-BR')}.</>}
           </p>
+          <span aria-label="Janela da lista" role="radiogroup" className="flex items-center gap-1 rounded border border-steam-elevated p-1">
+            {TOP_WINDOWS.map((days) => (
+              <button
+                key={days}
+                type="button"
+                onClick={() => setTopWindow(days)}
+                aria-pressed={topWindow === days}
+                className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs ${topWindow === days ? 'bg-steam-accent font-semibold text-steam-bg' : 'text-steam-text/60 hover:text-steam-accent'}`}
+              >
+                Últimos {days} dias
+              </button>
+            ))}
+          </span>
           <button disabled={busy} type="button" onClick={() => void refreshTop()} className="flex items-center gap-2 rounded bg-steam-accent px-3 py-2 text-sm font-semibold text-steam-bg disabled:opacity-50"><RefreshCw size={15} className={busy ? 'animate-spin' : ''}/> {busy ? 'Buscando…' : 'Atualizar agora'}</button>
         </div>
         {filteredTop.length ? (
@@ -582,7 +689,16 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
             ))}
           </div>
         ) : (
-          <Empty text={assets.top.fetchedAt ? 'Nenhum repositório encontrado para os critérios atuais.' : 'A lista ainda não foi buscada. Clique em "Atualizar agora".'} />
+          <Empty
+            text={
+              filtersActive
+                ? 'Nenhum repositório da aba Top GitHub corresponde à busca.'
+                : topCache[topWindow].fetchedAt
+                  ? 'Nenhum repositório encontrado para os critérios atuais.'
+                  : `A lista de ${topWindow} dias ainda não foi buscada. Clique em "Atualizar agora".`
+            }
+            action={query.trim() ? noResultsAction : undefined}
+          />
         )}
       </>}
     </div>
@@ -594,10 +710,38 @@ export default function AssetLibraryPage({ onError }: Props): React.JSX.Element 
         onClose={() => setManageOpen(false)}
       />
     )}
+    {pendingRemove && (() => {
+      const kindName = pendingRemove.kind === 'skill' ? 'skill' : pendingRemove.kind === 'agent' ? 'agente' : 'base';
+      const returns = pendingRemove.kind !== 'base';
+      return (
+        <ConfirmDialog
+          title={`Remover ${kindName}`}
+          message={
+            returns
+              ? `"${pendingRemove.name}" sai da biblioteca e das associações. O arquivo continua no disco e reaparece ao sincronizar as origens.`
+              : `"${pendingRemove.name}" sai da biblioteca. A pasta local em disco não é apagada.`
+          }
+          confirmLabel="Remover"
+          onConfirm={() => {
+            const { kind, id } = pendingRemove;
+            setPendingRemove(null);
+            void performRemove(kind, id);
+          }}
+          onCancel={() => setPendingRemove(null)}
+        />
+      );
+    })()}
   </main>;
 }
 
-function Empty({ text }: { text: string }): React.JSX.Element { return <div className="flex min-h-64 flex-1 items-center justify-center rounded border border-dashed border-steam-elevated p-8 text-center text-sm text-steam-text/50">{text}</div>; }
+function Empty({ text, action }: { text: string; action?: React.ReactNode }): React.JSX.Element {
+  return (
+    <div className="flex min-h-64 flex-1 flex-col items-center justify-center gap-3 rounded border border-dashed border-steam-elevated p-8 text-center text-sm text-steam-text/50">
+      <p>{text}</p>
+      {action}
+    </div>
+  );
+}
 
 function countAssetCategories(items: { category: AssetCategory }[]): Partial<Record<AssetCategory, number>> {
   const counts: Partial<Record<AssetCategory, number>> = {};

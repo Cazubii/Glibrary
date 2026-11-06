@@ -351,7 +351,8 @@ export function BaseCard({
   onFavorite,
   onClone,
   onRemove,
-  basesRoot
+  basesRoot,
+  cloning
 }: {
   base: BaseItem;
   allTags: string[];
@@ -360,6 +361,7 @@ export function BaseCard({
   onClone: () => void;
   onRemove: () => void;
   basesRoot?: string;
+  cloning?: boolean;
 }): React.JSX.Element {
   return (
     <article className="rounded border border-steam-elevated bg-steam-panel p-4">
@@ -379,9 +381,10 @@ export function BaseCard({
           <button
             type="button"
             onClick={onClone}
-            className="rounded bg-steam-elevated px-2 py-1 text-xs hover:text-steam-accent"
+            disabled={cloning}
+            className="rounded bg-steam-elevated px-2 py-1 text-xs hover:text-steam-accent disabled:opacity-50"
           >
-            Clonar para {basesRoot ?? '~/BASES'}
+            {cloning ? 'Clonando…' : `Clonar para ${basesRoot ?? '~/BASES'}`}
           </button>
         )}
         <button
@@ -416,6 +419,7 @@ export function ProjectCard({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState(project.notes ?? '');
+  const [saving, setSaving] = useState(false);
   const mergeTags = (addedIds: string[]): string[] | undefined => {
     if (!inheritTags || addedIds.length === 0) return undefined;
     const byId = new Map([
@@ -435,13 +439,14 @@ export function ProjectCard({
     const current =
       kind === 'skill' ? project.skillIds : kind === 'agent' ? project.agentIds : project.baseIds;
     const nextIds = checked ? [...current, id] : current.filter((x) => x !== id);
+    setSaving(true);
     void onSave({
       skillIds: kind === 'skill' ? nextIds : project.skillIds,
       agentIds: kind === 'agent' ? nextIds : project.agentIds,
       baseIds: kind === 'base' ? nextIds : project.baseIds,
       notes,
       ...(checked ? { tags: mergeTags([id]) } : {})
-    });
+    }).finally(() => setSaving(false));
   };
   return (
     <article className="rounded border border-steam-elevated bg-steam-panel p-4">
@@ -467,8 +472,8 @@ export function ProjectCard({
       </div>
       <TagArea tags={project.tags} allTags={allTags} onChange={onTagsChange} />
       {open && (
-        <div className="mt-4 grid gap-4 border-t border-steam-elevated/50 pt-4 md:grid-cols-3">
-          <fieldset className="space-y-2">
+        <div aria-busy={saving} className="mt-4 grid gap-4 border-t border-steam-elevated/50 pt-4 md:grid-cols-3">
+          <fieldset className="space-y-2" disabled={saving}>
             <legend className="mb-2 text-xs font-semibold uppercase text-steam-text/50">
               Skills usadas
             </legend>
@@ -486,7 +491,7 @@ export function ProjectCard({
               <p className="text-xs text-steam-text/40">Ainda não há Skills na biblioteca.</p>
             )}
           </fieldset>
-          <fieldset className="space-y-2">
+          <fieldset className="space-y-2" disabled={saving}>
             <legend className="mb-2 text-xs font-semibold uppercase text-steam-text/50">
               Agents usados
             </legend>
@@ -506,7 +511,7 @@ export function ProjectCard({
               </p>
             )}
           </fieldset>
-          <fieldset className="space-y-2">
+          <fieldset className="space-y-2" disabled={saving}>
             <legend className="mb-2 text-xs font-semibold uppercase text-steam-text/50">
               Bases usadas
             </legend>
