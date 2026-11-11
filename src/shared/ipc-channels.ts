@@ -66,7 +66,14 @@ export const IpcChannels = {
   githubAccountStatus: 'github:accountStatus',
   githubAccountConnect: 'github:accountConnect',
   githubAccountDisconnect: 'github:accountDisconnect',
-  githubReposList: 'github:reposList'
+  githubReposList: 'github:reposList',
+  terminalList: 'terminal:list',
+  terminalStart: 'terminal:start',
+  terminalWrite: 'terminal:write',
+  terminalResize: 'terminal:resize',
+  terminalClose: 'terminal:close',
+  terminalOutput: 'terminal:output',
+  terminalExit: 'terminal:exit'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
