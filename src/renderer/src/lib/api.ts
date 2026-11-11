@@ -34,6 +34,8 @@ import type {
 import type { ToolStatus } from '../../../shared/tools';
 import { IpcChannels } from '../../../shared/ipc-channels';
 
+const terminalWriteQueues = new Map<string, Promise<void>>();
+
 async function unwrap<T>(promise: Promise<unknown>): Promise<T> {
   const result = (await promise) as IpcResult<T>;
   if (!result.ok) throw new Error(result.error);
@@ -132,14 +134,20 @@ export const api = {
   terminalStart: (input: TerminalStartInput): Promise<TerminalSessionSnapshot> =>
     unwrap(window.api.invoke(IpcChannels.terminalStart, input)),
   terminalWrite: async (sessionId: string, data: string): Promise<null> => {
-    const limit = 16 * 1024;
-    for (let offset = 0; offset < data.length;) {
-      let end = Math.min(data.length, offset + limit);
-      const last = data.charCodeAt(end - 1);
-      if (end < data.length && last >= 0xd800 && last <= 0xdbff) end -= 1;
-      await unwrap<null>(window.api.invoke(IpcChannels.terminalWrite, { sessionId, data: data.slice(offset, end) }));
-      offset = end;
-    }
+    const previous = terminalWriteQueues.get(sessionId) ?? Promise.resolve();
+    const queued = previous.catch(() => undefined).then(async () => {
+      const limit = 16 * 1024;
+      for (let offset = 0; offset < data.length;) {
+        let end = Math.min(data.length, offset + limit);
+        const last = data.charCodeAt(end - 1);
+        if (end < data.length && last >= 0xd800 && last <= 0xdbff) end -= 1;
+        await unwrap<null>(window.api.invoke(IpcChannels.terminalWrite, { sessionId, data: data.slice(offset, end) }));
+        offset = end;
+      }
+    });
+    terminalWriteQueues.set(sessionId, queued);
+    try { await queued; }
+    finally { if (terminalWriteQueues.get(sessionId) === queued) terminalWriteQueues.delete(sessionId); }
     return null;
   },
   terminalResize: (sessionId: string, cols: number, rows: number): Promise<null> =>
