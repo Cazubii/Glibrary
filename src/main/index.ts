@@ -10,6 +10,11 @@ import { registerNativeToolsIpc } from './ipc/native-tools.ipc';
 import { registerDashboardIpc } from './ipc/dashboard.ipc';
 import { registerProjectsIpc } from './ipc/projects.ipc';
 import { registerAssetsIpc, refreshTopReposAndBroadcast } from './ipc/assets.ipc';
+import { registerRepoIpc } from './ipc/repos.ipc';
+import { TerminalManager } from './services/terminal-manager';
+import { registerTerminalIpc } from './ipc/terminal.ipc';
+import { DevWorkspaceManager } from './services/dev-workspace';
+import { registerDevWorkspaceIpc } from './ipc/dev-workspace.ipc';
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -49,6 +54,14 @@ void app.whenReady().then(async () => {
   registerDashboardIpc(store);
   registerProjectsIpc(store, new GitService());
   registerAssetsIpc(store, new GitService());
+  registerRepoIpc(store, new GitService(), join(app.getPath('userData'), 'covers'));
+  const terminalManager = new TerminalManager();
+  registerTerminalIpc(terminalManager);
+  registerDevWorkspaceIpc(
+    store,
+    new DevWorkspaceManager(store, join(app.getPath('userData'), 'workspaces')),
+    terminalManager
+  );
   createWindow();
   // Atualiza os top repos do GitHub em segundo plano; erros ficam silenciosos
   // (offline/limite da API não impedem o uso — a lista anterior continua na aba).
