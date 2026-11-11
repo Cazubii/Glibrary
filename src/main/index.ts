@@ -5,6 +5,8 @@ import { GitService } from './services/git-service';
 import { AgentRunStore } from './services/agent-run-store';
 import { AgentRunManager } from './services/agent-run-manager';
 import { registerAgentRunsIpc } from './ipc/agent-runs.ipc';
+import { ToolManager } from './services/tool-manager';
+import { registerNativeToolsIpc } from './ipc/native-tools.ipc';
 import { registerAssetsIpc, refreshTopReposAndBroadcast } from './ipc/assets.ipc';
 
 function createWindow(): void {
@@ -32,7 +34,16 @@ void app.whenReady().then(async () => {
   const runManager = new AgentRunManager(store, runStore, join(app.getPath('userData'), 'logs', 'agents'), (channel, payload) => {
     for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload);
   });
+  const toolManager = new ToolManager(
+    store,
+    join(app.getPath('userData'), 'tools'),
+    join(app.getPath('userData'), 'logs', 'tools'),
+    (channel, payload) => {
+      for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload);
+    }
+  );
   registerAgentRunsIpc(store, runManager);
+  registerNativeToolsIpc(toolManager);
   registerAssetsIpc(store, new GitService());
   createWindow();
   // Atualiza os top repos do GitHub em segundo plano; erros ficam silenciosos
@@ -45,7 +56,7 @@ void app.whenReady().then(async () => {
     }
   }, 1500);
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
-  app.on('before-quit', () => { void runManager.stopAll(); });
+  app.on('before-quit', () => { void runManager.stopAll(); void toolManager.stopAll(); });
 });
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
