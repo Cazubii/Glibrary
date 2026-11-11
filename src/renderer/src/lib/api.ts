@@ -3,6 +3,8 @@ import type {
   IpcResult,
   LibraryFile,
   Agent,
+  AgentProfile,
+  AgentRun,
   AgentsScanResult,
   BaseItem,
   Kit,
@@ -251,5 +253,41 @@ export const api = {
   onStatusChanged: (listener: (payload: { id: string; status: Repo['status'] }) => void) =>
     window.api.on(IpcChannels.repoStatusChanged, (payload: unknown) => {
       listener(payload as { id: string; status: Repo['status'] });
+    }),
+
+  agentProfilesList: (): Promise<AgentProfile[]> =>
+    unwrap<AgentProfile[]>(window.api.invoke(IpcChannels.agentProfilesList)),
+
+  agentProfilesCreate: (input: { name: string; repoId: string; command: string; args?: string[] }): Promise<AgentProfile> =>
+    unwrap<AgentProfile>(window.api.invoke(IpcChannels.agentProfilesCreate, input)),
+
+  agentProfilesUpdate: (id: string, patch: { name?: string; repoId?: string; command?: string; args?: string[] }): Promise<AgentProfile> =>
+    unwrap<AgentProfile>(window.api.invoke(IpcChannels.agentProfilesUpdate, { id, patch })),
+
+  agentProfilesRemove: (id: string): Promise<null> =>
+    unwrap<null>(window.api.invoke(IpcChannels.agentProfilesRemove, { id })),
+
+  agentRunsStart: (profileId: string, prompt?: string): Promise<AgentRun> =>
+    unwrap<AgentRun>(
+      window.api.invoke(IpcChannels.agentRunsStart, { profileId, ...(prompt != null ? { prompt } : {}) })
+    ),
+
+  agentRunsStop: (id: string): Promise<null> =>
+    unwrap<null>(window.api.invoke(IpcChannels.agentRunsStop, { id })),
+
+  agentRunsList: (): Promise<AgentRun[]> =>
+    unwrap<AgentRun[]>(window.api.invoke(IpcChannels.agentRunsList)),
+
+  agentRunsGetLogs: (id: string): Promise<LogLine[]> =>
+    unwrap<LogLine[]>(window.api.invoke(IpcChannels.agentRunsGetLogs, { id })),
+
+  onAgentRunsChanged: (listener: (run: AgentRun) => void) =>
+    window.api.on(IpcChannels.agentRunsChanged, (payload: unknown) => {
+      listener(payload as AgentRun);
+    }),
+
+  onAgentRunsLog: (listener: (payload: { id: string; line: LogLine }) => void) =>
+    window.api.on(IpcChannels.agentRunsLog, (payload: unknown) => {
+      listener(payload as { id: string; line: LogLine });
     })
 };
