@@ -136,6 +136,24 @@ export class TerminalManager {
     if (session.state === 'running') await this.terminateSessions([session], 2000);
   }
 
+  hasRunningTemporarySession(repoId: string): boolean {
+    return [...this.sessions.values()].some((session) =>
+      session.repoId === repoId &&
+      session.provider === 'temporary-local' &&
+      session.state === 'running'
+    );
+  }
+
+  async closeCodespaceSessions(repoId: string, codespaceName: string): Promise<void> {
+    const attached = [...this.sessions.values()].filter((session) =>
+      session.repoId === repoId &&
+      session.provider === 'codespace' &&
+      session.codespaceName === codespaceName &&
+      session.state === 'running'
+    );
+    await Promise.all(attached.map((session) => this.close(session.id)));
+  }
+
   async closeAll(): Promise<void> {
     const active = [...this.sessions.values()].filter((session) => session.state === 'running');
     await this.terminateSessions(active, 5000);
