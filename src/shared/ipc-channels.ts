@@ -73,7 +73,14 @@ export const IpcChannels = {
   terminalResize: 'terminal:resize',
   terminalClose: 'terminal:close',
   terminalOutput: 'terminal:output',
-  terminalExit: 'terminal:exit'
+  terminalExit: 'terminal:exit',
+  terminalClear: 'terminal:clear',
+  terminalCodespacesList: 'terminal:codespacesList',
+  terminalCodespaceStart: 'terminal:codespaceStart',
+  terminalCodespaceStop: 'terminal:codespaceStop',
+  terminalCodespaceCreate: 'terminal:codespaceCreate',
+  terminalTempStatus: 'terminal:tempStatus',
+  terminalTempCleanup: 'terminal:tempCleanup'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
