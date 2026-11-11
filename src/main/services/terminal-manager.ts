@@ -1,7 +1,6 @@
 import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
 import { homedir } from 'os';
-import * as pty from 'node-pty';
 import type { IPty } from 'node-pty';
 import type {
   Repo,
@@ -58,6 +57,7 @@ export class TerminalManager {
     if (!repo) throw new Error('Repositório não encontrado.');
     this.starting += 1;
     try {
+      const pty = await import('node-pty');
       let proc: IPty;
       let temporaryPath: string | undefined;
       if (input.provider === 'codespace') {
