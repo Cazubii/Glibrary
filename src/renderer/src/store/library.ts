@@ -1,11 +1,13 @@
 import { create } from 'zustand';
-import type { LogLine, Repo, Settings } from '@shared/types';
+import type { GithubAccountStatus, GithubRepoPage, LogLine, Repo, Settings } from '@shared/types';
 import type { ToolStatus } from '@shared/tools';
 import { api } from '../lib/api';
 
 interface LibraryState {
   repos: Repo[];
   settings: Settings | null;
+  githubAccount: GithubAccountStatus | null;
+  githubRepoPages: Record<number, GithubRepoPage>;
   loaded: boolean;
   error: string | null;
   logs: Record<string, LogLine[]>;
@@ -20,6 +22,10 @@ interface LibraryState {
   removeRepo: (id: string, deleteFolder: boolean) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
   updateSettings: (patch: Partial<Settings>) => Promise<void>;
+  loadGithubAccount: (force?: boolean) => Promise<GithubAccountStatus>;
+  connectGithubAccount: (token: string) => Promise<GithubAccountStatus>;
+  disconnectGithubAccount: () => Promise<GithubAccountStatus>;
+  loadGithubRepos: (page: number, force?: boolean) => Promise<GithubRepoPage>;
   appendLog: (id: string, line: LogLine) => void;
   clearLogs: (id: string) => void;
   confirmRun: (key: string) => void;
@@ -31,6 +37,8 @@ export const runConfirmKey = (id: string, command: string): string => `${id}::${
 export const useLibraryStore = create<LibraryState>((set, get) => ({
   repos: [],
   settings: null,
+  githubAccount: null,
+  githubRepoPages: {},
   loaded: false,
   error: null,
   logs: {},
@@ -85,6 +93,35 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   updateSettings: async (patch) => {
     const settings = await api.settingsSet(patch);
     set({ settings });
+  },
+  loadGithubAccount: async (force = false) => {
+    const cached = get().githubAccount;
+    if (!force && cached != null && Date.now() - Date.parse(cached.checkedAt) < 5 * 60 * 1000) {
+      return cached;
+    }
+    const account = await api.githubAccountStatus();
+    set({ githubAccount: account, ...(account.state === 'connected' ? {} : { githubRepoPages: {} }) });
+    return account;
+  },
+
+  connectGithubAccount: async (token) => {
+    const account = await api.githubAccountConnect(token);
+    set({ githubAccount: account, githubRepoPages: {} });
+    return account;
+  },
+
+  disconnectGithubAccount: async () => {
+    const account = await api.githubAccountDisconnect();
+    set({ githubAccount: account, githubRepoPages: {} });
+    return account;
+  },
+
+  loadGithubRepos: async (page, force = false) => {
+    const cached = get().githubRepoPages[page];
+    if (!force && cached != null) return cached;
+    const result = await api.githubReposList(page);
+    set((state) => ({ githubRepoPages: { ...state.githubRepoPages, [page]: result } }));
+    return result;
   },
 
   appendLog: (id, line) =>
