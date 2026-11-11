@@ -51,6 +51,36 @@ export interface GithubRepoPage {
   hasNextPage: boolean;
 }
 
+export type TerminalProvider = 'local';
+
+export interface TerminalSessionSummary {
+  id: string;
+  repoId: string;
+  title: string;
+  provider: TerminalProvider;
+  state: 'running' | 'exited' | 'error';
+  createdAt: string;
+  exitCode?: number;
+}
+
+export interface TerminalStartInput {
+  repoId: string;
+  provider: TerminalProvider;
+  cols: number;
+  rows: number;
+}
+
+export interface TerminalOutputEvent {
+  sessionId: string;
+  data: string;
+}
+
+export interface TerminalExitEvent {
+  sessionId: string;
+  exitCode: number | null;
+  signal?: number;
+}
+
 export interface TopRepos {
   fetchedAt: string; // ISO da última busca; '' = nunca buscado
   repos: TopRepo[];
