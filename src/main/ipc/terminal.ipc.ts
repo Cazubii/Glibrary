@@ -114,6 +114,8 @@ export function registerTerminalIpc(
   ipcMain.handle(IpcChannels.terminalCodespaceStop, async (_event, raw: unknown): Promise<IpcResult<null>> => {
     try {
       const input = TerminalCodespaceActionInputSchema.parse(raw);
+      requireRepo(store, input.repoId);
+      await manager.closeCodespaceSessions(input.repoId, input.codespaceName);
       await codespaces.stop(requireRepo(store, input.repoId), input.codespaceName);
       return ok(null);
     } catch (error) { return fail(error); }
@@ -138,6 +140,9 @@ export function registerTerminalIpc(
     try {
       const { repoId } = TerminalTempCleanupInputSchema.parse(raw);
       requireRepo(store, repoId);
+      if (manager.hasRunningTemporarySession(repoId)) {
+        throw new Error('Encerre a sessão do checkout temporário antes de removê-lo.');
+      }
       return ok(await temporaryCheckouts.cleanup(repoId));
     } catch (error) { return fail(error); }
   });
