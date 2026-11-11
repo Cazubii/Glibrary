@@ -57,7 +57,7 @@ export interface GithubCodespace {
   name: string;
   repository: string;
   state: 'available' | 'shutdown' | 'unknown';
-  webUrl?: string;
+  createdAt?: string;
 }
 
 export interface GithubCodespaceMachine {
