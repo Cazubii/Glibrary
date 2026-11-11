@@ -12,6 +12,7 @@ import TagManagerDialog from '../components/TagManagerDialog';
 import ConfirmDialog from '../components/ConfirmDialog';
 import OutdatedBanner from '../components/OutdatedBanner';
 import { AgentCard, BaseCard, ProjectCard, SkillCard, TopRepoCard } from '../components/AssetCards';
+import GithubReposPanel from '../components/GithubReposPanel';
 
 type Section = 'skills' | 'agents' | 'bases' | 'projects' | 'top';
 type Assets = { skills: Skill[]; agents: Agent[]; bases: BaseItem[]; projects: ProjectRef[] };
@@ -31,6 +32,7 @@ interface Props {
 }
 export default function AssetLibraryPage({ onError, onSuccess }: Props): React.JSX.Element {
   const [section, setSection] = useState<Section>('skills');
+  const [projectSource, setProjectSource] = useState<'local' | 'github'>('local');
   const [assets, setAssets] = useState<Assets>(empty);
   const [topWindow, setTopWindow] = useState<TopWindow>(30);
   const [topCache, setTopCache] = useState<TopCache>(() => ({
@@ -617,39 +619,51 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
         )}
       </>}
       {section === 'projects' && <>
-        <div className="mb-5 flex items-center"><p className="mr-auto text-sm text-steam-text/60">Projetos existentes como contexto: associe as skills e bases usadas em cada um.</p><button type="button" onClick={() => void api.dialogPickFolder().then(async (path) => { if (path) { await api.projectAdd(path); await refresh(); } }).catch((e: unknown) => onError(String(e)))} className="flex items-center gap-2 rounded bg-steam-accent px-3 py-2 text-sm font-semibold text-steam-bg"><FolderPlus size={15}/>Adicionar projeto</button></div>
-        {filteredProjects.length ? (
-          <div className="space-y-3">
-            {filteredProjects.map((project) => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                assets={assets}
-                allTags={allTagNames}
-                inheritTags={settings?.inheritTags ?? true}
-                onSave={async (patch) => {
-                  try {
-                    await api.projectUpdate(project.id, patch);
-                    await refresh();
-                  } catch (e) {
-                    onError(e instanceof Error ? e.message : String(e));
-                  }
-                }}
-                onTagsChange={(tags) => void updateProjectTags(project, tags)}
-                onFavorite={(next) => void setProjectFavorite(project, next)}
-              />
-            ))}
-          </div>
-        ) : (
-          <Empty
-            text={
-              filtersActive
-                ? 'Nenhum projeto corresponde à busca e aos filtros selecionados.'
-                : 'A migração não encontrou projetos. Os repositórios locais da biblioteca v1 aparecem aqui como contexto.'
-            }
-            action={filtersActive ? noResultsAction : undefined}
+        <div className="mb-5 flex items-center gap-2 border-b border-steam-elevated/40 pb-3">
+          <button type="button" onClick={() => setProjectSource('local')} aria-pressed={projectSource === 'local'} className={`rounded px-3 py-1.5 text-xs ${projectSource === 'local' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/55 hover:bg-steam-panel'}`}>Projetos locais</button>
+          <button type="button" onClick={() => setProjectSource('github')} aria-pressed={projectSource === 'github'} className={`rounded px-3 py-1.5 text-xs ${projectSource === 'github' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/55 hover:bg-steam-panel'}`}>Repositórios da conta</button>
+        </div>
+        {projectSource === 'github' ? (
+          <GithubReposPanel
+            knownUrls={knownUrls}
+            onAdded={(url) => setKnownUrls((current) => current.includes(url) ? current : [...current, url])}
+            onError={onError}
           />
-        )}
+        ) : <>
+          <div className="mb-5 flex items-center"><p className="mr-auto text-sm text-steam-text/60">Projetos existentes como contexto: associe as skills e bases usadas em cada um.</p><button type="button" onClick={() => void api.dialogPickFolder().then(async (path) => { if (path) { await api.projectAdd(path); await refresh(); } }).catch((e: unknown) => onError(String(e)))} className="flex items-center gap-2 rounded bg-steam-accent px-3 py-2 text-sm font-semibold text-steam-bg"><FolderPlus size={15}/>Adicionar projeto</button></div>
+          {filteredProjects.length ? (
+            <div className="space-y-3">
+              {filteredProjects.map((project) => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  assets={assets}
+                  allTags={allTagNames}
+                  inheritTags={settings?.inheritTags ?? true}
+                  onSave={async (patch) => {
+                    try {
+                      await api.projectUpdate(project.id, patch);
+                      await refresh();
+                    } catch (e) {
+                      onError(e instanceof Error ? e.message : String(e));
+                    }
+                  }}
+                  onTagsChange={(tags) => void updateProjectTags(project, tags)}
+                  onFavorite={(next) => void setProjectFavorite(project, next)}
+                />
+              ))}
+            </div>
+          ) : (
+            <Empty
+              text={
+                filtersActive
+                  ? 'Nenhum projeto corresponde à busca e aos filtros selecionados.'
+                  : 'A migração não encontrou projetos. Os repositórios locais da biblioteca v1 aparecem aqui como contexto.'
+              }
+              action={filtersActive ? noResultsAction : undefined}
+            />
+          )}
+        </>}
       </>}
       {section === 'top' && <>
         <div className="mb-5 flex flex-wrap items-center gap-2">
