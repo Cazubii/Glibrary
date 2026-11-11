@@ -396,7 +396,7 @@ export default function RepoTerminal({ repo, onHide, onError }: Props): React.JS
         <div className="flex items-center gap-2 border-b border-steam-elevated/50 bg-steam-panel/50 px-3 py-1.5 text-[10px] text-steam-text/45">
           <Globe size={12} />
           A conexão SSH requer um servidor SSH instalado na imagem do Codespace.
-          {codespaces.length === 0 && !providerError && <button type="button" onClick={() => void loadCodespaces()} className="ml-auto inline-flex items-center gap-1 text-steam-accent"><RefreshCw size={11} /> Atualizar</button>}
+          {codespaces.length === 0 && <button type="button" onClick={() => void loadCodespaces()} className="ml-auto inline-flex items-center gap-1 text-steam-accent"><RefreshCw size={11} /> Atualizar</button>}
         </div>
       )}
 
@@ -420,6 +420,7 @@ export default function RepoTerminal({ repo, onHide, onError }: Props): React.JS
             {activeSession?.state === 'running' && <button type="button" title="Encerrar sessão" onClick={() => void api.terminalClose(activeSession.id).catch((error: unknown) => onError(error instanceof Error ? error.message : String(error)))} className="rounded p-1.5 text-steam-text/45 hover:bg-steam-error/20 hover:text-steam-error"><Power size={14} /></button>}
           </span>
         </div>
+        {activeSession?.errorMessage && <p role="status" className="border-b border-amber-400/20 bg-amber-400/5 px-3 py-1.5 text-[11px] text-amber-200">{activeSession.errorMessage}</p>}
         {searchOpen && (
           <div className="flex items-center gap-2 border-b border-steam-elevated/50 px-3 py-1.5">
             <Search size={12} className="text-steam-text/40" />
