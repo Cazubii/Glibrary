@@ -14,6 +14,43 @@ export interface TopRepo {
   createdAt?: string;
 }
 
+export interface GithubAccountProfile {
+  login: string;
+  avatarUrl: string;
+  htmlUrl: string;
+}
+
+export type GithubAccountStatus =
+  | { state: 'disconnected'; checkedAt: string }
+  | { state: 'connected'; account: GithubAccountProfile; checkedAt: string }
+  | {
+      state: 'error';
+      reason: 'invalid_token' | 'forbidden' | 'rate_limit' | 'network' | 'unknown';
+      message: string;
+      checkedAt: string;
+    };
+
+export interface GithubAccountRepo {
+  id: number;
+  owner: string;
+  name: string;
+  fullName: string;
+  remoteUrl: string;
+  htmlUrl: string;
+  private: boolean;
+  description?: string;
+  language?: string;
+  stars: number;
+  pushedAt?: string;
+  updatedAt: string;
+}
+
+export interface GithubRepoPage {
+  repos: GithubAccountRepo[];
+  page: number;
+  hasNextPage: boolean;
+}
+
 export interface TopRepos {
   fetchedAt: string; // ISO da última busca; '' = nunca buscado
   repos: TopRepo[];
