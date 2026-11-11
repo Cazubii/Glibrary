@@ -125,6 +125,7 @@ export interface Settings {
   viewMode: 'grid' | 'list';
   checkUpdatesOnStart: boolean;
   inheritTags: boolean; // projetos herdam tags dos skills/agents/bases associados
+  agentsViewMode?: AgentViewMode; // modo de visualização da página Agentes
 }
 
 export interface UsageEvent {
@@ -225,6 +226,7 @@ export interface LibraryFile {
   projects: ProjectRef[];
   kits: Kit[];
   usage: UsageEvent[];
+  agentProfiles: AgentProfile[];
   topRepos: TopRepos;
   /** Cache da lista de 7 dias; admitido opcional para library.json v2 existente. */
   topRepos7?: TopRepos;
@@ -239,6 +241,37 @@ export interface LogLine {
   ts: string; // ISO
   stream: 'out' | 'err' | 'sys';
   text: string;
+}
+
+export type AgentViewMode = 'painel' | 'grid';
+
+export interface AgentProfile {
+  id: string;
+  name: string;
+  repoId: string;
+  command: string;
+  args: string[];
+  createdAt: string;
+  lastRunAt?: string;
+}
+
+export type AgentRunStatus = 'running' | 'done' | 'stopped' | 'error';
+
+export interface AgentRun {
+  id: string;
+  profileId: string;
+  profileName: string; // snapshot do nome do perfil
+  repoId: string;
+  repoName: string;
+  command: string; // linha completa executada
+  prompt?: string; // tarefa inicial do sub-agente
+  status: AgentRunStatus;
+  exitCode?: number;
+  startedAt: string;
+  finishedAt?: string;
+  durationMs?: number;
+  lastError?: string; // cauda do stderr quando falha
+  logFile: string;
 }
 
 export interface RunHandle {
