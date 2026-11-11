@@ -51,7 +51,29 @@ export interface GithubRepoPage {
   hasNextPage: boolean;
 }
 
-export type TerminalProvider = 'local';
+export type TerminalProvider = 'local' | 'codespace' | 'temporary-local';
+
+export interface GithubCodespace {
+  name: string;
+  repository: string;
+  state: 'available' | 'shutdown' | 'unknown';
+  webUrl?: string;
+}
+
+export interface GithubCodespaceMachine {
+  name: string;
+  displayName: string;
+  memoryGb: number;
+  storageGb: number;
+}
+
+export interface TemporaryCheckoutStatus {
+  exists: boolean;
+  path?: string;
+  dirty?: boolean;
+  unpushedCommits?: number;
+  createdAt?: string;
+}
 
 export interface TerminalSessionSummary {
   id: string;
@@ -61,6 +83,8 @@ export interface TerminalSessionSummary {
   state: 'running' | 'exited' | 'error';
   createdAt: string;
   exitCode?: number;
+  errorMessage?: string;
+  temporaryPath?: string;
 }
 
 export interface TerminalSessionSnapshot extends TerminalSessionSummary {
@@ -72,6 +96,7 @@ export interface TerminalStartInput {
   provider: TerminalProvider;
   cols: number;
   rows: number;
+  codespaceName?: string;
 }
 
 export interface TerminalOutputEvent {
