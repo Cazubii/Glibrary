@@ -3,6 +3,7 @@ import { Check, X, ExternalLink, RefreshCw, Wrench } from 'lucide-react';
 import type { Repo } from '@shared/types';
 import type { ToolStatus } from '@shared/tools';
 import { TOOLS } from '@shared/tools';
+import NativeToolsPanel from '../components/NativeToolsPanel';
 
 interface Props {
   tools: ToolStatus[];
@@ -10,6 +11,7 @@ interface Props {
   repos: Repo[];
   onRecheck: () => void;
   onFilterByTool: (toolId: string) => void;
+  onError?: (message: string) => void;
 }
 
 export default function ToolsPage({
@@ -17,7 +19,8 @@ export default function ToolsPage({
   toolsLoaded,
   repos,
   onRecheck,
-  onFilterByTool
+  onFilterByTool,
+  onError
 }: Props): React.JSX.Element {
   const byId = useMemo(() => new Map(tools.map((t) => [t.id, t])), [tools]);
 
@@ -46,6 +49,7 @@ export default function ToolsPage({
       </header>
 
       <div className="flex-1 overflow-y-auto p-6">
+        <NativeToolsPanel onError={(message) => onError?.(message)} />
         {!toolsLoaded ? (
           <p className="text-steam-text/60">Verificando ferramentas…</p>
         ) : (

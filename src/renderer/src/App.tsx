@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, Library, BarChart3, Boxes, Bot, Moon, Search, Sun, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Library, BarChart3, Boxes, Bot, Moon, Search, Sun, Wrench, X } from 'lucide-react';
 import { useLibraryStore } from './store/library';
 import AssetLibraryPage from './pages/AssetLibraryPage';
 import DashboardPage from './pages/DashboardPage';
 import CollectionsPage from './pages/CollectionsPage';
 import GithubSearchPage from './pages/GithubSearchPage';
 import AgentesPage from './pages/AgentesPage';
+import NativeToolsPage from './pages/NativeToolsPage';
 
-type Page = 'library' | 'dashboard' | 'collections' | 'search' | 'agentes';
+type Page = 'library' | 'dashboard' | 'collections' | 'search' | 'agentes' | 'ferramentas';
 type ToastKind = 'error' | 'success';
 
 interface Toast { id: number; message: string; kind: ToastKind }
@@ -73,6 +74,7 @@ export default function App(): React.JSX.Element {
         <button type="button" onClick={() => setPage('collections')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'collections' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Boxes size={15}/>Coleções</button>
         <button type="button" onClick={() => setPage('search')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'search' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Search size={15}/>Busca</button>
         <button type="button" onClick={() => setPage('agentes')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'agentes' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Bot size={15}/>Agentes</button>
+        <button type="button" onClick={() => setPage('ferramentas')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'ferramentas' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Wrench size={15}/>Ferramentas</button>
       </nav>
       <span className="ml-4 text-sm text-steam-text/50">Skills · Agents · Bases · Projetos</span>
       <button
@@ -94,7 +96,9 @@ export default function App(): React.JSX.Element {
             ? <CollectionsPage onError={onError} onSuccess={onSuccess}/>
             : page === 'agentes'
               ? <AgentesPage/>
-              : <GithubSearchPage onError={onError} onSuccess={onSuccess}/>}
+              : page === 'ferramentas'
+                ? <NativeToolsPage onError={onError}/>
+                : <GithubSearchPage onError={onError} onSuccess={onSuccess}/>}
     </div>
     <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex flex-col gap-2">{toasts.map((toast) => <div key={toast.id} className={`pointer-events-auto flex max-w-sm items-start gap-2 rounded px-4 py-3 text-sm text-white shadow-lg ${toast.kind === 'success' ? 'bg-steam-green' : 'bg-steam-error'}`} role="status">{toast.kind === 'success' ? <CheckCircle2 size={16} className="mt-0.5 shrink-0"/> : <AlertCircle size={16} className="mt-0.5 shrink-0"/>}<span className="flex-1">{toast.message}</span><button type="button" onClick={() => setToasts((items) => items.filter((item) => item.id !== toast.id))} aria-label="Fechar aviso"><X size={14}/></button></div>)}</div>
   </div>;

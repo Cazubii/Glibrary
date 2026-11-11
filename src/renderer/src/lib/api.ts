@@ -21,15 +21,24 @@ import type {
   Settings,
   TopRepos,
   TopRepo,
-  UsageEvent
+  UsageEvent,
+  ToolEntry,
+  ToolInstallRun,
+  ToolStatus
 } from '../../../shared/types';
-import type { ToolStatus } from '../../../shared/tools';
+import type { ToolStatus as SystemToolStatus } from '../../../shared/tools';
 import { IpcChannels } from '../../../shared/ipc-channels';
 
 async function unwrap<T>(promise: Promise<unknown>): Promise<T> {
   const result = (await promise) as IpcResult<T>;
   if (!result.ok) throw new Error(result.error);
   return result.data;
+}
+
+function detectNativeTools(): Promise<Record<string, ToolStatus>>;
+function detectNativeTools(id: string): Promise<ToolStatus>;
+function detectNativeTools(id?: string): Promise<ToolStatus | Record<string, ToolStatus>> {
+  return unwrap(window.api.invoke(IpcChannels.toolsDetect, id != null ? { id } : {}));
 }
 
 export const api = {
@@ -149,8 +158,8 @@ export const api = {
   repoRefreshMeta: (id: string): Promise<Repo> =>
     unwrap<Repo>(window.api.invoke(IpcChannels.repoRefreshMeta, { id })),
 
-  toolsCheck: (force = false): Promise<ToolStatus[]> =>
-    unwrap<ToolStatus[]>(window.api.invoke(IpcChannels.toolsCheck, { force })),
+  toolsCheck: (force = false): Promise<SystemToolStatus[]> =>
+    unwrap<SystemToolStatus[]>(window.api.invoke(IpcChannels.toolsCheck, { force })),
 
   scanStart: (folders?: string[]): Promise<ScannedRepo[]> =>
     unwrap<ScannedRepo[]>(
@@ -288,6 +297,33 @@ export const api = {
 
   onAgentRunsLog: (listener: (payload: { id: string; line: LogLine }) => void) =>
     window.api.on(IpcChannels.agentRunsLog, (payload: unknown) => {
+      listener(payload as { id: string; line: LogLine });
+    }),
+
+  toolsList: (): Promise<ToolEntry[]> =>
+    unwrap<ToolEntry[]>(window.api.invoke(IpcChannels.toolsList)),
+
+  toolsAdd: (url: string): Promise<ToolEntry> =>
+    unwrap<ToolEntry>(window.api.invoke(IpcChannels.toolsAdd, { url })),
+
+  toolsRemove: (id: string): Promise<null> =>
+    unwrap<null>(window.api.invoke(IpcChannels.toolsRemove, { id })),
+
+  toolsInstall: (id: string): Promise<ToolInstallRun> =>
+    unwrap<ToolInstallRun>(window.api.invoke(IpcChannels.toolsInstall, { id })),
+
+  toolsDetect: detectNativeTools,
+
+  toolRunsGetLogs: (id: string): Promise<LogLine[]> =>
+    unwrap<LogLine[]>(window.api.invoke(IpcChannels.toolRunsGetLogs, { id })),
+
+  onToolRunsChanged: (listener: (run: ToolInstallRun) => void) =>
+    window.api.on(IpcChannels.toolRunsChanged, (payload: unknown) => {
+      listener(payload as ToolInstallRun);
+    }),
+
+  onToolRunsLog: (listener: (payload: { id: string; line: LogLine }) => void) =>
+    window.api.on(IpcChannels.toolRunsLog, (payload: unknown) => {
       listener(payload as { id: string; line: LogLine });
     })
 };
