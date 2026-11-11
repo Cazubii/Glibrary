@@ -13,8 +13,24 @@ export interface GithubApiOptions {
   token?: string;
 }
 
+export type GithubApiErrorReason = 'invalid_token' | 'forbidden' | 'rate_limit' | 'network' | 'unknown';
+
+export class GithubApiError extends Error {
+  constructor(
+    readonly reason: GithubApiErrorReason,
+    readonly statusCode: number | undefined,
+    message: string
+  ) {
+    super(message);
+    this.name = 'GithubApiError';
+  }
+}
+
 /** Seção 10: token sempre via safeStorage. */
 export function encodeToken(token: string): string {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('O armazenamento seguro do sistema não está disponível.');
+  }
   return safeStorage.encryptString(token).toString('base64');
 }
 
@@ -34,6 +50,7 @@ export function fetchJson(url: string, token?: string): Promise<unknown> {
       request.setHeader('Authorization', `Bearer ${token}`);
     }
     request.setHeader('Accept', 'application/vnd.github+json');
+    request.setHeader('X-GitHub-Api-Version', '2022-11-28');
     request.setHeader('User-Agent', 'Glibrary');
     let body = '';
     request.on('response', (response) => {
@@ -41,22 +58,41 @@ export function fetchJson(url: string, token?: string): Promise<unknown> {
         body += chunk.toString('utf-8');
       });
       response.on('end', () => {
-        if (response.statusCode === 403 || response.statusCode === 429) {
-          reject(new Error('Limite da API do GitHub atingido. Tente mais tarde ou adicione um token.'));
+        const status = response.statusCode;
+        const rateRemaining = response.headers['x-ratelimit-remaining']?.[0];
+        if (status === 401) {
+          reject(new GithubApiError('invalid_token', status, 'Token do GitHub inválido ou expirado.'));
           return;
         }
-        if (response.statusCode == null || response.statusCode >= 400) {
-          reject(new Error(`GitHub API: HTTP ${response.statusCode}`));
+        if (status === 403 || status === 429) {
+          const rateLimited = status === 429 || rateRemaining === '0' || /rate limit exceeded/i.test(body);
+          reject(new GithubApiError(
+            rateLimited ? 'rate_limit' : 'forbidden',
+            status,
+            rateLimited
+              ? 'Limite da API do GitHub atingido. Tente novamente mais tarde.'
+              : 'O token não tem permissão para esta operação.'
+          ));
+          return;
+        }
+        if (status == null || status >= 400) {
+          reject(new GithubApiError(
+            'unknown',
+            status,
+            `GitHub API: HTTP ${status ?? 'desconhecido'}`
+          ));
           return;
         }
         try {
           resolve(JSON.parse(body));
         } catch {
-          reject(new Error('Resposta inválida da API do GitHub'));
+          reject(new GithubApiError('unknown', status, 'Resposta inválida da API do GitHub.'));
         }
       });
     });
-    request.on('error', (err) => reject(err));
+    request.on('error', (err) => {
+      reject(new GithubApiError('network', undefined, err.message));
+    });
     request.end();
   });
 }
