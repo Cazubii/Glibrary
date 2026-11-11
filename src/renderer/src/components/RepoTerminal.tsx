@@ -446,6 +446,7 @@ function TerminalPane({ session, onReady, onError }: {
     let terminal: import('@xterm/xterm').Terminal | null = null;
     let fitAddon: import('@xterm/addon-fit').FitAddon | null = null;
     let searchAddon: import('@xterm/addon-search').SearchAddon | null = null;
+    let webLinksAddon: import('@xterm/addon-web-links').WebLinksAddon | null = null;
     let observer: ResizeObserver | null = null;
     let offOutput: (() => void) | null = null;
     let dataSubscription: { dispose: () => void } | null = null;
@@ -455,6 +456,7 @@ function TerminalPane({ session, onReady, onError }: {
         import('@xterm/xterm'),
         import('@xterm/addon-fit'),
         import('@xterm/addon-search'),
+        import('@xterm/addon-web-links'),
         import('@xterm/xterm/css/xterm.css')
       ]);
       if (disposed || !host.current) return;
@@ -489,8 +491,12 @@ function TerminalPane({ session, onReady, onError }: {
       });
       fitAddon = new fitModule.FitAddon();
       searchAddon = new searchModule.SearchAddon();
+      webLinksAddon = new webLinksModule.WebLinksAddon((_event, uri) => {
+        if (/^https?:\\/\\//i.test(uri)) window.open(uri, '_blank');
+      });
       terminal.loadAddon(fitAddon);
       terminal.loadAddon(searchAddon);
+      terminal.loadAddon(webLinksAddon);
       terminal.open(host.current);
       terminal.write(currentSession.current.buffer, () => fitAddon?.fit());
       terminal.attachCustomKeyEventHandler((event) => {
@@ -540,6 +546,7 @@ function TerminalPane({ session, onReady, onError }: {
       terminal?.dispose();
       fitAddon?.dispose();
       searchAddon?.dispose();
+      webLinksAddon?.dispose();
     };
   }, [session.id, onError, onReady]);
 
