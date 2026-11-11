@@ -28,7 +28,7 @@ Cada instância mantém seu próprio PTY e buffer de tela. Ocultar/reabrir o pai
 ### Conta GitHub no Dashboard e lista de repositórios
 
 - Adicionar ao Dashboard um cartão de conta com avatar/login quando autenticada e estados explícitos: não conectada, conectada, credencial inválida/expirada, sem permissão suficiente, API indisponível ou limite atingido. Mostrar quando o estado foi verificado e uma ação para tentar novamente.
-- O estado representa a credencial configurada no Glibrary, nunca a conexão do plugin GitHub desta sessão. Reutilizar o token opcional já guardado pelo processo principal com safeStorage. Se não houver token, o cartão oferece configuração; campo mascarado, validação via API e gravação somente no processo principal. Token não vai para renderer, logs ou arquivos de configuração em texto puro.
+- O estado representa a credencial configurada no Glibrary, nunca a conexão do plugin GitHub desta sessão. Reutilizar o token opcional já guardado pelo processo principal com safeStorage. Se não houver token, o cartão oferece configuração; campo mascarado, validação via API e gravação somente no processo principal. O token só fica no campo mascarado enquanto é digitado e enviado; o renderer limpa o campo após salvar/cancelar. O processo principal valida e cifra com safeStorage; não devolve token, cifra, nem grava em logs ou arquivos em texto puro.
 - A validação autenticada consulta o perfil da conta GitHub. Sem token, não afirmar que uma conta está conectada nem tentar enumerar repositórios privados.
 - Na seção Projetos, acrescentar uma alternância clara entre “Projetos locais” e “Repositórios da conta”. Preservar a lista e as ações atuais de contextos locais.
 - A lista da conta usa os repositórios que a credencial pode acessar (proprietário, colaborador e organização), públicos ou privados conforme as permissões do token. Repositórios aparecem paginados, com pesquisa/filtro, nome, owner, visibilidade, descrição, linguagem e estado de inclusão na biblioteca.
@@ -58,7 +58,7 @@ Cada instância mantém seu próprio PTY e buffer de tela. Ocultar/reabrir o pai
 - **Renderer:** painel dockado, tabs de sessões e viewport xterm; recebe saída e envia entrada/redimensionamento por IPC.
 - **Preload/IPC:** métodos específicos tipados para listar ambientes, iniciar sessão, enviar entrada, redimensionar, encerrar sessão e receber eventos. Nenhum acesso Node é exposto ao renderer.
 - **Main:** gerenciador de sessões; provider local inicia `node-pty`; provider Codespace inicia/gerencia `gh codespace ssh` e encaminha o stream. O módulo `node-pty` só é carregado para sessões locais.
-- **GitHub:** serviço principal controla credenciais e operações remotas; token nunca chega ao renderer nem é gravado em logs.
+- **GitHub:** serviço principal controla credenciais e operações remotas; o campo de configuração é o único momento em que o renderer recebe o token, que é limpo após envio/cancelamento; o processo principal não devolve o token nem a cifra e não grava em logs.
 - **Configuração:** provider escolhido e perfil padrão podem ser lembrados; tokens continuam no armazenamento seguro existente. Não persistir um caminho local quando o projeto só é remoto.
 
 Fluxo: usuário abre o painel → escolhe Codespace/local temporário → main valida disponibilidade e permissões → inicia provider → renderer recebe id e stream → resize/input fluem por IPC → usuário encerra sessão ou fecha a aplicação.
