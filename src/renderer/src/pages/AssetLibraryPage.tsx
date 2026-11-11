@@ -29,8 +29,9 @@ const unwrapTop = (payload: unknown): TopRepos | null =>
 interface Props {
   onError: (message: string) => void;
   onSuccess?: (message: string) => void;
+  onOpenDashboard: () => void;
 }
-export default function AssetLibraryPage({ onError, onSuccess }: Props): React.JSX.Element {
+export default function AssetLibraryPage({ onError, onSuccess, onOpenDashboard }: Props): React.JSX.Element {
   const [section, setSection] = useState<Section>('skills');
   const [projectSource, setProjectSource] = useState<'local' | 'github'>('local');
   const [assets, setAssets] = useState<Assets>(empty);
@@ -625,6 +626,7 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
         </div>
         {projectSource === 'github' ? (
           <GithubReposPanel
+            onOpenDashboard={onOpenDashboard}
             knownUrls={knownUrls}
             onAdded={(url) => setKnownUrls((current) => current.includes(url) ? current : [...current, url])}
             onError={onError}
