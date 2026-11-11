@@ -85,7 +85,7 @@ export default function App(): React.JSX.Element {
     </header>
     <div className="flex min-h-0 flex-1">
       {page === 'library'
-        ? <AssetLibraryPage onError={onError} onSuccess={onSuccess}/>
+        ? <AssetLibraryPage onError={onError} onSuccess={onSuccess} onOpenDashboard={() => setPage('dashboard')}/>
         : page === 'dashboard'
           ? <DashboardPage onError={onError} onSuccess={onSuccess}/>
           : page === 'collections'
