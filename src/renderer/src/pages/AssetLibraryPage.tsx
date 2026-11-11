@@ -30,8 +30,9 @@ interface Props {
   onError: (message: string) => void;
   onSuccess?: (message: string) => void;
   onOpenDashboard: () => void;
+  onOpenRepository: (repoId: string) => void;
 }
-export default function AssetLibraryPage({ onError, onSuccess, onOpenDashboard }: Props): React.JSX.Element {
+export default function AssetLibraryPage({ onError, onSuccess, onOpenDashboard, onOpenRepository }: Props): React.JSX.Element {
   const [section, setSection] = useState<Section>('skills');
   const [projectSource, setProjectSource] = useState<'local' | 'github'>('local');
   const [assets, setAssets] = useState<Assets>(empty);
@@ -627,6 +628,7 @@ export default function AssetLibraryPage({ onError, onSuccess, onOpenDashboard }
         {projectSource === 'github' ? (
           <GithubReposPanel
             onOpenDashboard={onOpenDashboard}
+            onOpenRepository={onOpenRepository}
             knownUrls={knownUrls}
             onAdded={(url) => setKnownUrls((current) => current.includes(url) ? current : [...current, url])}
             onError={onError}
