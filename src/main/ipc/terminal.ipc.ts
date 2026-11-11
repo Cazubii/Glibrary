@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { ipcMain, shell } from 'electron';
 import { z } from 'zod';
 import type {
   GithubCodespace,
@@ -139,6 +139,17 @@ export function registerTerminalIpc(
       const { repoId } = TerminalTempCleanupInputSchema.parse(raw);
       requireRepo(store, repoId);
       return ok(await temporaryCheckouts.cleanup(repoId));
+    } catch (error) { return fail(error); }
+  });
+
+  ipcMain.handle(IpcChannels.terminalTempOpen, async (_event, raw: unknown): Promise<IpcResult<null>> => {
+    try {
+      const { repoId } = TerminalRepoInputSchema.parse(raw);
+      requireRepo(store, repoId);
+      const status = await temporaryCheckouts.status(repoId);
+      if (!status.exists || !status.path) throw new Error('Checkout temporário não encontrado.');
+      shell.showItemInFolder(status.path);
+      return ok(null);
     } catch (error) { return fail(error); }
   });
 }
