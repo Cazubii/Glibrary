@@ -85,6 +85,7 @@ export interface TerminalSessionSummary {
   exitCode?: number;
   errorMessage?: string;
   temporaryPath?: string;
+  codespaceName?: string;
 }
 
 export interface TerminalSessionSnapshot extends TerminalSessionSummary {
