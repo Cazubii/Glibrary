@@ -227,6 +227,7 @@ export interface LibraryFile {
   kits: Kit[];
   usage: UsageEvent[];
   agentProfiles: AgentProfile[];
+  tools: ToolEntry[];
   topRepos: TopRepos;
   /** Cache da lista de 7 dias; admitido opcional para library.json v2 existente. */
   topRepos7?: TopRepos;
@@ -272,6 +273,31 @@ export interface AgentRun {
   durationMs?: number;
   lastError?: string; // cauda do stderr quando falha
   logFile: string;
+}
+
+export type ToolSource = 'builtin' | 'custom';
+export type ToolStatus = 'not_installed' | 'installing' | 'installed';
+export type ToolInstallRunStatus = 'running' | 'done' | 'error' | 'stopped';
+
+export interface ToolEntry {
+  id: string;
+  name: string;
+  gitUrl: string;
+  source: ToolSource;
+  createdAt: string;
+}
+
+export interface ToolInstallRun {
+  id: string;
+  toolId: string;
+  toolName: string;
+  command: string;
+  status: ToolInstallRunStatus;
+  startedAt: string;
+  finishedAt?: string;
+  exitCode?: number;
+  logFile: string;
+  prompt: string;
 }
 
 export interface RunHandle {

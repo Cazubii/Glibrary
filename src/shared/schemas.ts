@@ -281,6 +281,34 @@ export const AgentRunStartInputSchema = z
   })
   .strict();
 
+const GitHubToolUrlSchema = z.string().trim().regex(
+  /^https:\/\/github\.com\/[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9_.-]+(?:\.git)?\/?$/i,
+  'Informe um link no formato https://github.com/usuario/repositorio'
+);
+
+export const ToolInputSchema = z.object({ url: GitHubToolUrlSchema }).strict();
+
+export const ToolEntrySchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1).max(120),
+  gitUrl: GitHubToolUrlSchema,
+  source: z.enum(['builtin', 'custom']),
+  createdAt: z.string().min(1)
+});
+
+export const ToolInstallRunSchema = z.object({
+  id: z.string().min(1),
+  toolId: z.string().min(1),
+  toolName: z.string().min(1),
+  command: z.string().min(1),
+  status: z.enum(['running', 'done', 'error', 'stopped']),
+  startedAt: z.string().min(1),
+  finishedAt: z.string().optional(),
+  exitCode: z.number().int().optional(),
+  logFile: z.string().min(1),
+  prompt: z.string().min(1)
+});
+
 export const AgentIdInputSchema = z.object({ id: z.string().min(1) }).strict();
 
 export const LibraryFileSchema = z.object({
@@ -295,7 +323,8 @@ export const LibraryFileSchema = z.object({
   topRepos: TopReposSchema.default({ fetchedAt: '', repos: [] }),
   topRepos7: TopReposSchema.default({ fetchedAt: '', repos: [] }),
   settings: SettingsSchema,
-  agentProfiles: z.array(AgentProfileSchema).default([])
+  agentProfiles: z.array(AgentProfileSchema).default([]),
+  tools: z.array(ToolEntrySchema).default([])
 });
 
 export const SkillUpdateInputSchema = z

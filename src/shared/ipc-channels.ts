@@ -72,7 +72,15 @@ export const IpcChannels = {
   agentRunsList: 'agentRuns:list',
   agentRunsGetLogs: 'agentRuns:getLogs',
   agentRunsChanged: 'agentRuns:changed',
-  agentRunsLog: 'agentRuns:log'
+  agentRunsLog: 'agentRuns:log',
+  toolsList: 'tools:list',
+  toolsAdd: 'tools:add',
+  toolsRemove: 'tools:remove',
+  toolsInstall: 'tools:install',
+  toolsDetect: 'tools:detect',
+  toolRunsGetLogs: 'toolRuns:getLogs',
+  toolRunsChanged: 'toolRuns:changed',
+  toolRunsLog: 'toolRuns:log'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
