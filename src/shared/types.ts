@@ -63,6 +63,10 @@ export interface TerminalSessionSummary {
   exitCode?: number;
 }
 
+export interface TerminalSessionSnapshot extends TerminalSessionSummary {
+  buffer: string;
+}
+
 export interface TerminalStartInput {
   repoId: string;
   provider: TerminalProvider;
