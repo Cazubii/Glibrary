@@ -16,8 +16,7 @@ interface GhCodespaceRecord {
   name?: unknown;
   repository?: unknown;
   state?: unknown;
-  webUrl?: unknown;
-  web_url?: unknown;
+  createdAt?: unknown;
 }
 
 interface GhMachineRecord {
@@ -82,18 +81,17 @@ export class CodespaceService {
     await this.assertAuthenticated();
     try {
       const raw = await this.runGh([
-        'codespace', 'list', '--repo', fullName, '--json', 'name,repository,state,webUrl'
+        'codespace', 'list', '--repo', fullName, '--limit', '100', '--json', 'name,repository,state,createdAt'
       ]);
       const values = JSON.parse(raw) as GhCodespaceRecord[];
       const codespaces = (Array.isArray(values) ? values : [])
         .map((item): GithubCodespace | null => {
           if (typeof item.name !== 'string' || item.name === '') return null;
-          const url = item.webUrl ?? item.web_url;
           return {
             name: item.name,
             repository: normalizeRepository(item.repository) || fullName,
             state: normalizeState(item.state),
-            ...(typeof url === 'string' && url !== '' ? { webUrl: url } : {})
+            ...(typeof item.createdAt === 'string' ? { createdAt: item.createdAt } : {})
           };
         })
         .filter((item): item is GithubCodespace => item != null);
@@ -157,21 +155,18 @@ export class CodespaceService {
     if (!choices.machines.some((machine) => machine.name === machineName)) {
       throw new Error('Selecione uma máquina disponível para este repositório.');
     }
+    const existingNames = new Set(choices.codespaces.map((space) => space.name));
     try {
-      const raw = await this.runGh([
-        'codespace', 'create', '--repo', fullName, '--machine', machineName, '--json', 'name'
+      await this.runGh([
+        'codespace', 'create', '--repo', fullName, '--machine', machineName
       ], 300000);
-      const created = JSON.parse(raw) as { name?: unknown };
-      if (typeof created.name !== 'string' || created.name === '') {
-        throw new Error('O GitHub CLI não informou o nome do Codespace criado.');
-      }
-      return {
-        name: created.name,
-        repository: fullName,
-        state: 'available'
-      };
+      const refreshed = await this.listForRepo(repo);
+      const created = refreshed.codespaces.find((space) => !existingNames.has(space.name));
+      if (!created) throw new Error('O Codespace foi solicitado, mas ainda não aparece na lista.');
+      return created;
     } catch (error) {
       if (error instanceof Error && error.message.includes('não está instalado')) throw error;
+      if (error instanceof Error && error.message.includes('ainda não aparece')) throw error;
       throw new Error('Não foi possível criar o Codespace. ' + BILLING_MESSAGE);
     }
   }
