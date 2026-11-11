@@ -94,8 +94,33 @@ export const RepoSchema = z.object({
   lastRunAt: z.string().optional(),
   lastPulledAt: z.string().optional(),
   behindBy: z.number().int().nonnegative().optional(),
-  lastError: z.string().optional()
+  lastError: z.string().optional(),
+  devSession: z.object({
+    startedAt: z.string().min(1),
+    branch: z.string().min(1),
+    workspacePath: z.string().min(1)
+  }).nullable().optional()
 })
+
+export const DevWorkspaceOpenInputSchema = z.object({
+  repoId: z.string().trim().min(1).max(128),
+  branch: z.string().trim().max(255).optional()
+}).strict()
+
+export const DevWorkspaceRepoInputSchema = z.object({
+  repoId: z.string().trim().min(1).max(128)
+}).strict()
+
+export const DevWorkspaceBranchInputSchema = z.object({
+  repoId: z.string().trim().min(1).max(128),
+  branch: z.string().trim().min(1).max(255)
+}).strict()
+
+export const DevWorkspaceCreateBranchInputSchema = z.object({
+  repoId: z.string().trim().min(1).max(128),
+  name: z.string().trim().min(1).max(120),
+  defaultBranch: z.string().trim().min(1).max(255)
+}).strict()
 
 export const SettingsSchema = z.object({
   reposRoot: z.string().min(1),

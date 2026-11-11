@@ -110,6 +110,32 @@ export interface Repo {
   lastPulledAt?: string;
   behindBy?: number; // commits atrás do remoto (último fetch)
   lastError?: string;
+  /** Sessão da área de desenvolvimento atualmente ativa para este repositório. */
+  devSession?: DevSession | null;
+}
+
+export interface DevSession {
+  startedAt: string;
+  branch: string;
+  workspacePath: string;
+}
+
+export interface DevWorkspaceStatus {
+  branch: string | null;
+  changes: number;
+  ahead: number;
+  behind: number;
+}
+
+export interface DevWorkspaceOpenResult {
+  workspacePath: string;
+  reusedManaged: boolean;
+  branch: string;
+}
+
+export interface DevWorkspaceCloseResult {
+  workspacePath: string | null;
+  removed: boolean;
 }
 
 export interface Settings {
@@ -307,6 +333,7 @@ export interface RunHandle {
 
 export interface GlibraryApi {
   invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
+  send: (channel: 'terminal:input' | 'terminal:resize' | 'terminal:kill', ...args: unknown[]) => void;
   on: (channel: string, listener: (...args: unknown[]) => void) => () => void;
 }
 
