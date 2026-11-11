@@ -20,9 +20,10 @@ describe('Schemas do painel de agentes', () => {
     ).toThrow();
   });
 
-  it('AgentProfileUpdateInputSchema exige id e patch', () => {
+  it('AgentProfileUpdateInputSchema exige id e patch sem default de args', () => {
     const ok = AgentProfileUpdateInputSchema.parse({ id: 'p1', patch: { name: 'novo' } });
     expect(ok.patch.name).toBe('novo');
+    expect(ok.patch.args).toBeUndefined();
     expect(() => AgentProfileUpdateInputSchema.parse({ patch: {} })).toThrow();
   });
 

@@ -229,7 +229,7 @@ export const AgentProfileSchema = z.object({
   name: z.string().trim().min(1).max(80),
   repoId: z.string().min(1),
   command: z.string().trim().min(1).max(500),
-  args: z.array(z.string().max(500)).max(20).default([]),
+  args: z.array(z.string().min(1).max(500)).max(20).default([]),
   createdAt: z.string(),
   lastRunAt: z.string().optional()
 });
@@ -238,13 +238,20 @@ export const AgentProfileInputSchema = z.object({
   name: z.string().trim().min(1).max(80),
   repoId: z.string().min(1),
   command: z.string().trim().min(1).max(500),
-  args: z.array(z.string().max(500)).max(20).default([])
+  args: z.array(z.string().min(1).max(500)).max(20).default([])
 });
 
 export const AgentProfileUpdateInputSchema = z
   .object({
     id: z.string().min(1),
-    patch: AgentProfileInputSchema.partial().strict()
+    patch: z
+      .object({
+        name: z.string().trim().min(1).max(80).optional(),
+        repoId: z.string().min(1).optional(),
+        command: z.string().trim().min(1).max(500).optional(),
+        args: z.array(z.string().min(1).max(500)).max(20).optional()
+      })
+      .strict()
   })
   .strict();
 
