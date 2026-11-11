@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Clipboard, Copy, ExternalLink, Globe, Maximize2, Minimize2, Plus, Power, RefreshCw,
   Search, SplitSquareHorizontal, Terminal as TerminalIcon, Trash2, X
@@ -51,7 +51,7 @@ export default function RepoTerminal({ repo, onHide, onError }: Props): React.JS
   const [maximized, setMaximized] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [controlRevision, setControlRevision] = useState(0);
+  const [, setControlRevision] = useState(0);
   const controls = useRef(new Map<string, PaneControls>());
 
   useEffect(() => {
@@ -126,10 +126,6 @@ export default function RepoTerminal({ repo, onHide, onError }: Props): React.JS
   const activeSession = sessions.find((session) => session.id === activeId) ?? null;
   const visibleIds = splitIds?.filter((id) => sessions.some((session) => session.id === id)) ?? [];
   const activeControls = activeId ? controls.current.get(activeId) : undefined;
-  const activeProviderSession = useMemo(
-    () => sessions.find((session) => session.state === 'running'),
-    [sessions]
-  );
 
   const startSession = async (
     selectedProvider: TerminalProvider,
@@ -403,7 +399,7 @@ export default function RepoTerminal({ repo, onHide, onError }: Props): React.JS
           <span className="ml-auto flex shrink-0 items-center gap-1">
             <button type="button" title="Abrir segundo terminal lado a lado" disabled={!activeSession || activeSession.state !== 'running' || busy} onClick={() => void addSplit()} className="rounded p-1.5 text-steam-text/45 hover:bg-steam-panel disabled:opacity-25"><SplitSquareHorizontal size={14} /></button>
             <button type="button" title="Limpar saída" disabled={!activeSession} onClick={() => void clearActive()} className="rounded p-1.5 text-steam-text/45 hover:bg-steam-panel disabled:opacity-25"><Trash2 size={14} /></button>
-            <button type="button" title="Copiar seleção" disabled={!activeControls || controlRevision < 0} onClick={() => void copySelection()} className="rounded p-1.5 text-steam-text/45 hover:bg-steam-panel disabled:opacity-25"><Copy size={14} /></button>
+            <button type="button" title="Copiar seleção" disabled={!activeControls} onClick={() => void copySelection()} className="rounded p-1.5 text-steam-text/45 hover:bg-steam-panel disabled:opacity-25"><Copy size={14} /></button>
             <button type="button" title="Colar" disabled={!activeControls} onClick={() => void pasteClipboard()} className="rounded p-1.5 text-steam-text/45 hover:bg-steam-panel disabled:opacity-25"><Clipboard size={14} /></button>
             <button type="button" title="Buscar na saída" onClick={() => setSearchOpen((value) => !value)} className="rounded p-1.5 text-steam-text/45 hover:bg-steam-panel"><Search size={14} /></button>
             {activeSession?.state === 'running' && <button type="button" title="Encerrar sessão" onClick={() => void api.terminalClose(activeSession.id).catch((error: unknown) => onError(error instanceof Error ? error.message : String(error)))} className="rounded p-1.5 text-steam-text/45 hover:bg-steam-error/20 hover:text-steam-error"><Power size={14} /></button>}
@@ -429,7 +425,6 @@ export default function RepoTerminal({ repo, onHide, onError }: Props): React.JS
           Abra uma sessão quando precisar. Nenhum processo de terminal é iniciado automaticamente.
         </div>
       )}
-      {activeProviderSession && sessions.every((session) => session.state !== 'running') && <span className="sr-only">Nenhuma sessão ativa</span>}
     </section>
   );
 }
@@ -441,7 +436,9 @@ function TerminalPane({ session, onReady, onError }: {
 }): React.JSX.Element {
   const host = useRef<HTMLDivElement | null>(null);
   const running = useRef(session.state === 'running');
+  const currentSession = useRef(session);
   running.current = session.state === 'running';
+  currentSession.current = session;
 
   useEffect(() => {
     let disposed = false;
@@ -494,7 +491,7 @@ function TerminalPane({ session, onReady, onError }: {
       terminal.loadAddon(fitAddon);
       terminal.loadAddon(searchAddon);
       terminal.open(host.current);
-      terminal.write(session.buffer, () => fitAddon?.fit());
+      terminal.write(currentSession.current.buffer, () => fitAddon?.fit());
       terminal.attachCustomKeyEventHandler((event) => {
         const modifier = event.ctrlKey || event.metaKey;
         if (modifier && event.key.toLowerCase() === 'c' && terminal?.hasSelection()) {
@@ -508,10 +505,10 @@ function TerminalPane({ session, onReady, onError }: {
         return true;
       });
       dataSubscription = terminal.onData((data) => {
-        if (running.current) void api.terminalWrite(session.id, data).catch((error: unknown) => onError(error instanceof Error ? error.message : String(error)));
+        if (running.current) void api.terminalWrite(currentSession.current.id, data).catch((error: unknown) => onError(error instanceof Error ? error.message : String(error)));
       });
       offOutput = api.onTerminalOutput((event) => {
-        if (event.sessionId === session.id) terminal?.write(event.data);
+        if (event.sessionId === currentSession.current.id) terminal?.write(event.data);
       });
       terminal.onResize(({ cols, rows }) => {
         if (running.current) void api.terminalResize(session.id, cols, rows).catch(() => undefined);
