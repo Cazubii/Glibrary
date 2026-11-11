@@ -18,9 +18,11 @@
 - Create `src/main/services/terminal-manager.ts`: own PTY instances, output buffers, resize and cleanup.
 - Create `src/main/ipc/terminal.ipc.ts`: register session lifecycle/input handlers.
 - Modify `src/main/index.ts`: instantiate and register terminal manager; close sessions on quit.
+- Create `src/renderer/src/pages/RepositoryDetailPage.tsx`: reachable repository detail shell with the docked terminal.
+- Modify `src/renderer/src/App.tsx` and `src/renderer/src/pages/AssetLibraryPage.tsx`: route from an account repository to detail and back.
 - Modify `src/renderer/src/lib/api.ts`: typed terminal wrappers and output subscription.
 - Create `src/renderer/src/components/RepoTerminal.tsx`: lazy xterm viewport, tabs, split panes, toolbar and keyboard behavior.
-- Modify `src/renderer/src/pages/RepoDetailPage.tsx`: dock the terminal beneath repository content and preserve the existing process Console.
+- Do not use `RepoDetailPage.tsx` in this plan: the active `App.tsx` does not route to it and its process actions depend on separate, unregistered IPC. The new focused `RepositoryDetailPage.tsx` owns repository summary plus terminal.
 
 ## Task 1: Dependencies and terminal contracts
 
@@ -71,13 +73,14 @@ export interface TerminalStartInput {
 - [ ] Copy uses selected text; Ctrl+C with a selection copies, Ctrl+C without a selection writes the interrupt byte. Paste uses the clipboard API and xterm paste API. Keep search scoped to xterm scrollback and use xterm link provider for URLs.
 - [ ] Apply the existing Glibrary Steam theme through xterm's theme options and load the xterm CSS from the component.
 
-## Task 4: Dock integration and verification
+## Task 4: Reachable dock integration and verification
 
-**Files:** modify `src/renderer/src/pages/RepoDetailPage.tsx`
+**Files:** create `src/renderer/src/pages/RepositoryDetailPage.tsx`; modify `src/renderer/src/App.tsx`, `src/renderer/src/pages/AssetLibraryPage.tsx`
 
-- [ ] Add a terminal toggle to the repository page and render a resizable bottom panel while preserving the repository details above it.
-- [ ] Preserve the existing Console tab for process logs; do not re-label process logs as a shell.
-- [ ] Reload active session summaries from main when the page reopens; keep renderer state keyed by repo/session id so navigation does not orphan PTYs.
+- [ ] Add `onOpenRepository(repoId)` to `AssetLibraryPage` and pass it to the account repository panel. After the user adds a remote-only repository, navigate to the detail page for that saved repo id.
+- [ ] Add a back action from `RepositoryDetailPage` to the library and render repo name, owner, visibility, description, and the terminal toggle; keep process execution controls out of this page.
+- [ ] Render the resizable dock at the bottom while keeping repository details visible. Hiding/reopening reloads session summaries from main and does not orphan PTYs.
+- [ ] Verify a remote-only repo detail opens without a local path and directs the user to a remote provider or explicit temporary checkout.
 - [ ] Verify local shell startup, two concurrent sessions, split/focus, resize, copy/paste, clear/search, hide/re-open, explicit close, app quit cleanup, missing local path, and repeated open/close.
 - [ ] Run `pnpm typecheck`, `pnpm lint`, and `pnpm build` from a disposable checkout. Do not run or add tests unless the user asks.
 
