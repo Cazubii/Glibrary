@@ -5,6 +5,7 @@ import { ASSET_CATEGORIES, ASSET_CATEGORY_LABELS } from '@shared/categories';
 import { buildDashboardMarkdown, computeDashboardData, computeMonthlyUsage } from '@shared/dashboard';
 import { DonutChart, HBarChart } from '../components/charts';
 import { api } from '../lib/api';
+import GithubAccountCard from '../components/GithubAccountCard';
 
 type Section = 'skills' | 'agents';
 
@@ -94,6 +95,8 @@ export default function DashboardPage({ onError, onSuccess }: Props): React.JSX.
           Exportar Markdown
         </button>
       </header>
+
+      <GithubAccountCard onError={onError} />
 
       <header className="mb-6 flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-steam-text/40">Filtros</span>
