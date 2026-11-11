@@ -94,6 +94,7 @@ export class TerminalManager {
         createdAt: new Date().toISOString(),
         buffer: '',
         ...(temporaryPath ? { temporaryPath } : {}),
+        ...(input.codespaceName ? { codespaceName: input.codespaceName } : {}),
         proc
       };
       this.sessions.set(id, session);
