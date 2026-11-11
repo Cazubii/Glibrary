@@ -325,7 +325,8 @@ export const GithubRepoPageInputSchema = z.object({
 
 export const TerminalStartInputSchema = z.object({
   repoId: z.string().min(1).max(128),
-  provider: z.literal('local'),
+  provider: z.enum(['local', 'codespace', 'temporary-local']),
+  codespaceName: z.string().min(1).max(128).optional(),
   cols: z.number().int().min(20).max(500),
   rows: z.number().int().min(5).max(200)
 }).strict();
@@ -348,6 +349,22 @@ export const TerminalResizeInputSchema = z.object({
   cols: z.number().int().min(20).max(500),
   rows: z.number().int().min(5).max(200)
 }).strict();
+
+export const TerminalCodespacesInputSchema = TerminalRepoInputSchema;
+
+export const TerminalCodespaceActionInputSchema = z.object({
+  repoId: z.string().min(1).max(128),
+  codespaceName: z.string().min(1).max(128)
+}).strict();
+
+export const TerminalCodespaceCreateInputSchema = z.object({
+  repoId: z.string().min(1).max(128),
+  machine: z.string().min(1).max(128)
+}).strict();
+
+export const TerminalTempCleanupInputSchema = TerminalRepoInputSchema;
+
+export const TerminalClearInputSchema = TerminalSessionInputSchema;
 
 export const AddLocalInputSchema = z.object({
   path: z.string().min(1)
