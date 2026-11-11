@@ -3,8 +3,10 @@ import { randomUUID } from 'crypto';
 import { join } from 'path';
 import { homedir } from 'os';
 import { z } from 'zod';
-import type { Agent, BaseItem, Kit, LibraryFile, ProjectRef, Repo, Settings, Skill, TopRepos, UsageEvent } from '../../shared/types';
+import type { Agent, AgentProfile, BaseItem, Kit, LibraryFile, ProjectRef, Repo, Settings, Skill, TopRepos, UsageEvent } from '../../shared/types';
 import {
+  AgentProfileInputSchema,
+  AgentProfileSchema,
   AgentSchema,
   BaseItemSchema,
   KitInputSchema,
@@ -40,7 +42,7 @@ export function defaultSettings(reposRoot: string): Settings {
 }
 
 export function emptyLibrary(reposRoot: string): LibraryFile {
-  return { version: 2, repos: [], skills: [], agents: [], bases: [], projects: [], kits: [], usage: [], topRepos: { fetchedAt: '', repos: [] }, topRepos7: { fetchedAt: '', repos: [], windowDays: 7 }, settings: defaultSettings(reposRoot) };
+  return { version: 2, repos: [], skills: [], agents: [], bases: [], projects: [], kits: [], usage: [], agentProfiles: [], topRepos: { fetchedAt: '', repos: [] }, topRepos7: { fetchedAt: '', repos: [], windowDays: 7 }, settings: defaultSettings(reposRoot) };
 }
 
 export function migrateLibrary(raw: unknown): LibraryFile {
@@ -226,6 +228,48 @@ export class LibraryStore {
     const index = this.data.kits.findIndex((kit) => kit.id === id);
     if (index === -1) throw new Error(`Coleção não encontrada: ${id}`);
     this.data.kits.splice(index, 1);
+    await this.save();
+  }
+
+  listAgentProfiles(): AgentProfile[] {
+    return this.data.agentProfiles;
+  }
+
+  async addAgentProfile(input: { name: string; repoId: string; command: string; args?: string[] }): Promise<AgentProfile> {
+    const parsed = AgentProfileInputSchema.parse(input);
+    const profile = AgentProfileSchema.parse({
+      id: randomUUID(),
+      name: parsed.name,
+      repoId: parsed.repoId,
+      command: parsed.command,
+      args: parsed.args,
+      createdAt: new Date().toISOString()
+    });
+    this.data.agentProfiles.push(profile);
+    await this.save();
+    return profile;
+  }
+
+  async updateAgentProfile(id: string, patch: { name?: string; repoId?: string; command?: string; args?: string[]; lastRunAt?: string }): Promise<AgentProfile> {
+    const index = this.data.agentProfiles.findIndex((item) => item.id === id);
+    if (index === -1) throw new Error(`Perfil não encontrado: ${id}`);
+    const merged = AgentProfileSchema.parse({
+      ...this.data.agentProfiles[index],
+      ...(patch.name != null ? { name: patch.name.trim() } : {}),
+      ...(patch.repoId != null ? { repoId: patch.repoId } : {}),
+      ...(patch.command != null ? { command: patch.command.trim() } : {}),
+      ...(patch.args != null ? { args: patch.args } : {}),
+      ...(patch.lastRunAt != null ? { lastRunAt: patch.lastRunAt } : {})
+    });
+    this.data.agentProfiles[index] = merged;
+    await this.save();
+    return merged;
+  }
+
+  async removeAgentProfile(id: string): Promise<void> {
+    const index = this.data.agentProfiles.findIndex((item) => item.id === id);
+    if (index === -1) throw new Error(`Perfil não encontrado: ${id}`);
+    this.data.agentProfiles.splice(index, 1);
     await this.save();
   }
 
