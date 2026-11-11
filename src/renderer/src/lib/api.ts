@@ -29,6 +29,8 @@ import type {
 import type { ToolStatus as SystemToolStatus } from '../../../shared/tools';
 import { IpcChannels } from '../../../shared/ipc-channels';
 import type { DashboardAccount } from '../../../shared/github-dashboard';
+import type { ProjectRepoPage, ProjectVisibility } from '../../../shared/github-projects';
+import type { GitBranchList } from '../../../shared/git-branches';
 
 async function unwrap<T>(promise: Promise<unknown>): Promise<T> {
   const result = (await promise) as IpcResult<T>;
@@ -89,6 +91,14 @@ export const api = {
     unwrap(window.api.invoke(IpcChannels.dashboardExport, { content, suggestedName })),
   dashboardAccount: (): Promise<DashboardAccount> =>
     unwrap<DashboardAccount>(window.api.invoke(IpcChannels.dashboardAccount)),
+  projectsList: (input: {
+    page: number;
+    perPage: number;
+    sort: 'updated';
+    visibility: ProjectVisibility;
+    fork: boolean;
+  }): Promise<ProjectRepoPage> =>
+    unwrap<ProjectRepoPage>(window.api.invoke(IpcChannels.projectsList, input)),
   settingsSet: (patch: Partial<Settings>): Promise<Settings> =>
     unwrap(window.api.invoke(IpcChannels.settingsSet, patch)),
   baseAdd: (input: Pick<BaseItem, 'name'> & Partial<Pick<BaseItem, 'remoteUrl' | 'localPath' | 'description'>>): Promise<BaseItem> =>
@@ -147,6 +157,15 @@ export const api = {
 
   repoClone: (id: string): Promise<null> =>
     unwrap<null>(window.api.invoke(IpcChannels.repoClone, { id })),
+
+  branchesList: (id: string): Promise<GitBranchList> =>
+    unwrap<GitBranchList>(window.api.invoke(IpcChannels.branchesList, { id })),
+
+  branchCreate: (id: string, name: string, defaultBranch?: string): Promise<{ branch: string }> =>
+    unwrap<{ branch: string }>(window.api.invoke(IpcChannels.branchCreate, { id, name, ...(defaultBranch ? { defaultBranch } : {}) })),
+
+  branchCheckout: (id: string, branch: string): Promise<{ branch: string }> =>
+    unwrap<{ branch: string }>(window.api.invoke(IpcChannels.branchCheckout, { id, branch })),
 
   repoPull: (id: string): Promise<{ updated: boolean; summary: string }> =>
     unwrap<{ updated: boolean; summary: string }>(window.api.invoke(IpcChannels.repoPull, { id })),

@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, Library, BarChart3, Boxes, Bot, Moon, Search, Sun, Wrench, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, FolderGit2, Library, BarChart3, Boxes, Bot, Moon, Search, Sun, Wrench, X } from 'lucide-react';
 import { useLibraryStore } from './store/library';
 import AssetLibraryPage from './pages/AssetLibraryPage';
 import DashboardPage from './pages/DashboardPage';
+import ProjectsPage from './pages/ProjectsPage';
 import CollectionsPage from './pages/CollectionsPage';
 import GithubSearchPage from './pages/GithubSearchPage';
 import AgentesPage from './pages/AgentesPage';
 import NativeToolsPage from './pages/NativeToolsPage';
 
-type Page = 'library' | 'dashboard' | 'collections' | 'search' | 'agentes' | 'ferramentas';
+type Page = 'library' | 'dashboard' | 'projects' | 'collections' | 'search' | 'agentes' | 'ferramentas';
 type ToastKind = 'error' | 'success';
 
 interface Toast { id: number; message: string; kind: ToastKind }
@@ -65,24 +66,25 @@ export default function App(): React.JSX.Element {
   }, [page]);
   if (!loaded) return <div className="flex h-full items-center justify-center bg-steam-bg text-steam-text">Carregando biblioteca…</div>;
   return <div className="relative flex h-full flex-col bg-steam-bg text-steam-text">
-    <header className="flex items-center gap-3 border-b border-steam-elevated/50 px-4 py-2">
+    <header className="glibrary-app-header flex items-center gap-3 border-b border-steam-elevated/50 px-4 py-2">
       <Library size={22} className="text-steam-accent"/>
       <span className="text-lg font-bold tracking-wide">GLIBRARY</span>
-      <nav className="ml-6 flex gap-1 text-sm">
+      <nav className="glibrary-app-nav ml-2 flex min-w-0 flex-1 gap-1 text-sm">
         <button type="button" onClick={() => setPage('dashboard')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'dashboard' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><BarChart3 size={15}/>Dashboard</button>
+        <button type="button" onClick={() => setPage('projects')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'projects' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><FolderGit2 size={15}/>Projetos</button>
         <button type="button" onClick={() => setPage('library')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'library' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Library size={15}/>Biblioteca</button>
         <button type="button" onClick={() => setPage('collections')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'collections' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Boxes size={15}/>Coleções</button>
         <button type="button" onClick={() => setPage('search')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'search' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Search size={15}/>Busca</button>
         <button type="button" onClick={() => setPage('agentes')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'agentes' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Bot size={15}/>Agentes</button>
         <button type="button" onClick={() => setPage('ferramentas')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'ferramentas' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Wrench size={15}/>Ferramentas</button>
       </nav>
-      <span className="ml-4 text-sm text-steam-text/50">Skills · Agents · Bases · Projetos</span>
+      <span className="ml-2 hidden shrink-0 whitespace-nowrap text-sm text-steam-text/50 2xl:block">Skills · Agents · Bases · Projetos</span>
       <button
         type="button"
         onClick={toggleTheme}
         aria-label={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
         title={theme === 'dark' ? 'Tema claro' : 'Tema escuro'}
-        className="ml-auto rounded p-1.5 text-steam-text/60 hover:bg-steam-panel hover:text-steam-accent"
+        className="ml-auto shrink-0 rounded p-1.5 text-steam-text/60 hover:bg-steam-panel hover:text-steam-accent"
       >
         {theme === 'dark' ? <Sun size={16}/> : <Moon size={16}/>}
       </button>
@@ -92,6 +94,8 @@ export default function App(): React.JSX.Element {
         ? <AssetLibraryPage onError={onError} onSuccess={onSuccess}/>
         : page === 'dashboard'
           ? <DashboardPage onError={onError} onSuccess={onSuccess}/>
+          : page === 'projects'
+            ? <ProjectsPage onError={onError} onSuccess={onSuccess}/>
           : page === 'collections'
             ? <CollectionsPage onError={onError} onSuccess={onSuccess}/>
             : page === 'agentes'

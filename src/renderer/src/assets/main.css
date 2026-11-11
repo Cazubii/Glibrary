@@ -50,3 +50,56 @@ body {
 #root {
   transition: background-color 160ms ease-out, color 160ms ease-out;
 }
+
+.glibrary-app-header {
+  min-width: 0;
+}
+
+.glibrary-app-nav {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.glibrary-app-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.glibrary-app-nav > button {
+  flex: none;
+  white-space: nowrap;
+}
+
+.glibrary-app-nav > button:focus-visible {
+  outline: 2px solid hsl(var(--steam-accent));
+  outline-offset: 2px;
+}
+
+.projects-surface {
+  caret-color: hsl(var(--steam-accent));
+  scrollbar-color: hsl(var(--steam-elevated)) hsl(var(--steam-bg));
+  scrollbar-width: thin;
+}
+
+.projects-surface ::selection {
+  color: hsl(var(--steam-text));
+  background: hsl(var(--steam-accent) / 0.35);
+}
+
+.projects-surface input::placeholder {
+  color: hsl(var(--steam-text) / 0.75);
+}
+
+.projects-surface::-webkit-scrollbar {
+  width: 8px;
+}
+
+.projects-surface::-webkit-scrollbar-track {
+  background: hsl(var(--steam-bg));
+}
+
+.projects-surface::-webkit-scrollbar-thumb {
+  border: 2px solid hsl(var(--steam-bg));
+  border-radius: 8px;
+  background: hsl(var(--steam-elevated));
+}
