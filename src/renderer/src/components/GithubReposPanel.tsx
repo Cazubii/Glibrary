@@ -9,6 +9,7 @@ interface Props {
   knownUrls: string[];
   onAdded: (remoteUrl: string) => void;
   onError: (message: string) => void;
+  onOpenDashboard: () => void;
 }
 
 function updatedLabel(value: string): string {
@@ -103,9 +104,12 @@ export default function GithubReposPanel({ knownUrls, onAdded, onError }: Props)
     return (
       <section className="rounded border border-dashed border-steam-elevated p-8 text-center">
         <p className="text-sm text-steam-text/60">{message}</p>
-        <button type="button" onClick={() => void refresh()} disabled={loadingPage != null} className="mt-3 inline-flex items-center gap-2 rounded border border-steam-elevated px-3 py-2 text-xs hover:bg-steam-panel disabled:opacity-50">
-          <RefreshCw size={13} className={loadingPage != null ? 'animate-spin' : ''} /> Verificar novamente
-        </button>
+        <div className="mt-3 flex justify-center gap-2">
+          <button type="button" onClick={onOpenDashboard} className="rounded bg-steam-accent px-3 py-2 text-xs font-semibold text-steam-bg">Abrir Dashboard</button>
+          <button type="button" onClick={() => void refresh()} disabled={loadingPage != null} className="inline-flex items-center gap-2 rounded border border-steam-elevated px-3 py-2 text-xs hover:bg-steam-panel disabled:opacity-50">
+            <RefreshCw size={13} className={loadingPage != null ? 'animate-spin' : ''} /> Verificar novamente
+          </button>
+        </div>
       </section>
     );
   }
