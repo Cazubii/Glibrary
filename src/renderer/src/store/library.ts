@@ -26,6 +26,7 @@ interface LibraryState {
   connectGithubAccount: (token: string) => Promise<GithubAccountStatus>;
   disconnectGithubAccount: () => Promise<GithubAccountStatus>;
   loadGithubRepos: (page: number, force?: boolean) => Promise<GithubRepoPage>;
+  clearGithubRepos: () => void;
   appendLog: (id: string, line: LogLine) => void;
   clearLogs: (id: string) => void;
   confirmRun: (key: string) => void;
@@ -123,6 +124,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set((state) => ({ githubRepoPages: { ...state.githubRepoPages, [page]: result } }));
     return result;
   },
+
+  clearGithubRepos: () => set({ githubRepoPages: {} }),
 
   appendLog: (id, line) =>
     set((s) => {
