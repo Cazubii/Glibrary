@@ -260,3 +260,15 @@ com as ações existentes: adicionar ao catálogo, importar skill/agents e compa
 `normalizeGitUrl` para marcar o que já está na biblioteca. Sem token o GitHub permite
 10 buscas/min; token (safeStorage) sobe para 30/min.
 
+## Painel de Agentes (2026-11-11)
+
+Decisão: painel dedicado à página "Agentes" para criar perfis de agentes de IA
+(CLI + repositório + args) e lançar execuções paralelas (sub-agentes) monitoradas ao vivo.
+
+- `AgentRunManager` modelado no `ProcessManager`, indexado por `runId` (não `repoId`),
+  permitindo N execuções simultâneas por perfil.
+- Perfis ficam no `library.json` v2 (`agentProfiles`); execuções em `agent-runs.json`
+  com snapshot do nome do perfil; logs em `logs/agents/<runId>.log` com rotação (200).
+- Prompt inicial vai como argumento citado do comando, sem stdin; comandos só rodam
+  com ação explícita do usuário.
+- Dois modos de visualização (Painel/Grid) persistidos em `settings.agentsViewMode`.
