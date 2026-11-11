@@ -28,8 +28,8 @@
 
 - [ ] Add provider values `codespace` and `temporary-local` to the terminal contract. Keep start input to `repoId`, `provider`, and optional `codespaceName`; never accept an arbitrary command from renderer.
 - [ ] Use `gh auth status` to detect CLI authentication and `gh codespace list --repo <owner/name> --json name,repository,state` to list existing Codespaces for the selected repository. Resolve `gh` from the main-process PATH and return a clear install/auth error without echoing environment secrets.
-- [ ] Attach with `gh codespace ssh --codespace <name>` under node-pty. Stream its PTY data through the local session manager; do not create a Codespace during list/connect.
-- [ ] Add a separate explicit “Criar Codespace” action only if the user has no existing Codespace. Before the GitHub API/CLI create call, show a confirmation describing required access and that Codespaces usage can be billed; include a cancel action. Never call create on panel open or automatic reconnect.
+- [ ] Attach with `gh codespace ssh --codespace <name>` under node-pty. Stream its PTY data through the local session manager; do not create a Codespace during list/connect. The Codespace image must already have an SSH server; if attach reports the server unavailable, explain that prerequisite and offer browser-based Codespaces or temporary local checkout without editing devcontainer files.
+- [ ] Add a separate explicit “Criar Codespace” action only if the user has no existing Codespace. Before the GitHub API/CLI create call, show a confirmation describing required access and that compute/storage usage may be charged; show selected machine size and a link to current GitHub billing details; include a cancel action. Never call create on panel open or automatic reconnect.
 - [ ] Show Codespace running/stopped/unknown state. Hiding or disconnecting terminal only closes SSH; stopping/deleting a Codespace is a separate explicit action.
 - [ ] Handle missing gh, unauthenticated CLI, permission denied, network loss, and closed SSH with actionable states; reconnect must not duplicate a process.
 
