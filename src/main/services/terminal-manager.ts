@@ -6,7 +6,6 @@ import type { IPty } from 'node-pty';
 import type {
   Repo,
   TerminalSessionSnapshot,
-  TerminalSessionSummary,
   TerminalStartInput
 } from '../../shared/types';
 import { IpcChannels } from '../../shared/ipc-channels';
@@ -128,6 +127,7 @@ export class TerminalManager {
     const session = this.sessions.get(sessionId);
     if (!session) throw new Error('Sessão de terminal não encontrada.');
     session.buffer = '';
+    session.proc?.clear();
   }
 
   async close(sessionId: string): Promise<void> {
