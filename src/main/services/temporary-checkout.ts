@@ -7,6 +7,7 @@ import type { Repo, TemporaryCheckoutStatus } from '../../shared/types';
 
 const execFileAsync = promisify(execFile);
 const MAX_BUFFER = 1024 * 1024;
+const MAX_TEMPORARY_CHECKOUTS = 3;
 
 interface CheckoutRecord {
   repoId: string;
@@ -60,12 +61,23 @@ export class TemporaryCheckoutService {
     if (!repo.remoteUrl) throw new Error('Este repositório não tem URL remota para clonar.');
     const existing = this.records.get(repo.id);
     if (existing && this.isManagedPath(existing.path)) {
+      if (existing.remoteUrl !== repo.remoteUrl) {
+        throw new Error('Este checkout temporário pertence a outra URL remota. Revise-o antes de removê-lo.');
+      }
       try {
         const info = await fs.stat(existing.path);
         if (info.isDirectory()) return existing.path;
       } catch {
         this.records.delete(repo.id);
       }
+    }
+
+    for (const [repoId, record] of this.records) {
+      try { await fs.stat(record.path); }
+      catch { this.records.delete(repoId); }
+    }
+    if (this.records.size >= MAX_TEMPORARY_CHECKOUTS) {
+      throw new Error('Limite de 3 checkouts temporários atingido. Revise e remova um checkout antes de criar outro.');
     }
 
     const target = await fs.mkdtemp(join(tmpdir(), 'glibrary-checkout-'));
