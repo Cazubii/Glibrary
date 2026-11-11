@@ -45,6 +45,9 @@ export default function RepoTerminal({ repo, onHide, onError }: Props): React.JS
   const [machines, setMachines] = useState<GithubCodespaceMachine[]>([]);
   const [selectedCodespace, setSelectedCodespace] = useState('');
   const [selectedMachine, setSelectedMachine] = useState('');
+  const [devcontainerPaths, setDevcontainerPaths] = useState<string[]>([]);
+  const [selectedDevcontainer, setSelectedDevcontainer] = useState('');
+  const [defaultBranch, setDefaultBranch] = useState('');
   const [tempStatus, setTempStatus] = useState<TemporaryCheckoutStatus>({ exists: false });
   const [providerError, setProviderError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -98,6 +101,9 @@ export default function RepoTerminal({ repo, onHide, onError }: Props): React.JS
       const result = await api.terminalCodespacesList(repo.id);
       setCodespaces(result.codespaces);
       setMachines(result.machines);
+      setDevcontainerPaths(result.devcontainerPaths);
+      setSelectedDevcontainer((current) => result.devcontainerPaths.includes(current) ? current : (result.devcontainerPaths[0] ?? ''));
+      setDefaultBranch(result.defaultBranch);
       setSelectedCodespace((current) =>
         result.codespaces.some((space) => space.name === current)
           ? current
@@ -193,13 +199,15 @@ export default function RepoTerminal({ repo, onHide, onError }: Props): React.JS
     const accepted = window.confirm(
       'Criar um Codespace para ' + repo.name + ' usando ' + machine.displayName +
       ' (' + (machine.memoryGb || '?') + ' GB de memória, ' + (machine.storageGb || '?') +
-      ' GB de armazenamento). O GitHub pode cobrar pelo uso de computação e armazenamento. Deseja continuar?'
+      ' GB de armazenamento), na branch ' + (defaultBranch || 'padrão') +
+      (selectedDevcontainer ? ', com ' + selectedDevcontainer : ', com a configuração padrão') +
+      '. O GitHub pode cobrar pelo uso de computação e armazenamento. Deseja continuar?'
     );
     if (!accepted) return;
     setBusy(true);
     setProviderError('');
     try {
-      const created = await api.terminalCodespaceCreate(repo.id, machine.name);
+      const created = await api.terminalCodespaceCreate(repo.id, machine.name, selectedDevcontainer || undefined);
       setCodespaces((current) => [created, ...current.filter((space) => space.name !== created.name)]);
       setSelectedCodespace(created.name);
       await startSession('codespace', created.name);
@@ -358,6 +366,12 @@ export default function RepoTerminal({ repo, onHide, onError }: Props): React.JS
                 {machines.map((machine) => <option key={machine.name} value={machine.name}>{machine.displayName} · {machine.memoryGb || '?'} GB</option>)}
               </select>
             </label>
+            <span className="text-[10px] text-steam-text/35">Branch: {defaultBranch || 'padrão'}</span>
+            {devcontainerPaths.length > 1 && <label className="flex items-center gap-2 text-[11px] text-steam-text/55">Configuração
+              <select value={selectedDevcontainer} onChange={(event) => setSelectedDevcontainer(event.target.value)} className="max-w-56 rounded border border-steam-elevated bg-steam-panel px-2 py-1.5 text-xs text-steam-text">
+                {devcontainerPaths.map((path) => <option key={path} value={path}>{path}</option>)}
+              </select>
+            </label>}
             {codespaces.length === 0 && <button type="button" disabled={busy} onClick={() => void createCodespace()} className="rounded border border-steam-accent/50 px-2.5 py-1.5 text-xs text-steam-accent disabled:opacity-45">Criar Codespace…</button>}
           </>}
           <a href={BILLING_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] text-steam-text/45 hover:text-steam-accent">Cobrança <ExternalLink size={10} /></a>
