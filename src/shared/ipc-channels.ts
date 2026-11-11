@@ -80,6 +80,7 @@ export const IpcChannels = {
   terminalCodespaceStop: 'terminal:codespaceStop',
   terminalCodespaceCreate: 'terminal:codespaceCreate',
   terminalTempStatus: 'terminal:tempStatus',
+  terminalTempOpen: 'terminal:tempOpen',
   terminalTempCleanup: 'terminal:tempCleanup'
 } as const
 
