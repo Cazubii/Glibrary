@@ -58,7 +58,7 @@ export interface TerminalStartInput {
 
 **Files:** create `src/main/services/terminal-manager.ts`, create `src/main/ipc/terminal.ipc.ts`, modify `src/main/index.ts`
 
-- [ ] Implement `TerminalManager` with a `Map<string, Session>`, a maximum of 8 live PTYs, and a 2000-line output buffer per session. Do not spawn before the user opens a terminal.
+- [ ] Implement `TerminalManager` with a `Map<string, Session>`, a maximum of 4 live PTYs, and a 2000-line output buffer per session. Do not spawn before the user opens a terminal.
 - [ ] Start the platform's configured interactive shell (PowerShell on Windows, user shell on macOS/Linux) with cwd set to `repo.localPath`. If the repo has no local path, return a typed error directing the UI to an available remote provider or explicit temporary checkout.
 - [ ] Forward raw PTY data to the owning window and retain bounded scrollback for re-open; forward input and resize to the matching PTY.
 - [ ] Close kills exactly one PTY; app `before-quit` closes all PTYs and waits up to five seconds before forced termination.
