@@ -19,10 +19,11 @@ export type EmitFn = (channel: string, payload: unknown) => void;
 const MAX_ACTIVE_SESSIONS = 4;
 const MAX_RETAINED_SESSIONS = 20;
 const MAX_BUFFER_LINES = 2000;
-const MAX_BUFFER_CHARS = 512 * 1024;
+const MAX_BUFFER_CHARS = 256 * 1024;
 
 interface Session extends TerminalSessionSnapshot {
   proc: IPty | null;
+  stopRequested: boolean;
 }
 
 export class TerminalManager {
@@ -41,6 +42,7 @@ export class TerminalManager {
     return [...this.sessions.values()]
       .filter((session) => session.repoId === repoId)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .filter((session) => session.state === 'running' || session === [...this.sessions.values()].filter((item) => item.repoId === repoId && item.state !== 'running').sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(-4).find((item) => item.id === session.id))
       .map((session) => this.snapshot(session));
   }
 
@@ -93,6 +95,7 @@ export class TerminalManager {
         state: 'running',
         createdAt: new Date().toISOString(),
         buffer: '',
+        stopRequested: false,
         ...(temporaryPath ? { temporaryPath } : {}),
         ...(input.codespaceName ? { codespaceName: input.codespaceName } : {}),
         proc
@@ -126,18 +129,28 @@ export class TerminalManager {
   async close(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) return;
-    if (session.state === 'running') {
-      session.proc?.kill();
-      await this.waitForExit([session], 2000);
-    }
+    if (session.state === 'running') await this.terminateSessions([session], 2000);
   }
 
   async closeAll(): Promise<void> {
     const active = [...this.sessions.values()].filter((session) => session.state === 'running');
-    for (const session of active) {
+    await this.terminateSessions(active, 5000);
+  }
+
+  private async terminateSessions(sessions: Session[], timeoutMs: number): Promise<void> {
+    for (const session of sessions) {
+      session.stopRequested = true;
       try { session.proc?.kill(); } catch { /* já encerrou */ }
     }
-    await this.waitForExit(active, 5000);
+    await this.waitForExit(sessions, timeoutMs);
+    for (const session of sessions) {
+      if (session.state !== 'running') continue;
+      try {
+        if (process.platform === 'win32') session.proc?.kill();
+        else session.proc?.kill('SIGKILL');
+      } catch { /* a implementação do PTY pode já ter encerrado */ }
+    }
+    await this.waitForExit(sessions, 1000);
   }
 
   private async waitForExit(sessions: Session[], timeoutMs: number): Promise<void> {
@@ -147,11 +160,11 @@ export class TerminalManager {
     }
   }
 
-  private requireRunning(id: string): Session {
+  private requireRunning(id: string): Session & { proc: IPty } {
     const session = this.sessions.get(id);
     if (!session) throw new Error('Sessão de terminal não encontrada.');
-    if (session.state !== 'running') throw new Error('Esta sessão já foi encerrada.');
-    return session;
+    if (session.state !== 'running' || !session.proc) throw new Error('Esta sessão já foi encerrada.');
+    return session as Session & { proc: IPty };
   }
 
   private terminalEnvironment(): Record<string, string> {
@@ -187,7 +200,7 @@ export class TerminalManager {
 
   private onExit(session: Session, exitCode: number, signal?: number): void {
     if (session.state !== 'running') return;
-    session.state = exitCode === 0 ? 'exited' : 'error';
+    session.state = session.stopRequested || exitCode === 0 ? 'exited' : 'error';
     session.exitCode = exitCode;
     session.proc = null;
     if (session.state === 'error' && session.provider === 'codespace') {
