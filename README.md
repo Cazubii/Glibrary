@@ -1,8 +1,28 @@
 # Glibrary
 
-Biblioteca desktop para organizar **Skills de agentes**, **repositórios-base** e os **projetos que usam esses recursos**.
+Um lugar só para trabalhar com **agentes de IA**: reúne os **agentes**, as **Skills** e os **repositórios** que você usa, e os **projetos** que dependem deles, num app desktop simples.
 
-## Recursos
+O objetivo é juntar a versatilidade de um ambiente de desenvolvimento com a gestão de agentes: abrir o terminal, editar o projeto, trabalhar com subagentes e com os repositórios direto no GitHub, de um jeito fácil o suficiente para quem está começando a desenvolver com IA.
+
+Glibrary é um projeto próprio de [BezierClick](https://bezierclick.com), aberto para a comunidade contribuir. Está no começo do desenvolvimento e nasceu para uso próprio do autor.
+
+## O que já faz
+
+- Encontra suas Skills (`SKILL.md`) e agentes nas pastas configuradas, sem alterar os arquivos.
+- Registra repositórios-base por URL Git ou pasta local e clona para `~/BASES`.
+- Liga cada projeto às Skills, agentes e Bases que ele usa, com notas por projeto.
+- Abre a pasta, o editor, o terminal ou a página no GitHub de cada repositório.
+- Tags, favoritos, filtros, busca no GitHub e destaques dos últimos 7 dias.
+
+## Para onde vai
+
+- Editar o projeto direto na branch principal a partir do app.
+- Trabalhar com subagentes dentro do próprio Glibrary.
+- Integração mais funda com o GitHub para gerenciar os repositórios sem sair do app.
+
+Sugestões e contribuições são bem-vindas: veja [Contribuir](#contribuir).
+
+## Detalhes técnicos
 
 - Descobre Skills em arquivos `SKILL.md` nas origens configuradas. Por padrão, procura em `~/.claude/skills`, `~/.opencode/skills` e `~/.agents/skills`.
 - Registra Bases por URL Git ou pasta local e clona repositórios para `~/BASES`.
