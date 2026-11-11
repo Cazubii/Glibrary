@@ -24,7 +24,10 @@ import type {
   UsageEvent,
   ToolEntry,
   ToolInstallRun,
-  ToolStatus
+  ToolStatus,
+  DevWorkspaceCloseResult,
+  DevWorkspaceOpenResult,
+  DevWorkspaceStatus
 } from '../../../shared/types';
 import type { ToolStatus as SystemToolStatus } from '../../../shared/tools';
 import { IpcChannels } from '../../../shared/ipc-channels';
@@ -167,6 +170,30 @@ export const api = {
   branchCheckout: (id: string, branch: string): Promise<{ branch: string }> =>
     unwrap<{ branch: string }>(window.api.invoke(IpcChannels.branchCheckout, { id, branch })),
 
+  devWorkspaceOpen: (repoId: string, branch?: string): Promise<DevWorkspaceOpenResult> =>
+    unwrap<DevWorkspaceOpenResult>(window.api.invoke(IpcChannels.devWorkspaceOpen, { repoId, ...(branch ? { branch } : {}) })),
+
+  devWorkspaceClose: (repoId: string): Promise<DevWorkspaceCloseResult> =>
+    unwrap<DevWorkspaceCloseResult>(window.api.invoke(IpcChannels.devWorkspaceClose, { repoId })),
+
+  devWorkspaceStatus: (repoId: string): Promise<DevWorkspaceStatus> =>
+    unwrap<DevWorkspaceStatus>(window.api.invoke(IpcChannels.devWorkspaceStatus, { repoId })),
+
+  devWorkspaceBranches: (repoId: string): Promise<GitBranchList> =>
+    unwrap<GitBranchList>(window.api.invoke(IpcChannels.devWorkspaceBranches, { repoId })),
+
+  devWorkspaceSwitchBranch: (repoId: string, branch: string): Promise<{ branch: string }> =>
+    unwrap<{ branch: string }>(window.api.invoke(IpcChannels.devWorkspaceSwitchBranch, { repoId, branch })),
+
+  devWorkspaceCreateBranch: (repoId: string, name: string, defaultBranch: string): Promise<{ branch: string }> =>
+    unwrap<{ branch: string }>(window.api.invoke(IpcChannels.devWorkspaceCreateBranch, { repoId, name, defaultBranch })),
+
+  devWorkspaceSync: (repoId: string): Promise<{ updated: boolean; summary: string; status: DevWorkspaceStatus }> =>
+    unwrap<{ updated: boolean; summary: string; status: DevWorkspaceStatus }>(window.api.invoke(IpcChannels.devWorkspaceSync, { repoId })),
+
+  devWorkspacePush: (repoId: string): Promise<{ branch: string; status: DevWorkspaceStatus }> =>
+    unwrap<{ branch: string; status: DevWorkspaceStatus }>(window.api.invoke(IpcChannels.devWorkspacePush, { repoId })),
+
   repoPull: (id: string): Promise<{ updated: boolean; summary: string }> =>
     unwrap<{ updated: boolean; summary: string }>(window.api.invoke(IpcChannels.repoPull, { id })),
 
@@ -284,6 +311,37 @@ export const api = {
   onStatusChanged: (listener: (payload: { id: string; status: Repo['status'] }) => void) =>
     window.api.on(IpcChannels.repoStatusChanged, (payload: unknown) => {
       listener(payload as { id: string; status: Repo['status'] });
+    }),
+
+  terminalCreate: (cwd: string): Promise<string> =>
+    unwrap<{ id: string }>(window.api.invoke(IpcChannels.terminalCreate, { cwd })).then((data) => data.id),
+
+  terminalOpen: (cwd: string): Promise<{ id: string; snapshot: string; sequence: number }> =>
+    unwrap<{ id: string; snapshot: string; sequence: number }>(window.api.invoke(IpcChannels.terminalOpen, { cwd })),
+
+  terminalDetach: (id: string): Promise<void> =>
+    unwrap<null>(window.api.invoke(IpcChannels.terminalDetach, { id })).then(() => undefined),
+
+  terminalInput: (id: string, data: string): void => {
+    window.api.send(IpcChannels.terminalInput, { id, data });
+  },
+
+  terminalResize: (id: string, cols: number, rows: number): void => {
+    window.api.send(IpcChannels.terminalResize, { id, cols, rows });
+  },
+
+  terminalKill: (id: string): void => {
+    window.api.send(IpcChannels.terminalKill, { id });
+  },
+
+  onTerminalOutput: (listener: (payload: { id: string; data: string; sequence?: number }) => void) =>
+    window.api.on(IpcChannels.terminalOutput, (payload: unknown) => {
+      listener(payload as { id: string; data: string; sequence?: number });
+    }),
+
+  onTerminalExit: (listener: (payload: { id: string; exitCode: number }) => void) =>
+    window.api.on(IpcChannels.terminalExit, (payload: unknown) => {
+      listener(payload as { id: string; exitCode: number });
     }),
 
   agentProfilesList: (): Promise<AgentProfile[]> =>

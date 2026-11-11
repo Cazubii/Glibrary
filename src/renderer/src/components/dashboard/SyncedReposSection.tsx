@@ -3,6 +3,7 @@ import { ExternalLink, FolderGit2, Star } from 'lucide-react';
 import { buildSyncedReposView } from '@shared/github-dashboard';
 import { useLibraryStore } from '../../store/library';
 import StatusBadge from '../StatusBadge';
+import DevSessionBadge from '../DevSessionBadge';
 
 interface Props {
   onOpen: (repoId: string) => void;
@@ -55,6 +56,7 @@ export default function SyncedReposSection({ onOpen, onError }: Props): React.JS
                     {row.owner != null && <span className="text-steam-text/50">{row.owner}/</span>}{row.name}
                   </span>
                   <StatusBadge status={row.status} />
+                  <DevSessionBadge session={repos.find((repo) => repo.id === row.id)?.devSession} />
                   {row.stars != null && row.stars > 0 && (
                     <span className="text-xs tabular-nums text-steam-text/40">★ {row.stars.toLocaleString('pt-BR')}</span>
                   )}

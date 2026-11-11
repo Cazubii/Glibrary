@@ -8,7 +8,7 @@ import { useLibraryStore } from '../store/library';
 import { useDashboardStore } from '../store/dashboard';
 import GithubAccountSection from '../components/dashboard/GithubAccountSection';
 import ProjectRepoRow from '../components/projects/ProjectRepoRow';
-import ProjectWorkspace from '../components/projects/ProjectWorkspace';
+import DevWorkspacePage from './DevWorkspacePage';
 import RepoDetailPage from './RepoDetailPage';
 
 interface Props {
@@ -73,7 +73,7 @@ export default function ProjectsPage({ onError, onSuccess }: Props): React.JSX.E
   const startClone = useProjectsStore((state) => state.startClone);
   const failClone = useProjectsStore((state) => state.failClone);
 
-  const [workspaceProject, setWorkspaceProject] = useState<ProjectRepoSummary | null>(null);
+  const [devProject, setDevProject] = useState<ProjectRepoSummary | null>(null);
   const [openRepoId, setOpenRepoId] = useState<string | null>(null);
 
   useEffect(() => { void loadAccount(); }, [loadAccount]);
@@ -136,17 +136,13 @@ export default function ProjectsPage({ onError, onSuccess }: Props): React.JSX.E
     );
   }
 
-  if (workspaceProject != null) {
-    const libraryRepo = findLibraryRepo(libraryRepos, workspaceProject);
-    const cloneState = clones[workspaceProject.fullName.toLocaleLowerCase('en-US')];
+  if (devProject != null) {
+    const libraryRepo = findLibraryRepo(libraryRepos, devProject);
     return (
-      <ProjectWorkspace
-        project={workspaceProject}
+      <DevWorkspacePage
+        project={devProject}
         {...(libraryRepo != null ? { repo: libraryRepo } : {})}
-        {...(cloneState != null ? { clone: cloneState } : {})}
-        onBack={() => setWorkspaceProject(null)}
-        onCloneFirst={() => { void cloneProject(workspaceProject); }}
-        onError={onError}
+        onBack={() => setDevProject(null)}
         onSuccess={onSuccess}
       />
     );
@@ -291,7 +287,7 @@ export default function ProjectsPage({ onError, onSuccess }: Props): React.JSX.E
                       {...(clone != null ? { clone } : {})}
                       onClone={() => { void cloneProject(project); }}
                       onOpen={() => { if (libraryRepo != null) setOpenRepoId(libraryRepo.id); }}
-                      onWork={() => setWorkspaceProject(project)}
+                      onWork={() => setDevProject(project)}
                     />
                   );
                 })}

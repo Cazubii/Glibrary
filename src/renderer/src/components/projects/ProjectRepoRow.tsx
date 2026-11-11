@@ -2,6 +2,7 @@ import { ArrowUpRight, Clock3, GitBranch, GitFork, Globe2, LockKeyhole, Star } f
 import type { ProjectRepoSummary } from '../../../../shared/github-projects';
 import type { Repo } from '../../../../shared/types';
 import type { ProjectCloneState } from '../../store/projects';
+import DevSessionBadge from '../DevSessionBadge';
 
 interface Props {
   project: ProjectRepoSummary;
@@ -61,6 +62,7 @@ export default function ProjectRepoRow({ project, libraryRepo, clone, onClone, o
               <GitFork size={11} aria-hidden="true" /> Fork
             </span>
           )}
+          <DevSessionBadge session={libraryRepo?.devSession} />
         </div>
         <p className="mt-1 line-clamp-2 max-w-3xl text-xs leading-5 text-steam-text/75">
           {project.description ?? 'Sem descrição.'}
