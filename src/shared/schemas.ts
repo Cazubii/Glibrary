@@ -323,6 +323,32 @@ export const GithubRepoPageInputSchema = z.object({
   page: z.number().int().min(1).max(100000)
 }).strict();
 
+export const TerminalStartInputSchema = z.object({
+  repoId: z.string().min(1).max(128),
+  provider: z.literal('local'),
+  cols: z.number().int().min(20).max(500),
+  rows: z.number().int().min(5).max(200)
+}).strict();
+
+export const TerminalRepoInputSchema = z.object({
+  repoId: z.string().min(1).max(128)
+}).strict();
+
+export const TerminalSessionInputSchema = z.object({
+  sessionId: z.string().min(1).max(128)
+}).strict();
+
+export const TerminalWriteInputSchema = z.object({
+  sessionId: z.string().min(1).max(128),
+  data: z.string().max(16 * 1024)
+}).strict();
+
+export const TerminalResizeInputSchema = z.object({
+  sessionId: z.string().min(1).max(128),
+  cols: z.number().int().min(20).max(500),
+  rows: z.number().int().min(5).max(200)
+}).strict();
+
 export const AddLocalInputSchema = z.object({
   path: z.string().min(1)
 })
