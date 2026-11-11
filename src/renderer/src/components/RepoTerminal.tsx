@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Clipboard, Copy, ExternalLink, Globe, Maximize2, Minimize2, Plus, Power, RefreshCw,
-  Search, SplitSquareHorizontal, Terminal as TerminalIcon, Trash2, X
+  Search, Columns2, Terminal as TerminalIcon, Trash2, X
 } from 'lucide-react';
 import type {
   GithubCodespace,
@@ -358,7 +358,7 @@ export default function RepoTerminal({ repo, onHide, onError }: Props): React.JS
                 {machines.map((machine) => <option key={machine.name} value={machine.name}>{machine.displayName} · {machine.memoryGb || '?'} GB</option>)}
               </select>
             </label>
-            <button type="button" disabled={busy} onClick={() => void createCodespace()} className="rounded border border-steam-accent/50 px-2.5 py-1.5 text-xs text-steam-accent disabled:opacity-45">Criar Codespace…</button>
+            {codespaces.length === 0 && <button type="button" disabled={busy} onClick={() => void createCodespace()} className="rounded border border-steam-accent/50 px-2.5 py-1.5 text-xs text-steam-accent disabled:opacity-45">Criar Codespace…</button>}
           </>}
           <a href={BILLING_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] text-steam-text/45 hover:text-steam-accent">Cobrança <ExternalLink size={10} /></a>
         </>}
@@ -372,6 +372,7 @@ export default function RepoTerminal({ repo, onHide, onError }: Props): React.JS
               {tempStatus.dirty ? 'Checkout preservado com alterações pendentes' : 'Checkout temporário limpo'}
             </span>
             <button type="button" onClick={() => void openTemporaryFolder()} className="rounded border border-steam-elevated px-2 py-1.5 text-[10px] text-steam-text/65 hover:bg-steam-elevated">Abrir pasta</button>
+            {tempStatus.dirty && repo.remoteUrl && <a href={repo.remoteUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] text-steam-accent">Abrir GitHub para publicar <ExternalLink size={10} /></a>}
             {!tempStatus.dirty && <button type="button" disabled={busy} onClick={() => void cleanupTemporaryCheckout()} className="rounded border border-steam-elevated px-2 py-1.5 text-[10px] text-steam-text/65 hover:bg-steam-elevated disabled:opacity-40">Remover checkout</button>}
           </>}
         </>}
@@ -397,7 +398,7 @@ export default function RepoTerminal({ repo, onHide, onError }: Props): React.JS
             </button>
           ))}
           <span className="ml-auto flex shrink-0 items-center gap-1">
-            <button type="button" title="Abrir segundo terminal lado a lado" disabled={!activeSession || activeSession.state !== 'running' || busy} onClick={() => void addSplit()} className="rounded p-1.5 text-steam-text/45 hover:bg-steam-panel disabled:opacity-25"><SplitSquareHorizontal size={14} /></button>
+            <button type="button" title="Abrir segundo terminal lado a lado" disabled={!activeSession || activeSession.state !== 'running' || busy} onClick={() => void addSplit()} className="rounded p-1.5 text-steam-text/45 hover:bg-steam-panel disabled:opacity-25"><Columns2 size={14} /></button>
             <button type="button" title="Limpar saída" disabled={!activeSession} onClick={() => void clearActive()} className="rounded p-1.5 text-steam-text/45 hover:bg-steam-panel disabled:opacity-25"><Trash2 size={14} /></button>
             <button type="button" title="Copiar seleção" disabled={!activeControls} onClick={() => void copySelection()} className="rounded p-1.5 text-steam-text/45 hover:bg-steam-panel disabled:opacity-25"><Copy size={14} /></button>
             <button type="button" title="Colar" disabled={!activeControls} onClick={() => void pasteClipboard()} className="rounded p-1.5 text-steam-text/45 hover:bg-steam-panel disabled:opacity-25"><Clipboard size={14} /></button>
