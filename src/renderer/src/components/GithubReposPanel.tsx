@@ -86,7 +86,10 @@ export default function GithubReposPanel({ knownUrls, onAdded, onError, onOpenDa
     setAdding(repo.remoteUrl);
     setLoadError('');
     try {
-      await api.repoAddByUrl(repo.remoteUrl, false, repo.fullName);
+      const addedRepo = await api.repoAddByUrl(repo.remoteUrl, false, repo.fullName);
+      useLibraryStore.setState((state) => ({
+        repos: state.repos.some((item) => item.id === addedRepo.id) ? state.repos : [...state.repos, addedRepo]
+      }));
       onAdded(repo.remoteUrl);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -112,13 +115,15 @@ export default function GithubReposPanel({ knownUrls, onAdded, onError, onOpenDa
           if (!saved) throw error;
         }
       }
+      if (!saved) throw new Error('Não foi possível registrar este repositório na biblioteca.');
+      const savedRepo = saved;
       useLibraryStore.setState((state) => ({
-        repos: state.repos.some((item) => item.id === saved?.id)
+        repos: state.repos.some((item) => item.id === savedRepo.id)
           ? state.repos
-          : [...state.repos, saved as NonNullable<typeof saved>]
+          : [...state.repos, savedRepo]
       }));
       onAdded(repo.remoteUrl);
-      onOpenRepository(saved.id);
+      onOpenRepository(savedRepo.id);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setLoadError(message);
