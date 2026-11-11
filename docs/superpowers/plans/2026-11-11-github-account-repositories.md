@@ -25,7 +25,7 @@
 - Create `src/renderer/src/components/GithubReposPanel.tsx`: paginated account-repository list and library-state labels.
 - Modify `src/renderer/src/pages/AssetLibraryPage.tsx`: switch between existing local projects and GitHub repositories.
 
-## Task 1: Shared contracts and validation
+### Task 1: Shared contracts and validation
 
 **Files:** `src/shared/types.ts`, `src/shared/schemas.ts`, `src/shared/ipc-channels.ts`
 
@@ -74,7 +74,7 @@ export interface GithubRepoPage {
 - [ ] Validate connect input as a trimmed non-empty token; validate page as an integer from 1 through 100000. Keep page size fixed in main at 50.
 - [ ] Confirm all response contracts contain only profile/repository metadata.
 
-## Task 2: GitHub REST service and main-process IPC
+### Task 2: GitHub REST service and main-process IPC
 
 **Files:** `src/main/services/github-api.ts`, `src/main/services/github-account.ts`, `src/main/ipc/assets.ipc.ts`
 
@@ -86,7 +86,7 @@ export interface GithubRepoPage {
 - [ ] Keep credentials out of logs and return error categories without returning request headers or token text.
 - [ ] The fine-grained token setup instructions must request only repository Metadata read for repository listing; the authenticated-user endpoint requires no additional fine-grained permission. Users only see private repositories granted to that token.
 
-## Task 3: Renderer API and memory cache
+### Task 3: Renderer API and memory cache
 
 **Files:** `src/renderer/src/lib/api.ts`, `src/renderer/src/store/library.ts`
 
@@ -95,7 +95,7 @@ export interface GithubRepoPage {
 - [ ] Reuse account status for five minutes; do not poll. Load repository page 1 only when the account list is opened, and request the next page only when the user selects “Carregar mais”.
 - [ ] Ensure the token is cleared from the connect form state after success, failure, and modal close.
 
-## Task 4: Dashboard account card
+### Task 4: Dashboard account card
 
 **Files:** create `src/renderer/src/components/GithubAccountCard.tsx`; modify `src/renderer/src/pages/DashboardPage.tsx`
 
@@ -105,7 +105,7 @@ export interface GithubRepoPage {
 - [ ] Add the card to Dashboard without changing existing summary cards or charts.
 - [ ] Keep all network loading/error feedback within the card and use the existing `onError`/success toast callbacks only for actions that complete.
 
-## Task 5: GitHub repositories in Projetos
+### Task 5: GitHub repositories in Projetos
 
 **Files:** create `src/renderer/src/components/GithubReposPanel.tsx`; modify `src/renderer/src/pages/AssetLibraryPage.tsx`
 
@@ -115,7 +115,7 @@ export interface GithubRepoPage {
 - [ ] Compare normalized remote URLs against the existing library repository and base URLs. Mark matches “Na biblioteca”; offer “Adicionar à biblioteca” for non-matches through `api.repoAddByUrl(url, false, fullName)`. Never auto-clone or bulk-import.
 - [ ] Show loading, empty, and retry states. Keep the list virtual-free unless observed account sizes require virtualization; page size 50 bounds memory and rendering.
 
-## Task 6: Verification
+### Task 6: Verification
 
 **Files:** none
 
