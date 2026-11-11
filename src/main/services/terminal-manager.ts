@@ -39,10 +39,14 @@ export class TerminalManager {
   ) {}
 
   list(repoId: string): TerminalSessionSnapshot[] {
-    return [...this.sessions.values()]
-      .filter((session) => session.repoId === repoId)
+    const matching = [...this.sessions.values()].filter((session) => session.repoId === repoId);
+    const active = matching.filter((session) => session.state === 'running');
+    const recentExited = matching
+      .filter((session) => session.state !== 'running')
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-      .filter((session) => session.state === 'running' || session === [...this.sessions.values()].filter((item) => item.repoId === repoId && item.state !== 'running').sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(-4).find((item) => item.id === session.id))
+      .slice(-4);
+    return [...active, ...recentExited]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .map((session) => this.snapshot(session));
   }
 
