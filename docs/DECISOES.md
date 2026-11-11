@@ -272,3 +272,18 @@ Decisão: painel dedicado à página "Agentes" para criar perfis de agentes de I
 - Prompt inicial vai como argumento citado do comando, sem stdin; comandos só rodam
   com ação explícita do usuário.
 - Dois modos de visualização (Painel/Grid) persistidos em `settings.agentsViewMode`.
+
+## Dashboard GitHub (2026-11-11)
+
+Decisão: "Dashboard" passa a ser a primeira aba e a página inicial, mostrando a conta
+GitHub conectada, gráficos e os repositórios registrados, acima do uso da biblioteca.
+
+- Um único canal `dashboard:account` agrega `/user`, `/user/repos` (100 mais recentes,
+  só do dono) e `/rate_limit`; sem token devolve apenas a cota anônima. Falha na cota
+  não derruba o restante.
+- Parsers e agregações são puros (`main/services/github-dashboard.ts`,
+  `shared/github-dashboard.ts`) com `fetchJson` injetado, testáveis sem Electron.
+- Cache no store zustand com stale-while-revalidate (5 min); "Atualizar" força a busca.
+- Projetos sincronizados derivam do `useLibraryStore` (mesmos dados do detalhe do
+  repositório), sem canal extra, para não divergir após favoritar.
+- Gráficos em SVG/CSS puro, reaproveitando `charts.tsx`; nenhuma dependência nova.
