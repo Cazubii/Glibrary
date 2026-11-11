@@ -22,7 +22,7 @@
 - Modify `src/renderer/src/lib/api.ts` and `src/renderer/src/components/RepoTerminal.tsx`: provider selector, Codespace list/state, explicit cleanup.
 - Modify `src/main/index.ts`: dispose provider processes and temporary workspaces during app shutdown.
 
-## Task 1: Codespace discovery and connection
+### Task 1: Codespace discovery and connection
 
 **Files:** create `src/main/services/codespace-service.ts`; modify terminal types, schema, manager, IPC, and terminal component.
 
@@ -33,7 +33,7 @@
 - [ ] Show Codespace running/stopped/unknown state. Hiding or disconnecting terminal only closes SSH; stopping/deleting a Codespace is a separate explicit action.
 - [ ] Handle missing gh, unauthenticated CLI, permission denied, network loss, and closed SSH with actionable states; reconnect must not duplicate a process.
 
-## Task 2: Explicit temporary local checkout
+### Task 2: Explicit temporary local checkout
 
 **Files:** create `src/main/services/temporary-checkout.ts`; modify manager, IPC, main lifecycle and terminal component.
 
@@ -43,7 +43,7 @@
 - [ ] Provide a separate “Remover checkout temporário” confirmation for a clean workspace. Never delete on hide/disconnect. On app exit, keep dirty workspaces and surface their paths on next start; only remove clean ones after explicit user choice.
 - [ ] When no Codespace exists, offer create, temporary checkout, or cancel. Do not auto-select a fallback.
 
-## Task 3: Provider integration and verification
+### Task 3: Provider integration and verification
 
 **Files:** terminal provider files listed above.
 
