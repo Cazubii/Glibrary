@@ -49,6 +49,11 @@ describe('LibraryStore tools', () => {
     await expect(store.addTool('https://github.com/example/my-cli/issues')).rejects.toThrow();
   });
 
+  it('rejects repository slugs that cannot be used as safe folder names', async () => {
+    const { store } = await makeStore();
+    await expect(store.addTool('https://github.com/example/..')).rejects.toThrow();
+  });
+
   it('removes custom entries but never removes built-ins', async () => {
     const { store } = await makeStore();
     const tool = await store.addTool('https://github.com/example/my-cli');

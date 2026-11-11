@@ -284,7 +284,10 @@ export const AgentRunStartInputSchema = z
 const GitHubToolUrlSchema = z.string().trim().regex(
   /^https:\/\/github\.com\/[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9_.-]+(?:\.git)?\/?$/i,
   'Informe um link no formato https://github.com/usuario/repositorio'
-);
+).refine((url) => {
+  const repoSlug = url.replace(/\/$/, '').split('/').at(-1)?.replace(/\.git$/i, '') ?? '';
+  return repoSlug !== '' && repoSlug !== '.' && repoSlug !== '..';
+}, 'O nome do repositório não pode ser usado como pasta');
 
 export const ToolInputSchema = z.object({ url: GitHubToolUrlSchema }).strict();
 
