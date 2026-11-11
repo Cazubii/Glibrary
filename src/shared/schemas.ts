@@ -359,7 +359,8 @@ export const TerminalCodespaceActionInputSchema = z.object({
 
 export const TerminalCodespaceCreateInputSchema = z.object({
   repoId: z.string().min(1).max(128),
-  machine: z.string().min(1).max(128)
+  machine: z.string().min(1).max(128),
+  devcontainerPath: z.string().max(512).optional()
 }).strict();
 
 export const TerminalTempCleanupInputSchema = TerminalRepoInputSchema;
