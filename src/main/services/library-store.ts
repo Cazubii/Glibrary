@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { join } from 'path';
 import { homedir } from 'os';
 import { z } from 'zod';
-import type { Agent, AgentProfile, BaseItem, Kit, LibraryFile, ProjectRef, Repo, Settings, Skill, TopRepos, UsageEvent } from '../../shared/types';
+import type { Agent, AgentProfile, BaseItem, Kit, LibraryFile, ProjectRef, Repo, Settings, Skill, ToolEntry, TopRepos, UsageEvent } from '../../shared/types';
 import {
   AgentProfileInputSchema,
   AgentProfileSchema,
@@ -16,6 +16,8 @@ import {
   RepoSchema,
   SettingsPatchSchema,
   SkillSchema,
+  ToolEntrySchema,
+  ToolInputSchema,
   TopReposSchema
 } from '../../shared/schemas';
 import { normalizeTag, normalizeTagList, tagKey } from '../../shared/tags';
@@ -24,6 +26,23 @@ import { applyStartupCorrections } from '../../shared/status';
 const LIBRARY_FILE = 'library.json';
 const BACKUP_FILE = 'library.backup.json';
 const TMP_FILE = 'library.json.tmp';
+
+const BUILTIN_TOOLS: ToolEntry[] = [
+  {
+    id: 'builtin-omniroute',
+    name: 'OmniRoute',
+    gitUrl: 'https://github.com/cheaper-inference/OmniRoute',
+    source: 'builtin',
+    createdAt: '2026-11-11T00:00:00.000Z'
+  },
+  {
+    id: 'builtin-habblaud',
+    name: 'Habblaud',
+    gitUrl: 'https://github.com/marmottajr/habblaud',
+    source: 'builtin',
+    createdAt: '2026-11-11T00:00:00.000Z'
+  }
+];
 
 export function defaultSettings(reposRoot: string): Settings {
   return {
@@ -42,7 +61,7 @@ export function defaultSettings(reposRoot: string): Settings {
 }
 
 export function emptyLibrary(reposRoot: string): LibraryFile {
-  return { version: 2, repos: [], skills: [], agents: [], bases: [], projects: [], kits: [], usage: [], agentProfiles: [], topRepos: { fetchedAt: '', repos: [] }, topRepos7: { fetchedAt: '', repos: [], windowDays: 7 }, settings: defaultSettings(reposRoot) };
+  return { version: 2, repos: [], skills: [], agents: [], bases: [], projects: [], kits: [], usage: [], agentProfiles: [], tools: [], topRepos: { fetchedAt: '', repos: [] }, topRepos7: { fetchedAt: '', repos: [], windowDays: 7 }, settings: defaultSettings(reposRoot) };
 }
 
 export function migrateLibrary(raw: unknown): LibraryFile {
@@ -123,6 +142,7 @@ export class LibraryStore {
     }
     if (raw == null) {
       this.data = emptyLibrary(this.data.settings.reposRoot);
+      this.seedBuiltinTools();
       await this.save();
       return this.data;
     }
@@ -142,7 +162,19 @@ export class LibraryStore {
         await this.save();
       }
     }
+    if (this.seedBuiltinTools()) await this.save();
     return this.data;
+  }
+
+  private seedBuiltinTools(): boolean {
+    let added = false;
+    for (const builtin of BUILTIN_TOOLS) {
+      if (!this.data.tools.some((tool) => tool.id === builtin.id)) {
+        this.data.tools.push({ ...builtin });
+        added = true;
+      }
+    }
+    return added;
   }
 
   async save(): Promise<void> {
@@ -270,6 +302,42 @@ export class LibraryStore {
     const index = this.data.agentProfiles.findIndex((item) => item.id === id);
     if (index === -1) throw new Error(`Perfil não encontrado: ${id}`);
     this.data.agentProfiles.splice(index, 1);
+    await this.save();
+  }
+
+  listTools(): ToolEntry[] {
+    return this.data.tools;
+  }
+
+  async addTool(url: string): Promise<ToolEntry> {
+    const input = ToolInputSchema.parse({ url });
+    const normalizedUrl = input.url.replace(/\/$/, '');
+    const repoSlug = normalizedUrl.split('/').at(-1)?.replace(/\.git$/i, '') ?? '';
+    const duplicate = this.data.tools.some((tool) => {
+      const existingSlug = tool.gitUrl.replace(/\/$/, '').split('/').at(-1)?.replace(/\.git$/i, '') ?? '';
+      return existingSlug.toLowerCase() === repoSlug.toLowerCase();
+    });
+    if (duplicate) throw new Error(`J\u00e1 existe uma ferramenta com o nome de pasta "${repoSlug}"`);
+
+    const tool = ToolEntrySchema.parse({
+      id: randomUUID(),
+      name: repoSlug,
+      gitUrl: normalizedUrl,
+      source: 'custom',
+      createdAt: new Date().toISOString()
+    });
+    this.data.tools.push(tool);
+    await this.save();
+    return tool;
+  }
+
+  async removeTool(id: string): Promise<void> {
+    const index = this.data.tools.findIndex((tool) => tool.id === id);
+    if (index === -1) throw new Error(`Ferramenta n\u00e3o encontrada: ${id}`);
+    if (this.data.tools[index]?.source === 'builtin') {
+      throw new Error('Ferramentas integradas n\u00e3o podem ser removidas');
+    }
+    this.data.tools.splice(index, 1);
     await this.save();
   }
 
