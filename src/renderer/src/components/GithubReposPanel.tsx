@@ -37,6 +37,9 @@ export default function GithubReposPanel({ knownUrls, onAdded, onError, onOpenDa
       await loadRepos(page, force);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : String(error));
+      void loadAccount(true).then((account) => {
+        if (account.state === 'error') setLoadError(account.message);
+      }).catch(() => undefined);
     } finally {
       setLoadingPage(null);
     }
