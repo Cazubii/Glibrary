@@ -173,10 +173,10 @@ export class ToolManager {
 
       hooks.onOut = (data) => this.capture(entry, 'out', data);
       hooks.onErr = (data) => this.capture(entry, 'err', data);
-      hooks.onExit = (code, signal) => { void this.finish(entry, code, signal); };
+      hooks.onExit = (code) => { void this.finish(entry, code); };
       hooks.onError = (error) => {
         this.appendLine(entry, 'err', error.message);
-        void this.finish(entry, 1, null);
+        void this.finish(entry, 1);
       };
       proc.stdout?.on('data', hooks.onOut);
       proc.stderr?.on('data', hooks.onErr);
@@ -204,7 +204,7 @@ export class ToolManager {
         resolve();
       });
     });
-    if (!entry.finalized) await this.finish(entry, null, 'SIGTERM');
+    if (!entry.finalized) await this.finish(entry, null);
   }
 
   async stopAll(): Promise<void> {
@@ -234,24 +234,25 @@ export class ToolManager {
   private checkCommand(command: string, timeoutMs: number): Promise<boolean> {
     return new Promise((resolve) => {
       let settled = false;
-      let proc: ChildProcess;
+      let proc: ChildProcess | null;
+      try { proc = this.spawnFn(command, { cwd: this.toolsRoot, shell: true, windowsHide: true }); }
+      catch { proc = null; }
+      if (proc == null) {
+        resolve(false);
+        return;
+      }
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        try { proc.kill('SIGTERM'); } catch { /* o processo pode já ter encerrado */ }
+        resolve(false);
+      }, timeoutMs);
       const finish = (available: boolean): void => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
         resolve(available);
       };
-      let timer: ReturnType<typeof setTimeout>;
-      try {
-        proc = this.spawnFn(command, { cwd: this.toolsRoot, shell: true, windowsHide: true });
-      } catch {
-        resolve(false);
-        return;
-      }
-      timer = setTimeout(() => {
-        try { proc.kill('SIGTERM'); } catch { /* o processo pode já ter encerrado */ }
-        finish(false);
-      }, timeoutMs);
       proc.on('error', () => finish(false));
       proc.on('exit', (code) => finish(code === 0));
     });
@@ -288,7 +289,7 @@ export class ToolManager {
     this.emit(IpcChannels.toolRunsLog, { id: entry.run.id, line });
   }
 
-  private async finish(entry: RunEntry, code: number | null, _signal: string | null): Promise<void> {
+  private async finish(entry: RunEntry, code: number | null): Promise<void> {
     if (entry.finalized) return;
     entry.finalized = true;
     this.flushPending(entry);
