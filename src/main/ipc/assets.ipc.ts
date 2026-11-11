@@ -1,14 +1,17 @@
-import { ipcMain, shell, dialog, BrowserWindow } from 'electron';
+import { ipcMain, shell, dialog, BrowserWindow, safeStorage } from 'electron';
 import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
 import { mkdir, stat, writeFile } from 'fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'path';
 import { z } from 'zod';
-import type { Agent, BaseItem, IpcResult, Kit, ProjectRef, Skill, SkillsScanResult, AgentsScanResult, TopRepos, UsageEvent } from '../../shared/types';
+import type { Agent, BaseItem, GithubAccountStatus, GithubRepoPage, IpcResult, Kit, LibraryFile, ProjectRef, Repo, Settings, Skill, SkillsScanResult, AgentsScanResult, TopRepos, UsageEvent } from '../../shared/types';
 import { IpcChannels } from '../../shared/ipc-channels';
 import {
   AgentUpdateInputSchema,
+  AddByUrlInputSchema,
   BaseUpdateInputSchema,
+  GithubRepoPageInputSchema,
+  GithubTokenInputSchema,
   KitApplyInputSchema,
   ProjectUpdateInputSchema,
   SettingsPatchSchema,
@@ -20,9 +23,10 @@ import {
 import { isSafeDirectoryName } from '../../shared/validators';
 import type { LibraryStore } from '../services/library-store';
 import type { GitService } from '../services/git-service';
-import { isValidGitUrl } from '../../shared/git-utils';
+import { isValidGitUrl, normalizeGitUrl, parseGithubRepo } from '../../shared/git-utils';
 import { discoverAgents, discoverSkills } from '../services/skills-scan';
-import { decodeToken, fetchJson, fetchText } from '../services/github-api';
+import { decodeToken, encodeToken, fetchJson, fetchRepoMeta, fetchText } from '../services/github-api';
+import { fetchGithubAccount, fetchGithubRepos, githubAccountError } from '../services/github-account';
 import { fetchTopRepos, searchGithubRepos } from '../services/top-repos';
 import type { GithubSearchResponse } from '../services/top-repos';
 import { searchAgentRepos } from '../services/agent-search';
@@ -62,17 +66,131 @@ function fail(error: unknown): IpcResult<never> {
   return { ok: false, error: error instanceof Error ? error.message : String(error) };
 }
 
+function redactSettings(settings: Settings): Settings {
+  return { ...settings, githubToken: undefined };
+}
+
+function redactLibrary(library: LibraryFile): LibraryFile {
+  return { ...library, settings: redactSettings(library.settings) };
+}
+
 export function registerAssetsIpc(store: LibraryStore, git: GitService): void {
-  ipcMain.handle(IpcChannels.libraryGet, async () => ok(store.get()));
-  ipcMain.handle(IpcChannels.settingsGet, async () => ok(store.getSettings()));
+  ipcMain.handle(IpcChannels.libraryGet, async () => ok(redactLibrary(store.get())));
+  ipcMain.handle(IpcChannels.settingsGet, async () => ok(redactSettings(store.getSettings())));
   ipcMain.handle(IpcChannels.settingsSet, async (_event, raw: unknown) => {
-    try { return ok(await store.updateSettings(SettingsPatchSchema.parse(raw))); } catch (e) { return fail(e); }
+    try {
+      const patch = SettingsPatchSchema.parse(raw);
+      if (patch.githubToken != null && patch.githubToken !== '') {
+        patch.githubToken = encodeToken(patch.githubToken);
+      }
+      const settings = await store.updateSettings(patch);
+      return ok(redactSettings(settings));
+    } catch (e) {
+      return fail(e);
+    }
   });
   ipcMain.handle(IpcChannels.dialogPickFolder, async (): Promise<IpcResult<string | null>> => {
     try { const win = BrowserWindow.getFocusedWindow(); const options = { properties: ['openDirectory' as const] }; const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options); return ok(result.canceled ? null : result.filePaths[0] ?? null); } catch (e) { return fail(e); }
   });
   ipcMain.handle(IpcChannels.assetsGet, async (): Promise<IpcResult<Pick<ReturnType<LibraryStore['get']>, 'skills' | 'agents' | 'bases' | 'projects' | 'kits' | 'usage'>>> => {
     try { const { skills, agents, bases, projects, kits, usage } = store.get(); return ok({ skills, agents, bases, projects, kits, usage }); } catch (e) { return fail(e); }
+  });
+
+  ipcMain.handle(IpcChannels.githubAccountStatus, async (): Promise<IpcResult<GithubAccountStatus>> => {
+    const checkedAt = new Date().toISOString();
+    try {
+      const token = decodeToken(store.getSettings().githubToken);
+      if (!token) return ok({ state: 'disconnected', checkedAt });
+      try {
+        return ok({ state: 'connected', account: await fetchGithubAccount(token), checkedAt });
+      } catch (error) {
+        return ok(githubAccountError(error, checkedAt));
+      }
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  ipcMain.handle(IpcChannels.githubAccountConnect, async (_event, raw: unknown): Promise<IpcResult<GithubAccountStatus>> => {
+    const checkedAt = new Date().toISOString();
+    try {
+      const { token } = GithubTokenInputSchema.parse(raw);
+      if (!safeStorage.isEncryptionAvailable()) {
+        return ok({
+          state: 'error',
+          reason: 'unknown',
+          message: 'O armazenamento seguro do sistema não está disponível.',
+          checkedAt
+        });
+      }
+      try {
+        const account = await fetchGithubAccount(token);
+        await store.updateSettings({ githubToken: encodeToken(token) });
+        return ok({ state: 'connected', account, checkedAt });
+      } catch (error) {
+        return ok(githubAccountError(error, checkedAt));
+      }
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  ipcMain.handle(IpcChannels.githubAccountDisconnect, async (): Promise<IpcResult<GithubAccountStatus>> => {
+    try {
+      await store.updateSettings({ githubToken: '' });
+      return ok({ state: 'disconnected', checkedAt: new Date().toISOString() });
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  ipcMain.handle(IpcChannels.githubReposList, async (_event, raw: unknown): Promise<IpcResult<GithubRepoPage>> => {
+    try {
+      const { page } = GithubRepoPageInputSchema.parse(raw);
+      const token = decodeToken(store.getSettings().githubToken);
+      if (!token) throw new Error('Conecte sua conta GitHub no Dashboard para listar os repositórios.');
+      return ok(await fetchGithubRepos(token, page));
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  ipcMain.handle(IpcChannels.repoAddByUrl, async (_event, raw: unknown): Promise<IpcResult<Repo>> => {
+    try {
+      const input = AddByUrlInputSchema.parse(raw);
+      if (input.clone) throw new Error('Adicione a referência remota sem clonar; o clone é uma ação separada.');
+      const url = input.url.trim();
+      if (!isValidGitUrl(url)) throw new Error('URL Git inválida.');
+      const github = parseGithubRepo(url);
+      if (!github) throw new Error('Informe um repositório GitHub no formato owner/repo.');
+      const normalized = normalizeGitUrl(url);
+      const duplicate = store.listRepos().find((repo) => repo.remoteUrl && normalizeGitUrl(repo.remoteUrl) === normalized);
+      if (duplicate) throw new Error(`Já está na biblioteca: ${duplicate.name}`);
+      const repo: Repo = {
+        id: randomUUID(),
+        name: input.name ?? github.repo,
+        owner: github.owner,
+        remoteUrl: url,
+        status: 'not_cloned',
+        tags: [],
+        favorite: false,
+        addedAt: new Date().toISOString()
+      };
+      try {
+        const meta = await fetchRepoMeta(github.owner, github.repo, {
+          token: decodeToken(store.getSettings().githubToken)
+        });
+        repo.description = meta.description;
+        repo.stars = meta.stars;
+        repo.language = meta.language;
+        repo.topics = meta.topics;
+      } catch {
+        // O cadastro remoto continua válido mesmo sem metadados adicionais.
+      }
+      return ok(await store.addRepo(repo));
+    } catch (error) {
+      return fail(error);
+    }
   });
 
   ipcMain.handle(IpcChannels.skillsScan, async (): Promise<IpcResult<SkillsScanResult>> => {
