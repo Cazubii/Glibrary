@@ -122,7 +122,7 @@ export function registerTerminalIpc(
   ipcMain.handle(IpcChannels.terminalCodespaceCreate, async (_event, raw: unknown): Promise<IpcResult<GithubCodespace>> => {
     try {
       const input = TerminalCodespaceCreateInputSchema.parse(raw);
-      return ok(await codespaces.create(requireRepo(store, input.repoId), input.machine));
+      return ok(await codespaces.create(requireRepo(store, input.repoId), input.machine, input.devcontainerPath));
     } catch (error) { return fail(error); }
   });
 
