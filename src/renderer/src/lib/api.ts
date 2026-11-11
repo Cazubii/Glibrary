@@ -150,6 +150,8 @@ export const api = {
     unwrap(window.api.invoke(IpcChannels.terminalTempStatus, { repoId })),
   terminalTempCleanup: (repoId: string): Promise<TemporaryCheckoutStatus> =>
     unwrap(window.api.invoke(IpcChannels.terminalTempCleanup, { repoId })),
+  terminalTempOpen: (repoId: string): Promise<null> =>
+    unwrap(window.api.invoke(IpcChannels.terminalTempOpen, { repoId })),
   onTerminalOutput: (listener: (payload: TerminalOutputEvent) => void) =>
     window.api.on(IpcChannels.terminalOutput, (payload: unknown) => listener(payload as TerminalOutputEvent)),
   onTerminalExit: (listener: (payload: TerminalExitEvent) => void) =>
