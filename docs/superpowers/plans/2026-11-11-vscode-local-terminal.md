@@ -19,6 +19,7 @@
 - Create `src/main/ipc/terminal.ipc.ts`: register session lifecycle/input handlers.
 - Modify `src/main/index.ts`: instantiate and register terminal manager; close sessions on quit.
 - Create `src/renderer/src/pages/RepositoryDetailPage.tsx`: reachable repository detail shell with the docked terminal.
+- Modify `src/renderer/src/components/GithubReposPanel.tsx`: an explicit “Abrir projeto” action for an account repository.
 - Modify `src/renderer/src/App.tsx` and `src/renderer/src/pages/AssetLibraryPage.tsx`: route from an account repository to detail and back.
 - Modify `src/renderer/src/lib/api.ts`: typed terminal wrappers and output subscription.
 - Create `src/renderer/src/components/RepoTerminal.tsx`: lazy xterm viewport, tabs, split panes, toolbar and keyboard behavior.
@@ -77,8 +78,9 @@ export interface TerminalStartInput {
 
 **Files:** create `src/renderer/src/pages/RepositoryDetailPage.tsx`; modify `src/renderer/src/App.tsx`, `src/renderer/src/pages/AssetLibraryPage.tsx`
 
-- [ ] Add `onOpenRepository(repoId)` to `AssetLibraryPage` and pass it to the account repository panel. After the user adds a remote-only repository, navigate to the detail page for that saved repo id.
-- [ ] Add a back action from `RepositoryDetailPage` to the library and render repo name, owner, visibility, description, and the terminal toggle; keep process execution controls out of this page.
+- [ ] Add `onOpenRepository(repoId)` to `AssetLibraryPage` and pass it to the account repository panel. The “Abrir projeto” action first ensures the selected remote repository is saved with clone disabled, then opens that saved repo id.
+- [ ] Load the selected `Repo` from `api.libraryGet()` in `RepositoryDetailPage`; display a back action, name, owner, visibility, description, and the docked terminal.
+- [ ] Keep process execution controls out of `RepositoryDetailPage`; it only displays repository metadata and the terminal toggle.
 - [ ] Render the resizable dock at the bottom while keeping repository details visible. Hiding/reopening reloads session summaries from main and does not orphan PTYs.
 - [ ] Verify a remote-only repo detail opens without a local path and directs the user to a remote provider or explicit temporary checkout.
 - [ ] Verify local shell startup, two concurrent sessions, split/focus, resize, copy/paste, clear/search, hide/re-open, explicit close, app quit cleanup, missing local path, and repeated open/close.
