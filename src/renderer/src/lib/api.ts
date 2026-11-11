@@ -1,5 +1,7 @@
 import type {
   DetectionResult,
+  GithubAccountStatus,
+  GithubRepoPage,
   IpcResult,
   LibraryFile,
   Agent,
@@ -109,6 +111,14 @@ export const api = {
         limit
       })
     ),
+  githubAccountStatus: (): Promise<GithubAccountStatus> =>
+    unwrap(window.api.invoke(IpcChannels.githubAccountStatus)),
+  githubAccountConnect: (token: string): Promise<GithubAccountStatus> =>
+    unwrap(window.api.invoke(IpcChannels.githubAccountConnect, { token })),
+  githubAccountDisconnect: (): Promise<GithubAccountStatus> =>
+    unwrap(window.api.invoke(IpcChannels.githubAccountDisconnect)),
+  githubReposList: (page: number): Promise<GithubRepoPage> =>
+    unwrap(window.api.invoke(IpcChannels.githubReposList, { page })),
   topReposRefresh: (windowDays?: number): Promise<TopRepos> =>
     unwrap(window.api.invoke(IpcChannels.topReposRefresh, { windowDays })),
   onTopReposChanged: (listener: (payload: IpcResult<TopRepos>) => void) =>
