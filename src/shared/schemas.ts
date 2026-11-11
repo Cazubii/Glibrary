@@ -315,6 +315,14 @@ export const AddByUrlInputSchema = z.object({
   name: z.string().min(1).optional()
 })
 
+export const GithubTokenInputSchema = z.object({
+  token: z.string().trim().min(1).max(512)
+}).strict();
+
+export const GithubRepoPageInputSchema = z.object({
+  page: z.number().int().min(1).max(100000)
+}).strict();
+
 export const AddLocalInputSchema = z.object({
   path: z.string().min(1)
 })
