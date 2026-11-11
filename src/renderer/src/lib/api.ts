@@ -2,6 +2,13 @@ import type {
   DetectionResult,
   GithubAccountStatus,
   GithubRepoPage,
+  GithubCodespace,
+  GithubCodespaceMachine,
+  TemporaryCheckoutStatus,
+  TerminalExitEvent,
+  TerminalOutputEvent,
+  TerminalSessionSnapshot,
+  TerminalStartInput,
   IpcResult,
   LibraryFile,
   Agent,
@@ -119,6 +126,34 @@ export const api = {
     unwrap(window.api.invoke(IpcChannels.githubAccountDisconnect)),
   githubReposList: (page: number): Promise<GithubRepoPage> =>
     unwrap(window.api.invoke(IpcChannels.githubReposList, { page })),
+  terminalList: (repoId: string): Promise<TerminalSessionSnapshot[]> =>
+    unwrap(window.api.invoke(IpcChannels.terminalList, { repoId })),
+  terminalStart: (input: TerminalStartInput): Promise<TerminalSessionSnapshot> =>
+    unwrap(window.api.invoke(IpcChannels.terminalStart, input)),
+  terminalWrite: (sessionId: string, data: string): Promise<null> =>
+    unwrap(window.api.invoke(IpcChannels.terminalWrite, { sessionId, data })),
+  terminalResize: (sessionId: string, cols: number, rows: number): Promise<null> =>
+    unwrap(window.api.invoke(IpcChannels.terminalResize, { sessionId, cols, rows })),
+  terminalClose: (sessionId: string): Promise<null> =>
+    unwrap(window.api.invoke(IpcChannels.terminalClose, { sessionId })),
+  terminalClear: (sessionId: string): Promise<null> =>
+    unwrap(window.api.invoke(IpcChannels.terminalClear, { sessionId })),
+  terminalCodespacesList: (repoId: string): Promise<{ codespaces: GithubCodespace[]; machines: GithubCodespaceMachine[] }> =>
+    unwrap(window.api.invoke(IpcChannels.terminalCodespacesList, { repoId })),
+  terminalCodespaceStart: (repoId: string, codespaceName: string): Promise<null> =>
+    unwrap(window.api.invoke(IpcChannels.terminalCodespaceStart, { repoId, codespaceName })),
+  terminalCodespaceStop: (repoId: string, codespaceName: string): Promise<null> =>
+    unwrap(window.api.invoke(IpcChannels.terminalCodespaceStop, { repoId, codespaceName })),
+  terminalCodespaceCreate: (repoId: string, machine: string): Promise<GithubCodespace> =>
+    unwrap(window.api.invoke(IpcChannels.terminalCodespaceCreate, { repoId, machine })),
+  terminalTempStatus: (repoId: string): Promise<TemporaryCheckoutStatus> =>
+    unwrap(window.api.invoke(IpcChannels.terminalTempStatus, { repoId })),
+  terminalTempCleanup: (repoId: string): Promise<TemporaryCheckoutStatus> =>
+    unwrap(window.api.invoke(IpcChannels.terminalTempCleanup, { repoId })),
+  onTerminalOutput: (listener: (payload: TerminalOutputEvent) => void) =>
+    window.api.on(IpcChannels.terminalOutput, (payload: unknown) => listener(payload as TerminalOutputEvent)),
+  onTerminalExit: (listener: (payload: TerminalExitEvent) => void) =>
+    window.api.on(IpcChannels.terminalExit, (payload: unknown) => listener(payload as TerminalExitEvent)),
   topReposRefresh: (windowDays?: number): Promise<TopRepos> =>
     unwrap(window.api.invoke(IpcChannels.topReposRefresh, { windowDays })),
   onTopReposChanged: (listener: (payload: IpcResult<TopRepos>) => void) =>
