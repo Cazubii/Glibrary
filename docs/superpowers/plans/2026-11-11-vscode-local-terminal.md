@@ -24,7 +24,7 @@
 - Create `src/renderer/src/components/RepoTerminal.tsx`: lazy xterm viewport, tabs, split panes, toolbar and keyboard behavior.
 - Do not use `RepoDetailPage.tsx` in this plan: the active `App.tsx` does not route to it and its process actions depend on separate, unregistered IPC. The new focused `RepositoryDetailPage.tsx` owns repository summary plus terminal.
 
-## Task 1: Dependencies and terminal contracts
+### Task 1: Dependencies and terminal contracts
 
 **Files:** `package.json`, `pnpm-lock.yaml`, `electron-builder.yml`, shared types/schemas/channels.
 
@@ -53,7 +53,7 @@ export interface TerminalStartInput {
 
 - [ ] Add channels `terminal:list`, `terminal:start`, `terminal:write`, `terminal:resize`, `terminal:close`, `terminal:output`, and `terminal:exit`; validate session/repo ids, dimensions (20–500 columns, 5–200 rows), and input string length (maximum 16 KiB per IPC message).
 
-## Task 2: Main-process PTY service and lifecycle
+### Task 2: Main-process PTY service and lifecycle
 
 **Files:** create `src/main/services/terminal-manager.ts`, create `src/main/ipc/terminal.ipc.ts`, modify `src/main/index.ts`
 
@@ -63,7 +63,7 @@ export interface TerminalStartInput {
 - [ ] Close kills exactly one PTY; app `before-quit` closes all PTYs and waits up to five seconds before forced termination.
 - [ ] Register the IPC handlers using the existing `IpcResult<T>` success/error convention. Never allow renderer-supplied executable paths or cwd values; resolve shell and cwd in main from app configuration and stored repo data.
 
-## Task 3: Lazy xterm renderer
+### Task 3: Lazy xterm renderer
 
 **Files:** create `src/renderer/src/components/RepoTerminal.tsx`, modify `src/renderer/src/lib/api.ts`
 
@@ -73,7 +73,7 @@ export interface TerminalStartInput {
 - [ ] Copy uses selected text; Ctrl+C with a selection copies, Ctrl+C without a selection writes the interrupt byte. Paste uses the clipboard API and xterm paste API. Keep search scoped to xterm scrollback and use xterm link provider for URLs.
 - [ ] Apply the existing Glibrary Steam theme through xterm's theme options and load the xterm CSS from the component.
 
-## Task 4: Reachable dock integration and verification
+### Task 4: Reachable dock integration and verification
 
 **Files:** create `src/renderer/src/pages/RepositoryDetailPage.tsx`; modify `src/renderer/src/App.tsx`, `src/renderer/src/pages/AssetLibraryPage.tsx`
 
