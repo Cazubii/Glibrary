@@ -17,7 +17,7 @@
 - Modify `src/shared/ipc-channels.ts`: add account and repository channels.
 - Modify `src/main/services/github-api.ts`: preserve HTTP status and classify auth, permission, rate-limit, and network errors.
 - Create `src/main/services/github-account.ts`: map GitHub user and repository API responses to narrow app types.
-- Modify `src/main/ipc/assets.ipc.ts`: connect/status/disconnect/list handlers; encrypt tokens; redact tokens from library/settings responses.
+- Modify `src/main/ipc/assets.ipc.ts`: connect/status/disconnect/list handlers and the active `repoAddByUrl` handler; encrypt tokens; redact tokens from library/settings responses.
 - Modify `src/renderer/src/lib/api.ts`: typed wrappers for the new IPC calls.
 - Modify `src/renderer/src/store/library.ts`: keep account state and one repository-page cache in memory.
 - Create `src/renderer/src/components/GithubAccountCard.tsx`: Dashboard status, connect form, refresh, and disconnect.
@@ -81,6 +81,7 @@ export interface GithubRepoPage {
 - [ ] Add an error type in `github-api.ts` that preserves HTTP status and classifies 401 as invalid credentials, 403/429 as permission or rate limit using response headers/body, and transport failures as network errors.
 - [ ] Create service methods `fetchGithubAccount(token)` for `GET /user` and `fetchGithubRepos(token, page)` for `GET /user/repos?visibility=all&affiliation=owner,collaborator,organization_member&sort=updated&per_page=50&page=<page>`. Map only the fields in `GithubAccountProfile` and `GithubAccountRepo`; set `hasNextPage` when the response contains 50 items.
 - [ ] Register IPC handlers in the already active `registerAssetsIpc` path. Connect validates the token with `GET /user` before encrypting it with `encodeToken` and saving it. Disconnect stores an empty credential. Status decodes the stored token and returns `disconnected` when absent.
+- [ ] Register `IpcChannels.repoAddByUrl` in this active path for `clone: false`: validate the GitHub URL, deduplicate normalized URLs, create a `Repo` with `status: 'not_cloned'`, and persist it with `LibraryStore.addRepo`. Reject `clone: true` in this handler; the account catalog only adds remote references.
 - [ ] Redact `githubToken` from `libraryGet`, `settingsGet`, and `settingsSet` responses. Ensure the active `settingsSet` handler encrypts a submitted token and rejects token writes when `safeStorage.isEncryptionAvailable()` is false.
 - [ ] Keep credentials out of logs and return error categories without returning request headers or token text.
 - [ ] The fine-grained token setup instructions must request only repository Metadata read for repository listing; the authenticated-user endpoint requires no additional fine-grained permission. Users only see private repositories granted to that token.
@@ -111,7 +112,7 @@ export interface GithubRepoPage {
 - [ ] Add a two-option selector inside the Projetos section: “Projetos locais” and “Repositórios da conta”. The local tab keeps the current project list and add-folder action unchanged.
 - [ ] Require a connected account for the remote tab; otherwise show the account connection action/state.
 - [ ] Show owner/name, public/private badge, description, language, stars, and last update. Search filters loaded pages; “Carregar mais” appends the next page and deduplicates by numeric repository id.
-- [ ] Compare normalized remote URLs against the existing library repository and base URLs. Mark matches “Na biblioteca”; offer “Adicionar à biblioteca” for non-matches using the existing remote-only add route with clone disabled. Never auto-clone or bulk-import.
+- [ ] Compare normalized remote URLs against the existing library repository and base URLs. Mark matches “Na biblioteca”; offer “Adicionar à biblioteca” for non-matches through `api.repoAddByUrl(url, false, fullName)`. Never auto-clone or bulk-import.
 - [ ] Show loading, empty, and retry states. Keep the list virtual-free unless observed account sizes require virtualization; page size 50 bounds memory and rendering.
 
 ## Task 6: Verification
@@ -127,5 +128,5 @@ export interface GithubRepoPage {
 - Dashboard account identity and error states map to Tasks 2–4.
 - All repositories available to the app credential, pagination, deduplication, and no-clone behavior map to Tasks 2, 3, and 5.
 - Existing local projects remain independent and unchanged in Task 5.
-- Token encryption/redaction is included in Task 2 because the current active IPC path is `registerAssetsIpc`, whose settings handler currently stores settings directly.
+- Token encryption/redaction and remote-only repository creation are included in Task 2 because the current active IPC path is `registerAssetsIpc`; the standalone repo IPC module is not registered by `src/main/index.ts`.
 - No automated test files or test commands are added per the standing instruction.
