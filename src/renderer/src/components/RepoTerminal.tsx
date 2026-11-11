@@ -133,6 +133,22 @@ export default function RepoTerminal({ repo, onHide, onError }: Props): React.JS
   const visibleIds = splitIds?.filter((id) => sessions.some((session) => session.id === id)) ?? [];
   const activeControls = activeId ? controls.current.get(activeId) : undefined;
 
+  const refreshSessions = useCallback(async (): Promise<TerminalSessionSnapshot[]> => {
+    const latest = await api.terminalList(repo.id);
+    setSessions(latest);
+    return latest;
+  }, [repo.id]);
+
+  const focusSession = async (sessionId: string): Promise<void> => {
+    try {
+      await refreshSessions();
+    } catch (error) {
+      onError(error instanceof Error ? error.message : String(error));
+    }
+    setActiveId(sessionId);
+    setSplitIds(null);
+  };
+
   const startSession = async (
     selectedProvider: TerminalProvider,
     codespaceName?: string
@@ -277,6 +293,8 @@ export default function RepoTerminal({ repo, onHide, onError }: Props): React.JS
 
   const addSplit = async (): Promise<void> => {
     if (!activeSession || activeSession.state !== 'running') return;
+    try { await refreshSessions(); }
+    catch (error) { onError(error instanceof Error ? error.message : String(error)); }
     const next = await startSession(activeSession.provider, activeSession.codespaceName);
     if (next) setSplitIds([activeSession.id, next.id]);
   };
@@ -405,7 +423,7 @@ export default function RepoTerminal({ repo, onHide, onError }: Props): React.JS
       {sessions.length > 0 && <>
         <div className="flex min-h-10 items-center gap-1 overflow-x-auto border-b border-steam-elevated/70 px-2">
           {sessions.map((session) => (
-            <button key={session.id} type="button" onClick={() => { setActiveId(session.id); setSplitIds(null); }} className={'flex shrink-0 items-center gap-2 rounded-t px-3 py-2 text-[11px] ' + (activeId === session.id ? 'border-b-2 border-steam-accent bg-steam-panel text-steam-text' : 'text-steam-text/45 hover:bg-steam-panel')}>
+            <button key={session.id} type="button" onClick={() => void focusSession(session.id)} className={'flex shrink-0 items-center gap-2 rounded-t px-3 py-2 text-[11px] ' + (activeId === session.id ? 'border-b-2 border-steam-accent bg-steam-panel text-steam-text' : 'text-steam-text/45 hover:bg-steam-panel')}>
               <span className={'h-1.5 w-1.5 rounded-full ' + (session.state === 'running' ? 'bg-emerald-400' : session.state === 'error' ? 'bg-steam-error' : 'bg-steam-text/30')} />
               <span>{session.title}</span>
               {session.exitCode != null && <span className="text-[9px] opacity-50">({session.exitCode})</span>}
