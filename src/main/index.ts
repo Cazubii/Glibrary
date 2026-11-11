@@ -3,6 +3,14 @@ import { join } from 'path';
 import { LibraryStore } from './services/library-store';
 import { GitService } from './services/git-service';
 import { registerAssetsIpc, refreshTopReposAndBroadcast } from './ipc/assets.ipc';
+import { registerTerminalIpc } from './ipc/terminal.ipc';
+import { TerminalManager } from './services/terminal-manager';
+import { CodespaceService } from './services/codespace-service';
+import { TemporaryCheckoutService } from './services/temporary-checkout';
+
+let terminalManager: TerminalManager | null = null;
+let shutdownStarted = false;
+let shutdownComplete = false;
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -25,6 +33,20 @@ void app.whenReady().then(async () => {
   const store = new LibraryStore(app.getPath('userData'), join(app.getPath('home'), 'Glibrary'));
   await store.load();
   registerAssetsIpc(store, new GitService());
+  const codespaces = new CodespaceService();
+  const temporaryCheckouts = new TemporaryCheckoutService(join(app.getPath('userData'), 'terminal-checkouts.json'));
+  terminalManager = new TerminalManager(
+    store,
+    codespaces,
+    temporaryCheckouts,
+    (channel, payload) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed()) window.webContents.send(channel, payload);
+      }
+    },
+    app.getPath('home')
+  );
+  registerTerminalIpc(store, terminalManager, codespaces, temporaryCheckouts);
   createWindow();
   // Atualiza os top repos do GitHub em segundo plano; erros ficam silenciosos
   // (offline/limite da API não impedem o uso — a lista anterior continua na aba).
@@ -39,3 +61,17 @@ void app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+
+app.on('before-quit', (event) => {
+  if (shutdownComplete) return;
+  event.preventDefault();
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+  void (async () => {
+    try { await terminalManager?.closeAll(); }
+    finally {
+      shutdownComplete = true;
+      app.quit();
+    }
+  })();
+});
