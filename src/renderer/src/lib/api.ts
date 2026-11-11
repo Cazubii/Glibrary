@@ -28,6 +28,7 @@ import type {
 } from '../../../shared/types';
 import type { ToolStatus as SystemToolStatus } from '../../../shared/tools';
 import { IpcChannels } from '../../../shared/ipc-channels';
+import type { DashboardAccount } from '../../../shared/github-dashboard';
 
 async function unwrap<T>(promise: Promise<unknown>): Promise<T> {
   const result = (await promise) as IpcResult<T>;
@@ -86,6 +87,8 @@ export const api = {
     ),
   dashboardExport: (content: string, suggestedName = 'dashboard.md'): Promise<string | null> =>
     unwrap(window.api.invoke(IpcChannels.dashboardExport, { content, suggestedName })),
+  dashboardAccount: (): Promise<DashboardAccount> =>
+    unwrap<DashboardAccount>(window.api.invoke(IpcChannels.dashboardAccount)),
   settingsSet: (patch: Partial<Settings>): Promise<Settings> =>
     unwrap(window.api.invoke(IpcChannels.settingsSet, patch)),
   baseAdd: (input: Pick<BaseItem, 'name'> & Partial<Pick<BaseItem, 'remoteUrl' | 'localPath' | 'description'>>): Promise<BaseItem> =>

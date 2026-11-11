@@ -18,7 +18,7 @@ type PushToast = (message: string, kind?: ToastKind) => void;
 export default function App(): React.JSX.Element {
   const { loaded, error, load, settings, updateSettings } = useLibraryStore();
   const theme = settings?.theme ?? 'dark';
-  const [page, setPage] = useState<Page>('library');
+  const [page, setPage] = useState<Page>('dashboard');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const pendingSearch = useRef(false);
   const pushToast: PushToast = useCallback((message, kind = 'error') => {
@@ -69,8 +69,8 @@ export default function App(): React.JSX.Element {
       <Library size={22} className="text-steam-accent"/>
       <span className="text-lg font-bold tracking-wide">GLIBRARY</span>
       <nav className="ml-6 flex gap-1 text-sm">
-        <button type="button" onClick={() => setPage('library')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'library' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Library size={15}/>Biblioteca</button>
         <button type="button" onClick={() => setPage('dashboard')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'dashboard' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><BarChart3 size={15}/>Dashboard</button>
+        <button type="button" onClick={() => setPage('library')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'library' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Library size={15}/>Biblioteca</button>
         <button type="button" onClick={() => setPage('collections')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'collections' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Boxes size={15}/>Coleções</button>
         <button type="button" onClick={() => setPage('search')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'search' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Search size={15}/>Busca</button>
         <button type="button" onClick={() => setPage('agentes')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'agentes' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Bot size={15}/>Agentes</button>

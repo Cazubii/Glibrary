@@ -48,10 +48,14 @@ function polar(cx: number, cy: number, rOuter: number, rInner: number, startAngl
 /** Gráfico de rosca por categoria (usa o tema, sem bibliotecas externas). */
 export function DonutChart({
   items,
-  emptyText
+  emptyText,
+  centerLabel = 'usos',
+  ariaLabel = 'Distribuição por categoria'
 }: {
   items: { label: string; value: number }[];
   emptyText: string;
+  centerLabel?: string;
+  ariaLabel?: string;
 }): React.JSX.Element {
   const filtered = items.filter((i) => i.value > 0);
   const total = filtered.reduce((sum, i) => sum + i.value, 0);
@@ -75,7 +79,7 @@ export function DonutChart({
 
   return (
     <div className="flex items-center gap-6">
-      <svg width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="Distribuição por categoria">
+      <svg width="160" height="160" viewBox="0 0 160 160" role="img" aria-label={ariaLabel}>
         {slices.map((slice) => (
           <path key={slice.label} d={slice.path} fill={slice.color} opacity={0.9} />
         ))}
@@ -83,7 +87,7 @@ export function DonutChart({
           {total}
         </text>
         <text x={cx} y={cy + 14} textAnchor="middle" className="fill-current text-steam-text/50" fontSize="10">
-          usos
+          {centerLabel}
         </text>
       </svg>
       <ul className="space-y-1.5 text-xs">

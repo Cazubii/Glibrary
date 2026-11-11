@@ -1,15 +1,73 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Flame, Layers3, BarChart3, Download, Star } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Flame, Layers3, BarChart3, Download, RefreshCw, Star } from 'lucide-react';
 import type { Agent, AssetCategory, BaseItem, ProjectRef, Skill, UsageEvent } from '@shared/types';
 import { ASSET_CATEGORIES, ASSET_CATEGORY_LABELS } from '@shared/categories';
 import { buildDashboardMarkdown, computeDashboardData, computeMonthlyUsage } from '@shared/dashboard';
 import { DonutChart, HBarChart } from '../components/charts';
 import { api } from '../lib/api';
+import { useDashboardStore } from '../store/dashboard';
+import GithubAccountSection from '../components/dashboard/GithubAccountSection';
+import GithubCharts from '../components/dashboard/GithubCharts';
 
 type Section = 'skills' | 'agents';
 
 interface Props { onError: (message: string) => void; onSuccess: (message: string) => void }
+
+/** Aba inicial: conta GitHub, gráficos, projetos sincronizados e uso da biblioteca. */
 export default function DashboardPage({ onError, onSuccess }: Props): React.JSX.Element {
+  const { account, loading, refreshing, error, load } = useDashboardStore();
+  useEffect(() => { void load(); }, [load]);
+  const refresh = useCallback(() => { void load(true); }, [load]);
+
+  return (
+    <main className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto p-6">
+      <header className="flex items-center">
+        <div>
+          <h1 className="text-xl font-semibold">Dashboard</h1>
+          <p className="mt-1 text-xs text-steam-text/50">
+            Sua conta GitHub, os repositórios sincronizados e a saúde da biblioteca.
+            {account != null && ` Atualizado às ${new Date(account.fetchedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={loading || refreshing}
+          className="ml-auto flex items-center gap-1.5 rounded border border-steam-elevated bg-steam-panel px-3 py-1.5 text-xs hover:bg-steam-elevated/40 disabled:opacity-60"
+        >
+          <RefreshCw size={14} className={loading || refreshing ? 'animate-spin' : ''} />
+          {refreshing ? 'Atualizando…' : 'Atualizar'}
+        </button>
+      </header>
+
+      {error != null && (
+        <div role="alert" className="flex items-center gap-3 rounded border border-steam-error/40 bg-steam-error/10 px-4 py-3 text-sm text-steam-error">
+          <span className="flex-1">{account != null ? `${error} Exibindo os últimos dados carregados.` : error}</span>
+          <button type="button" onClick={refresh} className="text-xs underline">Tentar novamente</button>
+        </div>
+      )}
+
+      {account == null ? (
+        loading && (
+          <div className="grid gap-4 lg:grid-cols-3" aria-busy="true" aria-label="Carregando dados do GitHub">
+            <div className="h-32 animate-pulse rounded border border-steam-elevated bg-steam-panel lg:col-span-2" />
+            <div className="h-32 animate-pulse rounded border border-steam-elevated bg-steam-panel" />
+          </div>
+        )
+      ) : (
+        <>
+          <GithubAccountSection account={account} onConnected={refresh} onError={onError} />
+          {account.connected && <GithubCharts repos={account.repos} />}
+        </>
+      )}
+
+      <LibraryUsageSection onError={onError} onSuccess={onSuccess} />
+    </main>
+  );
+}
+
+/** Uso de Skills/Agents nos projetos (conteúdo original do Dashboard). */
+function LibraryUsageSection({ onError, onSuccess }: Props): React.JSX.Element {
   const [assets, setAssets] = useState<{
     skills: Skill[];
     agents: Agent[];
@@ -48,7 +106,7 @@ export default function DashboardPage({ onError, onSuccess }: Props): React.JSX.
   );
 
   if (!data || !assets) {
-    return <main className="flex flex-1 items-center justify-center text-sm text-steam-text/50">Carregando dashboard…</main>;
+    return <p className="py-10 text-center text-sm text-steam-text/50">Carregando uso da biblioteca…</p>;
   }
 
   const summary = data.summary;
@@ -71,10 +129,10 @@ export default function DashboardPage({ onError, onSuccess }: Props): React.JSX.
   const coverage = (section === 'skills' ? summary.projectsWithSkills : summary.projectsWithAgents);
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col overflow-y-auto p-6">
+    <section className="flex min-w-0 flex-col border-t border-steam-elevated/50 pt-6">
       <header className="mb-6 flex items-center">
         <div>
-          <h1 className="text-xl font-semibold">Dashboard</h1>
+          <h2 className="text-lg font-semibold">Uso da biblioteca</h2>
           <p className="mt-1 text-xs text-steam-text/50">Uso de Skills e Agents nos seus projetos, saúde da biblioteca e contextos.</p>
         </div>
         <button
@@ -224,6 +282,6 @@ export default function DashboardPage({ onError, onSuccess }: Props): React.JSX.
           )}
         </section>
       </div>
-    </main>
+    </section>
   );
 }
