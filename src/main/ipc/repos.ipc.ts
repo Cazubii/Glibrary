@@ -303,6 +303,7 @@ export function registerRepoIpc(
                 store.getSettings().reposRoot,
                 name,
                 (progress) => broadcast(IpcChannels.cloneProgress, { id: saved.id, ...progress }),
+                githubToken(),
               );
               const detection = await detectProject(target);
               const updated = await store.updateRepo(
@@ -348,6 +349,7 @@ export function registerRepoIpc(
               store.getSettings().reposRoot,
               name,
               (progress) => broadcast(IpcChannels.cloneProgress, { id, ...progress }),
+              githubToken(),
             );
             const detection = await detectProject(target);
             const updated = await store.updateRepo(

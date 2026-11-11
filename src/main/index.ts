@@ -8,6 +8,7 @@ import { registerAgentRunsIpc } from './ipc/agent-runs.ipc';
 import { ToolManager } from './services/tool-manager';
 import { registerNativeToolsIpc } from './ipc/native-tools.ipc';
 import { registerDashboardIpc } from './ipc/dashboard.ipc';
+import { registerProjectsIpc } from './ipc/projects.ipc';
 import { registerAssetsIpc, refreshTopReposAndBroadcast } from './ipc/assets.ipc';
 
 function createWindow(): void {
@@ -46,6 +47,7 @@ void app.whenReady().then(async () => {
   registerAgentRunsIpc(store, runManager);
   registerNativeToolsIpc(toolManager);
   registerDashboardIpc(store);
+  registerProjectsIpc(store, new GitService());
   registerAssetsIpc(store, new GitService());
   createWindow();
   // Atualiza os top repos do GitHub em segundo plano; erros ficam silenciosos

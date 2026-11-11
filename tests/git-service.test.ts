@@ -73,4 +73,34 @@ describe('GitService', () => {
     const branch = await service.getCurrentBranch(join(root, 'meta-demo'));
     expect(branch).toBe('main');
   });
+
+  it('lista branches locais/remotas, cria a partir da padrão e faz checkout remoto', async () => {
+    const branchOrigin = join(root, 'branch-origin');
+    await fs.mkdir(branchOrigin, { recursive: true });
+    const source = simpleGit({ baseDir: branchOrigin });
+    await source.init(['--initial-branch=main']);
+    await source.addConfig('user.name', 'Teste');
+    await source.addConfig('user.email', 'teste@example.test');
+    await fs.writeFile(join(branchOrigin, 'README.md'), '# branches\n');
+    await source.add('.');
+    await source.commit('inicial');
+    await source.checkoutLocalBranch('feature/remota');
+    await fs.writeFile(join(branchOrigin, 'feature.txt'), 'branch\n');
+    await source.add('.');
+    await source.commit('branch remota');
+    await source.checkout('main');
+
+    const service = new GitService();
+    const clone = await service.clone('r5', branchOrigin, root, 'branch-clone', () => undefined);
+    const branches = await service.listBranches(clone);
+    expect(branches.local.map((branch) => branch.name)).toContain('main');
+    expect(branches.remote).toContainEqual({ name: 'feature/remota', remote: 'origin', ref: 'origin/feature/remota' });
+
+    await service.checkoutBranch(clone, 'origin/feature/remota');
+    expect(await service.getCurrentBranch(clone)).toBe('feature/remota');
+    await service.checkoutBranch(clone, 'main');
+    await service.createBranch(clone, 'feature/nova', 'main');
+    expect(await service.getCurrentBranch(clone)).toBe('feature/nova');
+    await expect(service.createBranch(clone, '-inválida', 'main')).rejects.toThrow('Nome de branch inválido.');
+  }, 15_000);
 });
