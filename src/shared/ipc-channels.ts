@@ -62,7 +62,11 @@ export const IpcChannels = {
   topReposRefresh: 'topRepos:refresh',
   topReposChanged: 'topRepos:changed',
   githubSearch: 'github:search',
-  githubAgentSearch: 'github:agentSearch'
+  githubAgentSearch: 'github:agentSearch',
+  githubAccountStatus: 'github:accountStatus',
+  githubAccountConnect: 'github:accountConnect',
+  githubAccountDisconnect: 'github:accountDisconnect',
+  githubReposList: 'github:reposList'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
