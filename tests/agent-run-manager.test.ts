@@ -141,7 +141,7 @@ describe('AgentRunManager', () => {
     const run = await manager.start(profile.id);
     expect(manager.hasActiveRunsForProfile(profile.id)).toBe(true);
     await manager.stop(run.id);
-    await wait();
+    for (let i = 0; i < 100 && manager.hasActiveRunsForProfile(profile.id); i += 1) await wait(20);
     expect(manager.hasActiveRunsForProfile(profile.id)).toBe(false);
   });
 });

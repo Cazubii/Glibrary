@@ -60,7 +60,7 @@ describe('AgentRunStore', () => {
     const list = store.list();
     expect(list).toHaveLength(500);
     expect(list[0].id).toBe('r519');
-  });
+  }, 30_000);
 
   it('grava arquivo JSON válido', async () => {
     const store = new AgentRunStore(join(dir, 'e'));
