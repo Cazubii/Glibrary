@@ -67,6 +67,13 @@ export interface GithubCodespaceMachine {
   storageGb: number;
 }
 
+export interface GithubCodespaceOptions {
+  codespaces: GithubCodespace[];
+  machines: GithubCodespaceMachine[];
+  defaultBranch: string;
+  devcontainerPaths: string[];
+}
+
 export interface TemporaryCheckoutStatus {
   exists: boolean;
   path?: string;
