@@ -22,7 +22,7 @@ const MAX_BUFFER_LINES = 2000;
 const MAX_BUFFER_CHARS = 512 * 1024;
 
 interface Session extends TerminalSessionSnapshot {
-  proc: IPty;
+  proc: IPty | null;
 }
 
 export class TerminalManager {
@@ -109,12 +109,12 @@ export class TerminalManager {
 
   write(sessionId: string, data: string): void {
     const session = this.requireRunning(sessionId);
-    session.proc.write(data);
+    session.proc?.write(data);
   }
 
   resize(sessionId: string, cols: number, rows: number): void {
     const session = this.requireRunning(sessionId);
-    session.proc.resize(cols, rows);
+    session.proc?.resize(cols, rows);
   }
 
   clear(sessionId: string): void {
@@ -127,7 +127,7 @@ export class TerminalManager {
     const session = this.sessions.get(sessionId);
     if (!session) return;
     if (session.state === 'running') {
-      session.proc.kill();
+      session.proc?.kill();
       await this.waitForExit([session], 2000);
     }
   }
@@ -135,7 +135,7 @@ export class TerminalManager {
   async closeAll(): Promise<void> {
     const active = [...this.sessions.values()].filter((session) => session.state === 'running');
     for (const session of active) {
-      try { session.proc.kill(); } catch { /* já encerrou */ }
+      try { session.proc?.kill(); } catch { /* já encerrou */ }
     }
     await this.waitForExit(active, 5000);
   }
@@ -189,7 +189,7 @@ export class TerminalManager {
     if (session.state !== 'running') return;
     session.state = exitCode === 0 ? 'exited' : 'error';
     session.exitCode = exitCode;
-    session.proc = null as unknown as IPty;
+    session.proc = null;
     if (session.state === 'error' && session.provider === 'codespace') {
       session.errorMessage = 'A conexão terminou. Verifique a rede e confirme que a imagem do Codespace tem um servidor SSH ativo.';
     }
@@ -202,8 +202,19 @@ export class TerminalManager {
   }
 
   private snapshot(session: Session): TerminalSessionSnapshot {
-    const { proc: _proc, ...snapshot } = session;
-    return snapshot;
+    return {
+      id: session.id,
+      repoId: session.repoId,
+      title: session.title,
+      provider: session.provider,
+      state: session.state,
+      createdAt: session.createdAt,
+      buffer: session.buffer,
+      ...(session.exitCode != null ? { exitCode: session.exitCode } : {}),
+      ...(session.errorMessage ? { errorMessage: session.errorMessage } : {}),
+      ...(session.temporaryPath ? { temporaryPath: session.temporaryPath } : {}),
+      ...(session.codespaceName ? { codespaceName: session.codespaceName } : {})
+    };
   }
 
   private pruneExitedSessions(): void {
