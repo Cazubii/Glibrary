@@ -1,5 +1,7 @@
 appId: com.cazubii.glibrary
 productName: Glibrary
+asarUnpack:
+  - "node_modules/node-pty/**/*"
 directories:
   output: dist
   buildResources: resources
