@@ -1,4 +1,5 @@
 import { execFile } from 'child_process';
+import { createHash } from 'crypto';
 import { promises as fs } from 'fs';
 import { promisify } from 'util';
 import { tmpdir } from 'os';
@@ -12,9 +13,21 @@ const MAX_TEMPORARY_CHECKOUTS = 3;
 interface CheckoutRecord {
   repoId: string;
   repoName: string;
-  remoteUrl: string;
+  remoteFingerprint: string;
   path: string;
   createdAt: string;
+}
+
+function remoteFingerprint(remoteUrl: string): string {
+  if (remoteUrl.startsWith('https://') || remoteUrl.startsWith('ssh://')) {
+    const parsed = new URL(remoteUrl);
+    const sensitiveQuery = [...parsed.searchParams.keys()].some((key) => /token|secret|password|credential/i.test(key));
+    const credentialedUser = parsed.username !== '' && parsed.username.toLowerCase() !== 'git';
+    if (parsed.password !== '' || credentialedUser || sensitiveQuery) {
+      throw new Error('Remova credenciais da URL remota e use o gerenciador de credenciais do Git.');
+    }
+  }
+  return createHash('sha256').update(remoteUrl).digest('hex');
 }
 
 export class TemporaryCheckoutService {
@@ -33,7 +46,7 @@ export class TemporaryCheckoutService {
         if (
           typeof value.repoId === 'string' &&
           typeof value.path === 'string' &&
-          typeof value.remoteUrl === 'string' &&
+          typeof value.remoteFingerprint === 'string' &&
           this.isManagedPath(value.path)
         ) this.records.set(value.repoId, value);
       }
@@ -59,9 +72,10 @@ export class TemporaryCheckoutService {
   async create(repo: Repo): Promise<string> {
     await this.load();
     if (!repo.remoteUrl) throw new Error('Este repositório não tem URL remota para clonar.');
+    const fingerprint = remoteFingerprint(repo.remoteUrl);
     const existing = this.records.get(repo.id);
     if (existing && this.isManagedPath(existing.path)) {
-      if (existing.remoteUrl !== repo.remoteUrl) {
+      if (existing.remoteFingerprint !== fingerprint) {
         throw new Error('Este checkout temporário pertence a outra URL remota. Revise-o antes de removê-lo.');
       }
       try {
@@ -91,7 +105,7 @@ export class TemporaryCheckoutService {
       const record: CheckoutRecord = {
         repoId: repo.id,
         repoName: repo.name,
-        remoteUrl: repo.remoteUrl,
+        remoteFingerprint: fingerprint,
         path: target,
         createdAt: new Date().toISOString()
       };
@@ -102,8 +116,7 @@ export class TemporaryCheckoutService {
       if (this.isManagedPath(target)) await fs.rm(target, { recursive: true, force: true }).catch(() => undefined);
       const err = error as NodeJS.ErrnoException & { stderr?: string; code?: string };
       if (err.code === 'ENOENT') throw new Error('Git não está instalado ou não está no PATH.');
-      const detail = String(err.stderr ?? '').trim();
-      throw new Error(detail ? 'Não foi possível criar o checkout temporário: ' + detail.slice(0, 240) : 'Não foi possível criar o checkout temporário.');
+      throw new Error('Não foi possível criar o checkout temporário. Verifique o acesso Git ao repositório e tente novamente.');
     }
   }
 
