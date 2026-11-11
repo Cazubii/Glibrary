@@ -387,7 +387,7 @@ export default function RepoTerminal({ repo, onHide, onError }: Props): React.JS
             </span>
             <button type="button" onClick={() => void openTemporaryFolder()} className="rounded border border-steam-elevated px-2 py-1.5 text-[10px] text-steam-text/65 hover:bg-steam-elevated">Abrir pasta</button>
             {tempStatus.dirty && repo.remoteUrl && <a href={repo.remoteUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] text-steam-accent">Abrir GitHub para publicar <ExternalLink size={10} /></a>}
-            {!tempStatus.dirty && <button type="button" disabled={busy} onClick={() => void cleanupTemporaryCheckout()} className="rounded border border-steam-elevated px-2 py-1.5 text-[10px] text-steam-text/65 hover:bg-steam-elevated disabled:opacity-40">Remover checkout</button>}
+            {!tempStatus.dirty && !sessions.some((session) => session.provider === 'temporary-local' && session.state === 'running') && <button type="button" disabled={busy} onClick={() => void cleanupTemporaryCheckout()} className="rounded border border-steam-elevated px-2 py-1.5 text-[10px] text-steam-text/65 hover:bg-steam-elevated disabled:opacity-40">Remover checkout</button>}
           </>}
         </>}
       </div>
