@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ExternalLink, Globe, LockKeyhole, Plus, RefreshCw, Search, Star } from 'lucide-react';
+import { ExternalLink, FolderOpen, Globe, LockKeyhole, Plus, RefreshCw, Search, Star } from 'lucide-react';
 import type { GithubAccountRepo } from '@shared/types';
 import { normalizeGitUrl } from '@shared/git-utils';
 import { api } from '../lib/api';
@@ -10,6 +10,7 @@ interface Props {
   onAdded: (remoteUrl: string) => void;
   onError: (message: string) => void;
   onOpenDashboard: () => void;
+  onOpenRepository: (repoId: string) => void;
 }
 
 function updatedLabel(value: string): string {
@@ -17,7 +18,7 @@ function updatedLabel(value: string): string {
   return Number.isNaN(date.getTime()) ? 'Data desconhecida' : `Atualizado ${date.toLocaleDateString('pt-BR')}`;
 }
 
-export default function GithubReposPanel({ knownUrls, onAdded, onError }: Props): React.JSX.Element {
+export default function GithubReposPanel({ knownUrls, onAdded, onError, onOpenDashboard, onOpenRepository }: Props): React.JSX.Element {
   const status = useLibraryStore((state) => state.githubAccount);
   const pages = useLibraryStore((state) => state.githubRepoPages);
   const loadAccount = useLibraryStore((state) => state.loadGithubAccount);
@@ -27,6 +28,7 @@ export default function GithubReposPanel({ knownUrls, onAdded, onError }: Props)
   const [loadingPage, setLoadingPage] = useState<number | null>(null);
   const [loadError, setLoadError] = useState('');
   const [adding, setAdding] = useState<string | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
 
   const loadPage = useCallback(async (page: number, force = false): Promise<void> => {
     setLoadingPage(page);
@@ -95,6 +97,37 @@ export default function GithubReposPanel({ knownUrls, onAdded, onError }: Props)
     }
   };
 
+  const openProject = async (repo: GithubAccountRepo): Promise<void> => {
+    setOpening(repo.remoteUrl);
+    setLoadError('');
+    try {
+      const library = await api.libraryGet();
+      let saved = library.repos.find((item) => item.remoteUrl && normalizeGitUrl(item.remoteUrl) === normalizeGitUrl(repo.remoteUrl));
+      if (!saved) {
+        try {
+          saved = await api.repoAddByUrl(repo.remoteUrl, false, repo.fullName);
+        } catch (error) {
+          const refreshed = await api.libraryGet();
+          saved = refreshed.repos.find((item) => item.remoteUrl && normalizeGitUrl(item.remoteUrl) === normalizeGitUrl(repo.remoteUrl));
+          if (!saved) throw error;
+        }
+      }
+      useLibraryStore.setState((state) => ({
+        repos: state.repos.some((item) => item.id === saved?.id)
+          ? state.repos
+          : [...state.repos, saved as NonNullable<typeof saved>]
+      }));
+      onAdded(repo.remoteUrl);
+      onOpenRepository(saved.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setLoadError(message);
+      onError(message);
+    } finally {
+      setOpening(null);
+    }
+  };
+
   if (status?.state !== 'connected') {
     const message = status?.state === 'error'
       ? status.message
@@ -138,6 +171,8 @@ export default function GithubReposPanel({ knownUrls, onAdded, onError }: Props)
               repo={repo}
               added={known.has(normalizeGitUrl(repo.remoteUrl))}
               adding={adding === repo.remoteUrl}
+              opening={opening === repo.remoteUrl}
+              onOpen={() => void openProject(repo)}
               onAdd={() => void addToLibrary(repo)}
             />
           ))}
@@ -158,10 +193,12 @@ export default function GithubReposPanel({ knownUrls, onAdded, onError }: Props)
   );
 }
 
-function RepositoryCard({ repo, added, adding, onAdd }: {
+function RepositoryCard({ repo, added, adding, opening, onOpen, onAdd }: {
   repo: GithubAccountRepo;
   added: boolean;
   adding: boolean;
+  opening: boolean;
+  onOpen: () => void;
   onAdd: () => void;
 }): React.JSX.Element {
   return (
@@ -183,6 +220,9 @@ function RepositoryCard({ repo, added, adding, onAdd }: {
         <span className="inline-flex items-center gap-1"><Star size={11} /> {repo.stars.toLocaleString('pt-BR')}</span>
         <span>{updatedLabel(repo.updatedAt)}</span>
       </div>
+      <button type="button" onClick={onOpen} disabled={opening} className="mt-3 flex items-center justify-center gap-1.5 rounded bg-steam-accent px-3 py-1.5 text-xs font-semibold text-steam-bg disabled:cursor-default disabled:opacity-55">
+        {opening ? 'Abrindo…' : <><FolderOpen size={12} /> Abrir projeto</>}
+      </button>
       <button type="button" onClick={onAdd} disabled={added || adding} className="mt-3 flex items-center justify-center gap-1.5 rounded border border-steam-elevated px-3 py-1.5 text-xs text-steam-text/70 hover:bg-steam-elevated disabled:cursor-default disabled:opacity-55">
         {added ? 'Na biblioteca' : adding ? 'Adicionando…' : <><Plus size={12} /> Adicionar à biblioteca</>}
       </button>
