@@ -22,6 +22,7 @@ interface GhRepositoryRecord {
 
 interface GhContentRecord {
   name?: unknown;
+  path?: unknown;
   type?: unknown;
 }
 
@@ -119,18 +120,32 @@ export class CodespaceService {
     if (!defaultBranch) throw new Error('Não foi possível identificar a branch padrão do repositório.');
     const ref = encodeURIComponent(defaultBranch);
     const paths = new Set<string>();
-    try {
-      const rawDirectory = await this.runGh(['api', 'repos/' + fullName + '/contents/.devcontainer?ref=' + ref]);
-      const entries = JSON.parse(rawDirectory) as GhContentRecord[];
-      for (const entry of Array.isArray(entries) ? entries : []) {
-        if (entry.type !== 'file' || typeof entry.name !== 'string') continue;
-        if (entry.name === 'devcontainer.json' || entry.name.endsWith('.devcontainer.json')) {
-          paths.add('.devcontainer/' + entry.name);
+    const pending: Array<{ path: string; depth: number }> = [{ path: '.devcontainer', depth: 0 }];
+    let inspectedFolders = 0;
+
+    while (pending.length > 0 && inspectedFolders < 20) {
+      const folder = pending.shift();
+      if (!folder) break;
+      inspectedFolders += 1;
+      try {
+        const rawDirectory = await this.runGh([
+          'api', 'repos/' + fullName + '/contents/' + folder.path + '?ref=' + ref
+        ]);
+        const entries = JSON.parse(rawDirectory) as GhContentRecord[];
+        for (const entry of Array.isArray(entries) ? entries : []) {
+          const entryPath = typeof entry.path === 'string' ? entry.path : '';
+          const name = typeof entry.name === 'string' ? entry.name : '';
+          if (entry.type === 'file' && entryPath && (name === 'devcontainer.json' || name.endsWith('.devcontainer.json'))) {
+            paths.add(entryPath);
+          } else if (entry.type === 'dir' && entryPath && folder.depth < 2) {
+            pending.push({ path: entryPath, depth: folder.depth + 1 });
+          }
         }
+      } catch {
+        // Diretório opcional; repositórios sem configuração usam a imagem padrão.
       }
-    } catch {
-      // Repositórios sem pasta .devcontainer usam o contêiner padrão.
     }
+
     try {
       const rawRoot = await this.runGh(['api', 'repos/' + fullName + '/contents/.devcontainer.json?ref=' + ref]);
       const rootConfig = JSON.parse(rawRoot) as GhContentRecord;
