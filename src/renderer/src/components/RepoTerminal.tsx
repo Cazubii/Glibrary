@@ -452,7 +452,7 @@ function TerminalPane({ session, onReady, onError }: {
     let dataSubscription: { dispose: () => void } | null = null;
 
     const initialize = async (): Promise<void> => {
-      const [xtermModule, fitModule, searchModule] = await Promise.all([
+      const [xtermModule, fitModule, searchModule, webLinksModule] = await Promise.all([
         import('@xterm/xterm'),
         import('@xterm/addon-fit'),
         import('@xterm/addon-search'),
@@ -492,7 +492,7 @@ function TerminalPane({ session, onReady, onError }: {
       fitAddon = new fitModule.FitAddon();
       searchAddon = new searchModule.SearchAddon();
       webLinksAddon = new webLinksModule.WebLinksAddon((_event, uri) => {
-        if (/^https?:\\/\\//i.test(uri)) window.open(uri, '_blank');
+        if (uri.startsWith('https://') || uri.startsWith('http://')) window.open(uri, '_blank');
       });
       terminal.loadAddon(fitAddon);
       terminal.loadAddon(searchAddon);
