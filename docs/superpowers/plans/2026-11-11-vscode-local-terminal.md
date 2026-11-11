@@ -69,9 +69,9 @@ export interface TerminalStartInput {
 **Files:** create `src/renderer/src/components/RepoTerminal.tsx`, modify `src/renderer/src/lib/api.ts`
 
 - [ ] Dynamically import xterm and addons only when the user opens the dock. Dispose the terminal, observers, listeners, and addons on component teardown.
-- [ ] Use one xterm instance per pane/session; attach FitAddon and SearchAddon; call fit on initial mount, tab focus, split, and ResizeObserver updates.
+- [ ] Use one xterm instance per pane/session; attach FitAddon, SearchAddon, and WebLinksAddon; call fit on initial mount, tab focus, split, and ResizeObserver updates.
 - [ ] Implement session tabs, new, split, clear, close, hide, and maximize controls. Hiding does not close sessions. Show explicit “Encerrar sessão” for process termination.
-- [ ] Copy uses selected text; Ctrl+C with a selection copies, Ctrl+C without a selection writes the interrupt byte. Paste uses the clipboard API and xterm paste API. Keep search scoped to xterm scrollback and use xterm link provider for URLs.
+- [ ] Copy uses selected text; Ctrl+C with a selection copies, Ctrl+C without a selection writes the interrupt byte. Paste uses the clipboard API and xterm paste API. Keep search scoped to xterm scrollback and use WebLinksAddon for HTTP(S) URLs.
 - [ ] Apply the existing Glibrary Steam theme through xterm's theme options and load the xterm CSS from the component.
 
 ### Task 4: Reachable dock integration and verification
