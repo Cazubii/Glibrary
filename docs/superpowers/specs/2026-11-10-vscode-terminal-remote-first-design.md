@@ -1,7 +1,7 @@
 # Terminal integrado VS Code e fluxo remoto-first
 
-**Data:** 2026-11-10  
-**Estado:** desenho aprovado pelo usuário; pronto para revisão da especificação antes do plano de implementação.  
+**Atualizado:** 2026-11-11  
+**Estado:** direção do terminal aprovada; extensão GitHub adicionada em 2026-11-11 e pendente de revisão da especificação antes do plano de implementação.  
 **Repositório/branch:** `Cazubii/Glibrary`, `codex/vscode-terminal-remote-first`.
 
 ## Contexto
@@ -14,6 +14,8 @@ O usuário quer um terminal integrado familiar ao VS Code e prefere trabalhar di
 - Usar sessões e perfis de terminal com comandos de criação, divisão, foco, ocultação, maximização e encerramento.
 - Preferir operações GitHub remotas para ler e alterar arquivos quando não houver necessidade de shell ou filesystem.
 - Executar comandos num Codespace ligado ao repositório sem clonar o projeto no computador. Usar checkout temporário somente como alternativa escolhida quando o Codespace não estiver disponível.
+- Mostrar no Dashboard o estado da conexão GitHub usada pelo próprio app, com identificação da conta quando autenticada.
+- Na área Projetos, permitir alternar entre contextos locais e todos os repositórios acessíveis à conta GitHub, sem clonar ou importar todos automaticamente.
 
 ## Direção aprovada
 
@@ -22,6 +24,17 @@ O usuário quer um terminal integrado familiar ao VS Code e prefere trabalhar di
 O terminal fica acoplado à página do projeto, inspirado no painel inferior do VS Code. O cabeçalho mostra repositório, branch e ambiente ativo. A área do terminal tem abas nomeadas por perfil e sessão, seletor de perfil/ambiente e ações visíveis para novo terminal, dividir, limpar, encerrar, ocultar e maximizar. Não serão exibidas abas de Problemas ou Saída sem funcionalidades reais associadas.
 
 Cada instância mantém seu próprio PTY e buffer de tela. Ocultar/reabrir o painel preserva sessões; encerrar uma sessão mata seu processo. Fechar a janela encerra os PTYs locais. Um Codespace conectado não é parado ao ocultar ou desconectar o painel; seu estado e uma ação explícita de parada ficam visíveis para evitar consumo remoto escondido.
+
+### Conta GitHub no Dashboard e lista de repositórios
+
+- Adicionar ao Dashboard um cartão de conta com avatar/login quando autenticada e estados explícitos: não conectada, conectada, credencial inválida/expirada, sem permissão suficiente, API indisponível ou limite atingido. Mostrar quando o estado foi verificado e uma ação para tentar novamente.
+- O estado representa a credencial configurada no Glibrary, nunca a conexão do plugin GitHub desta sessão. Reutilizar o token opcional já guardado pelo processo principal com safeStorage. Se não houver token, o cartão oferece configuração; campo mascarado, validação via API e gravação somente no processo principal. Token não vai para renderer, logs ou arquivos de configuração em texto puro.
+- A validação autenticada consulta o perfil da conta GitHub. Sem token, não afirmar que uma conta está conectada nem tentar enumerar repositórios privados.
+- Na seção Projetos, acrescentar uma alternância clara entre “Projetos locais” e “Repositórios da conta”. Preservar a lista e as ações atuais de contextos locais.
+- A lista da conta usa os repositórios que a credencial pode acessar (proprietário, colaborador e organização), públicos ou privados conforme as permissões do token. Repositórios aparecem paginados, com pesquisa/filtro, nome, owner, visibilidade, descrição, linguagem e estado de inclusão na biblioteca.
+- Mostrar “Na biblioteca” para URLs já cadastradas; para os restantes, oferecer “Adicionar à biblioteca”. Adicionar grava apenas a referência remota, sem clonar; qualquer clone ou execução continua sendo uma ação separada e explícita. Não importar automaticamente todos os repositórios para a biblioteca.
+- Buscar a conta ao abrir/revalidar o Dashboard; buscar páginas de repositórios somente quando a lista da conta for aberta. Sem polling em background. Cache temporário em memória com horário da última verificação e botão Atualizar; carregar páginas sob demanda para limitar tráfego e memória.
+- Erros distinguem credencial ausente/inválida, escopo insuficiente, limite da API e falha de rede, com mensagem e ação adequadas. Se um token só puder ver parte dos repositórios privados, a interface informa que a lista segue as permissões concedidas.
 
 ### Experiência de terminal
 
@@ -69,21 +82,26 @@ Fluxo: usuário abre o painel → escolhe Codespace/local temporário → main v
 ## Critérios de aceite
 
 1. O painel abre no rodapé da página do projeto e mantém a página visível.
-2. O usuário consegue abrir, alternar, dividir e encerrar mais de uma sessão; ocultar/reabrir mantém as sessões.
-3. Teclado, copiar/colar, busca, links e resize funcionam no terminal local e no Codespace.
-4. Um Codespace pode executar comandos do repositório sem `localPath` nem clone do projeto no computador.
-5. Alterações remotas que não requerem execução podem ser feitas em branch/commit pela API sem checkout local.
-6. Codespace e checkout temporário nunca são criados silenciosamente; estado, custo potencial e ações de encerramento ficam claros.
-7. Fallback temporário preserva alterações antes de remoção e não deixa cópia permanente.
-8. Erros de shell, autorização, `gh`, PTY e rede são visíveis e não deixam processos órfãos.
+2. O Dashboard informa se o GitHub do app está conectado e mostra o login da conta autenticada; credenciais inválidas e falhas ficam distinguíveis e permitem nova tentativa.
+3. A área Projetos alterna entre contextos locais e repositórios acessíveis da conta, lista todas as páginas sem duplicatas e marca as referências já adicionadas à biblioteca.
+4. O usuário consegue abrir, alternar, dividir e encerrar mais de uma sessão; ocultar/reabrir mantém as sessões.
+5. Teclado, copiar/colar, busca, links e resize funcionam no terminal local e no Codespace.
+6. Um Codespace pode executar comandos do repositório sem `localPath` nem clone do projeto no computador.
+7. Alterações remotas que não requerem execução podem ser feitas em branch/commit pela API sem checkout local.
+8. Codespace e checkout temporário nunca são criados silenciosamente; estado, custo potencial e ações de encerramento ficam claros.
+9. Fallback temporário preserva alterações antes de remoção e não deixa cópia permanente.
+10. Erros de shell, autorização, `gh`, PTY e rede são visíveis e não deixam processos órfãos.
 
 ## Validação planejada
 
-Depois do plano aprovado, validar manualmente: provider local já clonado; Codespace existente; Codespace parado; Codespace sem permissão; ausência de `gh`; nenhuma pasta local; fallback temporário com e sem alterações; resize e atalhos; encerramento e reconexão. Não executar comandos remotos que criem recursos faturáveis sem confirmação explícita.
+Depois do plano aprovado, validar manualmente: GitHub sem token, token válido, token inválido, permissão insuficiente, conta com mais de uma página de repositórios e repositório já cadastrado; provider local já clonado; Codespace existente; Codespace parado; Codespace sem permissão; ausência de `gh`; nenhuma pasta local; fallback temporário com e sem alterações; resize e atalhos; encerramento e reconexão. Não executar comandos remotos que criem recursos faturáveis sem confirmação explícita.
 
 ## Revisão da especificação
 
 - A direção aprovada (painel inferior e fluxo híbrido remoto-first) é consistente ao longo do documento.
+- A extensão do Dashboard e da lista de Projetos preserva os contextos locais e não cria clones nem importa em massa.
+- O token usado para o estado da conta é o do Glibrary; a identidade do conector GitHub externo não é reutilizada.
+- A listagem é limitada pelas permissões do token e pagina sob demanda, evitando tráfego e memória desnecessários.
 - Criação de Codespace está separada de conexão e exige confirmação, evitando provisionamento/cobrança silenciosos.
 - Checkout temporário é fallback não persistente e inclui proteção contra perda de alterações.
 - Perfis locais e remotos usam o mesmo fluxo xterm/IPC sem expor Node ao renderer.
