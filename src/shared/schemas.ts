@@ -109,7 +109,8 @@ export const SettingsSchema = z.object({
   theme: z.enum(['dark', 'light']),
   viewMode: z.enum(['grid', 'list']),
   checkUpdatesOnStart: z.boolean(),
-  inheritTags: z.boolean().default(true)
+  inheritTags: z.boolean().default(true),
+  agentsViewMode: z.enum(['painel', 'grid']).optional(),
 })
 
 export const SkillSchema = z.object({
@@ -223,6 +224,58 @@ export const TopWindowInputSchema = z.object({
   windowDays: z.number().int().optional()
 });
 
+export const AgentProfileSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1).max(80),
+  repoId: z.string().min(1),
+  command: z.string().trim().min(1).max(500),
+  args: z.array(z.string().max(500)).max(20).default([]),
+  createdAt: z.string(),
+  lastRunAt: z.string().optional()
+});
+
+export const AgentProfileInputSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  repoId: z.string().min(1),
+  command: z.string().trim().min(1).max(500),
+  args: z.array(z.string().max(500)).max(20).default([])
+});
+
+export const AgentProfileUpdateInputSchema = z
+  .object({
+    id: z.string().min(1),
+    patch: AgentProfileInputSchema.partial().strict()
+  })
+  .strict();
+
+export const AgentRunStatusSchema = z.enum(['running', 'done', 'stopped', 'error']);
+
+export const AgentRunSchema = z.object({
+  id: z.string().min(1),
+  profileId: z.string().min(1),
+  profileName: z.string().min(1),
+  repoId: z.string().min(1),
+  repoName: z.string().min(1),
+  command: z.string().min(1),
+  prompt: z.string().optional(),
+  status: AgentRunStatusSchema,
+  exitCode: z.number().int().optional(),
+  startedAt: z.string(),
+  finishedAt: z.string().optional(),
+  durationMs: z.number().int().nonnegative().optional(),
+  lastError: z.string().optional(),
+  logFile: z.string()
+});
+
+export const AgentRunStartInputSchema = z
+  .object({
+    profileId: z.string().min(1),
+    prompt: z.string().trim().max(4000).optional()
+  })
+  .strict();
+
+export const AgentIdInputSchema = z.object({ id: z.string().min(1) }).strict();
+
 export const LibraryFileSchema = z.object({
   version: z.literal(2),
   repos: z.array(RepoSchema).default([]),
@@ -234,7 +287,8 @@ export const LibraryFileSchema = z.object({
   usage: z.array(UsageEventSchema).default([]),
   topRepos: TopReposSchema.default({ fetchedAt: '', repos: [] }),
   topRepos7: TopReposSchema.default({ fetchedAt: '', repos: [] }),
-  settings: SettingsSchema
+  settings: SettingsSchema,
+  agentProfiles: z.array(AgentProfileSchema).default([])
 });
 
 export const SkillUpdateInputSchema = z
