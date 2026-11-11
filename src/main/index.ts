@@ -2,6 +2,9 @@ import { app, BrowserWindow, shell } from 'electron';
 import { join } from 'path';
 import { LibraryStore } from './services/library-store';
 import { GitService } from './services/git-service';
+import { AgentRunStore } from './services/agent-run-store';
+import { AgentRunManager } from './services/agent-run-manager';
+import { registerAgentRunsIpc } from './ipc/agent-runs.ipc';
 import { registerAssetsIpc, refreshTopReposAndBroadcast } from './ipc/assets.ipc';
 
 function createWindow(): void {
@@ -24,6 +27,12 @@ function createWindow(): void {
 void app.whenReady().then(async () => {
   const store = new LibraryStore(app.getPath('userData'), join(app.getPath('home'), 'Glibrary'));
   await store.load();
+  const runStore = new AgentRunStore(app.getPath('userData'));
+  await runStore.load();
+  const runManager = new AgentRunManager(store, runStore, join(app.getPath('userData'), 'logs', 'agents'), (channel, payload) => {
+    for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload);
+  });
+  registerAgentRunsIpc(store, runManager);
   registerAssetsIpc(store, new GitService());
   createWindow();
   // Atualiza os top repos do GitHub em segundo plano; erros ficam silenciosos
@@ -36,6 +45,7 @@ void app.whenReady().then(async () => {
     }
   }, 1500);
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+  app.on('before-quit', () => { void runManager.stopAll(); });
 });
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
