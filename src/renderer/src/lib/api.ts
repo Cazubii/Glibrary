@@ -130,8 +130,17 @@ export const api = {
     unwrap(window.api.invoke(IpcChannels.terminalList, { repoId })),
   terminalStart: (input: TerminalStartInput): Promise<TerminalSessionSnapshot> =>
     unwrap(window.api.invoke(IpcChannels.terminalStart, input)),
-  terminalWrite: (sessionId: string, data: string): Promise<null> =>
-    unwrap(window.api.invoke(IpcChannels.terminalWrite, { sessionId, data })),
+  terminalWrite: async (sessionId: string, data: string): Promise<null> => {
+    const limit = 16 * 1024;
+    for (let offset = 0; offset < data.length;) {
+      let end = Math.min(data.length, offset + limit);
+      const last = data.charCodeAt(end - 1);
+      if (end < data.length && last >= 0xd800 && last <= 0xdbff) end -= 1;
+      await unwrap<null>(window.api.invoke(IpcChannels.terminalWrite, { sessionId, data: data.slice(offset, end) }));
+      offset = end;
+    }
+    return null;
+  },
   terminalResize: (sessionId: string, cols: number, rows: number): Promise<null> =>
     unwrap(window.api.invoke(IpcChannels.terminalResize, { sessionId, cols, rows })),
   terminalClose: (sessionId: string): Promise<null> =>
