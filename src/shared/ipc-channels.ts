@@ -48,6 +48,7 @@ export const IpcChannels = {
   kitApply: 'kits:apply',
   usageList: 'usage:list',
   dashboardExport: 'dashboard:export',
+  dashboardAccount: 'dashboard:account',
   baseAdd: 'bases:add',
   baseClone: 'bases:clone',
   baseRemove: 'bases:remove',
