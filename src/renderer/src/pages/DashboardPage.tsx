@@ -8,6 +8,8 @@ import { api } from '../lib/api';
 import { useDashboardStore } from '../store/dashboard';
 import GithubAccountSection from '../components/dashboard/GithubAccountSection';
 import GithubCharts from '../components/dashboard/GithubCharts';
+import SyncedReposSection from '../components/dashboard/SyncedReposSection';
+import RepoDetailPage from './RepoDetailPage';
 
 type Section = 'skills' | 'agents';
 
@@ -16,8 +18,13 @@ interface Props { onError: (message: string) => void; onSuccess: (message: strin
 /** Aba inicial: conta GitHub, gráficos, projetos sincronizados e uso da biblioteca. */
 export default function DashboardPage({ onError, onSuccess }: Props): React.JSX.Element {
   const { account, loading, refreshing, error, load } = useDashboardStore();
+  const [openRepoId, setOpenRepoId] = useState<string | null>(null);
   useEffect(() => { void load(); }, [load]);
   const refresh = useCallback(() => { void load(true); }, [load]);
+
+  if (openRepoId != null) {
+    return <RepoDetailPage repoId={openRepoId} onBack={() => setOpenRepoId(null)} onError={onError} onSuccessToast={onSuccess} />;
+  }
 
   return (
     <main className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto p-6">
@@ -60,6 +67,8 @@ export default function DashboardPage({ onError, onSuccess }: Props): React.JSX.
           {account.connected && <GithubCharts repos={account.repos} />}
         </>
       )}
+
+      <SyncedReposSection onOpen={setOpenRepoId} onError={onError} />
 
       <LibraryUsageSection onError={onError} onSuccess={onSuccess} />
     </main>
