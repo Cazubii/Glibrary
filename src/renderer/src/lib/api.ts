@@ -4,6 +4,7 @@ import type {
   GithubRepoPage,
   GithubCodespace,
   GithubCodespaceMachine,
+  GithubCodespaceOptions,
   TemporaryCheckoutStatus,
   TerminalExitEvent,
   TerminalOutputEvent,
@@ -147,14 +148,14 @@ export const api = {
     unwrap(window.api.invoke(IpcChannels.terminalClose, { sessionId })),
   terminalClear: (sessionId: string): Promise<null> =>
     unwrap(window.api.invoke(IpcChannels.terminalClear, { sessionId })),
-  terminalCodespacesList: (repoId: string): Promise<{ codespaces: GithubCodespace[]; machines: GithubCodespaceMachine[] }> =>
+  terminalCodespacesList: (repoId: string): Promise<GithubCodespaceOptions> =>
     unwrap(window.api.invoke(IpcChannels.terminalCodespacesList, { repoId })),
   terminalCodespaceStart: (repoId: string, codespaceName: string): Promise<null> =>
     unwrap(window.api.invoke(IpcChannels.terminalCodespaceStart, { repoId, codespaceName })),
   terminalCodespaceStop: (repoId: string, codespaceName: string): Promise<null> =>
     unwrap(window.api.invoke(IpcChannels.terminalCodespaceStop, { repoId, codespaceName })),
-  terminalCodespaceCreate: (repoId: string, machine: string): Promise<GithubCodespace> =>
-    unwrap(window.api.invoke(IpcChannels.terminalCodespaceCreate, { repoId, machine })),
+  terminalCodespaceCreate: (repoId: string, machine: string, devcontainerPath?: string): Promise<GithubCodespace> =>
+    unwrap(window.api.invoke(IpcChannels.terminalCodespaceCreate, { repoId, machine, ...(devcontainerPath ? { devcontainerPath } : {}) })),
   terminalTempStatus: (repoId: string): Promise<TemporaryCheckoutStatus> =>
     unwrap(window.api.invoke(IpcChannels.terminalTempStatus, { repoId })),
   terminalTempCleanup: (repoId: string): Promise<TemporaryCheckoutStatus> =>
