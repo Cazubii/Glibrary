@@ -71,7 +71,7 @@ export interface TemporaryCheckoutStatus {
   exists: boolean;
   path?: string;
   dirty?: boolean;
-  unpushedCommits?: number;
+  unpushedCommits?: number | null;
   createdAt?: string;
 }
 
