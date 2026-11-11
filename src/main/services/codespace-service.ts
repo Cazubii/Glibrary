@@ -1,22 +1,28 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { parseGithubRepo } from '../../shared/git-utils';
-import type { GithubCodespace, GithubCodespaceMachine, Repo } from '../../shared/types';
+import type { GithubCodespace, GithubCodespaceMachine, GithubCodespaceOptions, Repo } from '../../shared/types';
 
 const execFileAsync = promisify(execFile);
 const MAX_BUFFER = 1024 * 1024;
 const BILLING_MESSAGE = 'Confira a cobrança e o armazenamento de Codespaces na página de faturamento do GitHub.';
 
-export interface CodespaceChoices {
-  codespaces: GithubCodespace[];
-  machines: GithubCodespaceMachine[];
-}
+export type CodespaceChoices = GithubCodespaceOptions;
 
 interface GhCodespaceRecord {
   name?: unknown;
   repository?: unknown;
   state?: unknown;
   createdAt?: unknown;
+}
+
+interface GhRepositoryRecord {
+  default_branch?: unknown;
+}
+
+interface GhContentRecord {
+  name?: unknown;
+  type?: unknown;
 }
 
 interface GhMachineRecord {
@@ -95,12 +101,44 @@ export class CodespaceService {
           };
         })
         .filter((item): item is GithubCodespace => item != null);
-      const machines = await this.listMachines(fullName);
-      return { codespaces, machines };
+      const [machines, repositoryInfo] = await Promise.all([
+        this.listMachines(fullName),
+        this.getRepositoryOptions(fullName)
+      ]);
+      return { codespaces, machines, ...repositoryInfo };
     } catch (error) {
       if (error instanceof SyntaxError) throw new Error('O GitHub CLI devolveu uma lista de Codespaces inválida.');
       throw error;
     }
+  }
+
+  private async getRepositoryOptions(fullName: string): Promise<Pick<GithubCodespaceOptions, 'defaultBranch' | 'devcontainerPaths'>> {
+    const rawRepository = await this.runGh(['api', 'repos/' + fullName]);
+    const repository = JSON.parse(rawRepository) as GhRepositoryRecord;
+    const defaultBranch = typeof repository.default_branch === 'string' ? repository.default_branch : '';
+    if (!defaultBranch) throw new Error('Não foi possível identificar a branch padrão do repositório.');
+    const ref = encodeURIComponent(defaultBranch);
+    const paths = new Set<string>();
+    try {
+      const rawDirectory = await this.runGh(['api', 'repos/' + fullName + '/contents/.devcontainer?ref=' + ref]);
+      const entries = JSON.parse(rawDirectory) as GhContentRecord[];
+      for (const entry of Array.isArray(entries) ? entries : []) {
+        if (entry.type !== 'file' || typeof entry.name !== 'string') continue;
+        if (entry.name === 'devcontainer.json' || entry.name.endsWith('.devcontainer.json')) {
+          paths.add('.devcontainer/' + entry.name);
+        }
+      }
+    } catch {
+      // Repositórios sem pasta .devcontainer usam o contêiner padrão.
+    }
+    try {
+      const rawRoot = await this.runGh(['api', 'repos/' + fullName + '/contents/.devcontainer.json?ref=' + ref]);
+      const rootConfig = JSON.parse(rawRoot) as GhContentRecord;
+      if (rootConfig.type === 'file') paths.add('.devcontainer.json');
+    } catch {
+      // Configuração de raiz opcional.
+    }
+    return { defaultBranch, devcontainerPaths: [...paths].sort() };
   }
 
   private async listMachines(fullName: string): Promise<GithubCodespaceMachine[]> {
@@ -149,17 +187,20 @@ export class CodespaceService {
     }
   }
 
-  async create(repo: Repo, machineName: string): Promise<GithubCodespace> {
+  async create(repo: Repo, machineName: string, devcontainerPath?: string): Promise<GithubCodespace> {
     const fullName = repoName(repo);
     const choices = await this.listForRepo(repo);
     if (!choices.machines.some((machine) => machine.name === machineName)) {
       throw new Error('Selecione uma máquina disponível para este repositório.');
     }
     const existingNames = new Set(choices.codespaces.map((space) => space.name));
+    if (devcontainerPath && !choices.devcontainerPaths.includes(devcontainerPath)) {
+      throw new Error('A configuração de contêiner selecionada não existe neste repositório.');
+    }
     try {
-      await this.runGh([
-        'codespace', 'create', '--repo', fullName, '--machine', machineName
-      ], 300000);
+      const args = ['codespace', 'create', '--repo', fullName, '--branch', choices.defaultBranch, '--machine', machineName];
+      if (devcontainerPath) args.push('--devcontainer-path', devcontainerPath);
+      await this.runGh(args, 300000);
       const refreshed = await this.listForRepo(repo);
       const created = refreshed.codespaces.find((space) => !existingNames.has(space.name));
       if (!created) throw new Error('O Codespace foi solicitado, mas ainda não aparece na lista.');
