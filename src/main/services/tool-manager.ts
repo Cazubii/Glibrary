@@ -196,9 +196,8 @@ export class ToolManager {
     this.starting.add(toolId);
     try {
       await fs.mkdir(this.toolsRoot, { recursive: true });
-      const openCodeAvailable = await this.checkCommand('opencode --version', COMMAND_TIMEOUT_MS);
-      const directHabblaudInstall = tool.id === 'builtin-habblaud' && !openCodeAvailable;
-      if (!openCodeAvailable && !directHabblaudInstall) {
+      const directHabblaudInstall = tool.id === 'builtin-habblaud';
+      if (!directHabblaudInstall && !(await this.checkCommand('opencode --version', COMMAND_TIMEOUT_MS))) {
         throw new Error('OpenCode não encontrado no PATH');
       }
 

@@ -15,15 +15,16 @@ interface FakeHooks {
 
 interface SpawnCall {
   command: string;
+  args?: string[];
   cwd?: string;
   hooks: FakeHooks;
 }
 
 function fakeSpawnFactory(openCodeExitCode = 0) {
   const calls: SpawnCall[] = [];
-  const spawn = (command: string, options: { cwd?: string }): ChildProcess => {
+  const spawn = (command: string, options: { args?: string[]; cwd?: string }): ChildProcess => {
     const hooks: FakeHooks = {};
-    calls.push({ command, cwd: options.cwd, hooks });
+    calls.push({ command, args: options.args, cwd: options.cwd, hooks });
     return {
       pid: 4242,
       stdout: { on: (_event: string, callback: (data: Buffer) => void) => { hooks.onOut = callback; } },
@@ -31,7 +32,7 @@ function fakeSpawnFactory(openCodeExitCode = 0) {
       on: (event: string, callback: (...args: unknown[]) => void) => {
         if (event === 'exit') {
           hooks.onExit = callback as FakeHooks['onExit'];
-          if (command === 'opencode --version') {
+          if (['opencode --version', 'git --version', 'node --version', 'npm --version'].includes(command)) {
             queueMicrotask(() => hooks.onExit?.(openCodeExitCode, null));
           }
         }
@@ -77,13 +78,13 @@ describe('ToolManager', () => {
     await expect(manager.add('https://github.com/example/my-cli')).resolves.toMatchObject({ name: 'my-cli' });
   });
 
-  it('spawns OpenCode with the install prompt and tools workspace', async () => {
+  it('installs Habblaud directly without OpenCode', async () => {
     const { manager, fake, toolsRoot } = await makeManager();
     const run = await manager.install('builtin-habblaud');
-    const installCall = fake.calls.find(({ command }) => command.startsWith('opencode run '));
-    expect(installCall?.command).toContain('https://github.com/marmottajr/habblaud');
-    expect(installCall?.command).toContain(join(toolsRoot, 'habblaud'));
-    expect(installCall?.command).toContain('npm install');
+    const installCall = fake.calls.find(({ command }) => command === 'node');
+    expect(installCall?.args?.[0]).toBe('-e');
+    expect(installCall?.args?.[1]).toContain('https://github.com/marmottajr/habblaud');
+    expect(installCall?.args?.[1]).toContain(join(toolsRoot, 'habblaud'));
     expect(installCall?.cwd).toBe(toolsRoot);
     expect(run.prompt).toContain('npm install');
   });
