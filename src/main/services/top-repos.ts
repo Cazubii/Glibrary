@@ -1,4 +1,5 @@
 import { isValidGitUrl, normalizeGitUrl } from '../../shared/git-utils';
+import type { TopScope } from '../../shared/types';
 
 export interface GithubRepoListItem {
   owner: string;
@@ -17,7 +18,16 @@ export interface TopReposFetchOptions {
   limit?: number;
   /** Janela de "em alta", em dias. */
   windowDays?: number;
+  /** Escopo de ecossistema (all = repos criados na janela; demais = topics ativos na janela). */
+  scope?: TopScope;
 }
+
+/** Topics usados para filtrar os repos por ecossistema de agente (uma busca por topic). */
+export const SCOPE_TOPICS: Record<Exclude<TopScope, 'all'>, string[]> = {
+  claude: ['claude-code'],
+  codex: ['openai-codex', 'codex-cli'],
+  opencode: ['opencode']
+};
 
 export type JsonFetcher = (url: string, token?: string) => Promise<unknown>;
 
@@ -52,7 +62,19 @@ export function parseTopReposResponse(data: unknown): GithubRepoListItem[] {
   });
 }
 
-export function buildTopReposUrl(limit: number, windowDays: number): string {
+export function buildScopeUrls(limit: number, windowDays: number, scope: Exclude<TopScope, 'all'>): string[] {
+  const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  // Qualifiers `topic:` repetidos são AND no GitHub; por isso uma busca (e uma URL) por topic.
+  return SCOPE_TOPICS[scope].map((topic) => {
+    const q = `topic:${topic} pushed:>=${since}`;
+    return `https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&sort=stars&order=desc&per_page=${limit}`;
+  });
+}
+
+export function buildTopReposUrl(limit: number, windowDays: number, scope: TopScope = 'all'): string {
+  if (scope !== 'all') return buildScopeUrls(limit, windowDays, scope)[0];
   const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000)
     .toISOString()
     .slice(0, 10);
@@ -63,7 +85,9 @@ export function buildTopReposUrl(limit: number, windowDays: number): string {
 }
 
 /**
- * Busca os repos "em alta": criados nos últimos N dias, ordenados por estrelas.
+ * Busca os repos "em alta". Com scope 'all' (padrão): criados nos últimos N dias,
+ * ordenados por estrelas. Com scope de ecossistema: repos ligados aos topics do
+ * agente que tiveram atividade na janela (pushed), mesclados por estrelas.
  * (A API do GitHub não tem endpoint de trending; esta é a aproximação padrão.)
  */
 export async function fetchTopRepos(
@@ -72,8 +96,23 @@ export async function fetchTopRepos(
 ): Promise<{ fetchedAt: string; repos: GithubRepoListItem[] }> {
   const limit = Math.min(Math.max(options.limit ?? 25, 1), 100);
   const windowDays = Math.max(options.windowDays ?? 30, 1);
-  const data = await fetchJson(buildTopReposUrl(limit, windowDays), options.token);
-  return { fetchedAt: new Date().toISOString(), repos: parseTopReposResponse(data) };
+  const scope: TopScope = options.scope ?? 'all';
+  if (scope === 'all') {
+    const data = await fetchJson(buildTopReposUrl(limit, windowDays), options.token);
+    return { fetchedAt: new Date().toISOString(), repos: parseTopReposResponse(data) };
+  }
+  const urls = buildScopeUrls(limit, windowDays, scope);
+  const lists = await Promise.all(
+    urls.map((url) => fetchJson(url, options.token).then((data) => parseTopReposResponse(data)))
+  );
+  const merged = new Map<string, GithubRepoListItem>();
+  for (const list of lists) {
+    for (const repo of list) {
+      if (!merged.has(repo.remoteUrl)) merged.set(repo.remoteUrl, repo);
+    }
+  }
+  const repos = [...merged.values()].sort((a, b) => b.stars - a.stars).slice(0, limit);
+  return { fetchedAt: new Date().toISOString(), repos };
 }
 
 export interface GithubSearchResponse extends GithubRepoList {

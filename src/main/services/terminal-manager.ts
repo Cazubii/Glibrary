@@ -3,6 +3,12 @@ import { existsSync } from 'fs';
 import { resolve } from 'path';
 import { spawn as ptySpawn, type IPty } from 'node-pty';
 import { IpcChannels } from '../../shared/ipc-channels';
+import type {
+  TerminalAttachResult,
+  TerminalListResult,
+  TerminalSessionStatus,
+  TerminalSessionSummary
+} from '../../shared/types';
 
 export interface TerminalEvents {
   send(channel: string, payload: unknown): void;
@@ -11,16 +17,15 @@ export interface TerminalEvents {
 export type SpawnPty = typeof ptySpawn;
 
 interface TerminalSession {
-  pty: IPty;
+  pty: IPty | null;
   cwd: string;
+  name: string;
+  status: TerminalSessionStatus;
+  createdAt: string;
+  exitCode?: number;
   events: TerminalEvents | null;
+  attachmentId: string | null;
   output: string;
-  sequence: number;
-}
-
-export interface OpenTerminalResult {
-  id: string;
-  snapshot: string;
   sequence: number;
 }
 
@@ -41,85 +46,148 @@ export class TerminalManager {
     private readonly newId: () => string = () => randomUUID()
   ) {}
 
-  create(events: TerminalEvents, cwd: string, cols = 80, rows = 24): string {
+  create(cwd: string, cols = 80, rows = 24): TerminalSessionSummary {
     if (cwd === '' || !existsSync(cwd)) throw new Error(`Pasta não encontrada: ${cwd}`);
+    const resolvedCwd = resolve(cwd);
+    const cwdKey = this.cwdKey(resolvedCwd);
+    const usedNames = new Set(
+      [...this.sessions.values()]
+        .filter((session) => this.cwdKey(session.cwd) === cwdKey)
+        .map((session) => session.name)
+    );
+    let nameIndex = 1;
+    while (usedNames.has(`Terminal ${nameIndex}`)) nameIndex += 1;
+
     const id = this.newId();
     const pty = this.spawnPty(resolveShell(), [], {
       name: 'xterm-256color',
       cols,
       rows,
-      cwd,
+      cwd: resolvedCwd,
       env: { ...process.env } as unknown as Record<string, string>
     });
-    const session: TerminalSession = { pty, cwd: resolve(cwd), events, output: '', sequence: 0 };
+    const session: TerminalSession = {
+      pty,
+      cwd: resolvedCwd,
+      name: `Terminal ${nameIndex}`,
+      status: 'running',
+      createdAt: new Date().toISOString(),
+      events: null,
+      attachmentId: null,
+      output: '',
+      sequence: 0
+    };
     this.sessions.set(id, session);
     pty.onData((data) => {
-      if (this.sessions.get(id) !== session) return;
+      if (this.sessions.get(id) !== session || session.status !== 'running') return;
       session.sequence += 1;
       session.output = `${session.output}${data}`.slice(-TERMINAL_SNAPSHOT_LIMIT);
       session.events?.send(IpcChannels.terminalOutput, { id, data, sequence: session.sequence });
     });
     pty.onExit(({ exitCode }) => {
-      if (this.sessions.get(id) !== session) return;
-      this.sessions.delete(id);
-      session.events?.send(IpcChannels.terminalExit, { id, exitCode });
+      if (this.sessions.get(id) !== session || session.status !== 'running') return;
+      session.pty = null;
+      session.status = 'exited';
+      session.exitCode = exitCode;
+      const events = session.events;
+      session.events = null;
+      session.attachmentId = null;
+      events?.send(IpcChannels.terminalExit, { id, exitCode });
     });
-    return id;
+    return this.toSummary(id, session);
   }
 
-  /** Reanexa ao terminal da pasta ou cria uma sessÃ£o persistente para ela. */
-  open(events: TerminalEvents, cwd: string, cols = 80, rows = 24): OpenTerminalResult {
-    if (cwd === '' || !existsSync(cwd)) throw new Error(`Pasta nÃ£o encontrada: ${cwd}`);
+  list(cwd: string): TerminalListResult {
     const resolvedCwd = resolve(cwd);
-    const key = process.platform === 'win32' ? resolvedCwd.toLocaleLowerCase('en-US') : resolvedCwd;
-    const existing = [...this.sessions.entries()].find(([, session]) => {
-      const sessionKey = process.platform === 'win32' ? session.cwd.toLocaleLowerCase('en-US') : session.cwd;
-      return sessionKey === key;
-    });
-    if (existing != null) {
-      const [id, session] = existing;
+    const cwdKey = this.cwdKey(resolvedCwd);
+    const sessions = [...this.sessions.entries()]
+      .filter(([, session]) => this.cwdKey(session.cwd) === cwdKey)
+      .map(([id, session]) => this.toSummary(id, session));
+    return { cwd: resolvedCwd, sessions };
+  }
+
+  private cwdKey(cwd: string): string {
+    return process.platform === 'win32' ? cwd.toLocaleLowerCase('en-US') : cwd;
+  }
+
+  private toSummary(id: string, session: TerminalSession): TerminalSessionSummary {
+    return {
+      id,
+      cwd: session.cwd,
+      name: session.name,
+      status: session.status,
+      createdAt: session.createdAt,
+      ...(session.exitCode === undefined ? {} : { exitCode: session.exitCode })
+    };
+  }
+
+  attach(id: string, events: TerminalEvents, cols = 80, rows = 24): TerminalAttachResult {
+    const session = this.sessions.get(id);
+    if (session == null) throw new Error(`Sessão de terminal não encontrada: ${id}`);
+
+    const attachmentId = randomUUID();
+    if (session.status === 'running' && session.pty != null) {
       session.events = events;
-      return { id, snapshot: session.output, sequence: session.sequence };
+      session.attachmentId = attachmentId;
+      session.pty.resize(cols, rows);
     }
 
-    const id = this.create(events, resolvedCwd, cols, rows);
-    const session = this.sessions.get(id);
-    return { id, snapshot: session?.output ?? '', sequence: session?.sequence ?? 0 };
+    return {
+      id,
+      attachmentId,
+      snapshot: session.output,
+      sequence: session.sequence,
+      status: session.status,
+      ...(session.exitCode === undefined ? {} : { exitCode: session.exitCode })
+    };
   }
 
-  detach(id: string): void {
+  detach(id: string, attachmentId: string): void {
     const session = this.sessions.get(id);
-    if (session != null) session.events = null;
+    if (session != null && session.attachmentId === attachmentId) {
+      session.events = null;
+      session.attachmentId = null;
+    }
   }
 
   killForCwd(cwd: string): void {
     const resolvedCwd = resolve(cwd);
-    const key = process.platform === 'win32' ? resolvedCwd.toLocaleLowerCase('en-US') : resolvedCwd;
-    for (const [id, session] of this.sessions) {
-      const sessionKey = process.platform === 'win32' ? session.cwd.toLocaleLowerCase('en-US') : session.cwd;
-      if (sessionKey === key) this.kill(id);
+    const key = this.cwdKey(resolvedCwd);
+    for (const [id, session] of [...this.sessions.entries()]) {
+      if (this.cwdKey(session.cwd) === key) this.close(id);
     }
+  }
+
+  killAll(): void {
+    for (const id of [...this.sessions.keys()]) this.close(id);
   }
 
   input(id: string, data: string): void {
     const session = this.sessions.get(id);
-    if (session == null) return;
+    if (session == null || session.status !== 'running' || session.pty == null) return;
     session.pty.write(data);
   }
 
   resize(id: string, cols: number, rows: number): void {
     const session = this.sessions.get(id);
-    if (session == null) return;
+    if (session == null || session.status !== 'running' || session.pty == null) return;
     session.pty.resize(cols, rows);
   }
 
-  kill(id: string): void {
+  close(id: string): void {
     const session = this.sessions.get(id);
     if (session == null) return;
-    session.pty.kill();
+
+    this.sessions.delete(id);
+    const pty = session.pty;
+    session.pty = null;
+    session.events = null;
+    session.attachmentId = null;
+    if (pty != null && session.status === 'running') pty.kill();
   }
 
   alive(id: string): boolean {
-    return this.sessions.has(id);
+    const session = this.sessions.get(id);
+    return session?.status === 'running' && session.pty != null;
   }
 }

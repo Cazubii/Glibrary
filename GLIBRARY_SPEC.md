@@ -555,7 +555,7 @@ flowchart TD
 ### 13.3 Ao iniciar o app (todas as vezes)
 1. Carregar a biblioteca e corrigir status presos (seção 5.2).
 2. Marcar `missing` em pastas que sumiram.
-3. Se `checkUpdatesOnStart`: `git fetch` em segundo plano, **no máximo 4 em paralelo**, preenchendo `behindBy`. Nunca fazer pull automático.
+3. A verificação remota é manual por padrão e cobre até 12 projetos. Se `checkUpdatesOnStart` estiver ativado pelo usuário, executa ao abrir a Biblioteca. Nunca fazer pull automático.
 
 ---
 

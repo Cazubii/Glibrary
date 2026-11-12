@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, CircleAlert, ExternalLink, Loader2, Plus, RotateCw, Trash2, Wrench, X } from 'lucide-react';
+import { Check, CircleAlert, ExternalLink, FolderOpen, Loader2, Plus, RotateCw, Trash2, Wrench, X } from 'lucide-react';
 import type { ToolEntry, ToolInstallRun, ToolStatus } from '@shared/types';
 import { api } from '../lib/api';
 import { useToolsStore } from '../store/tools';
@@ -30,6 +30,7 @@ export default function NativeToolsPanel({ onError }: Props): React.JSX.Element 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [url, setUrl] = useState('');
   const [saving, setSaving] = useState(false);
+  const [openingToolId, setOpeningToolId] = useState<string | null>(null);
   const orderedEntries = useMemo(() => entries, [entries]);
 
   useEffect(() => {
@@ -72,6 +73,17 @@ export default function NativeToolsPanel({ onError }: Props): React.JSX.Element 
       await removeTool(tool.id);
     } catch (error) {
       onError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const handleOpen = async (tool: ToolEntry): Promise<void> => {
+    setOpeningToolId(tool.id);
+    try {
+      await api.toolsOpen(tool.id);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setOpeningToolId(null);
     }
   };
 
@@ -147,6 +159,18 @@ export default function NativeToolsPanel({ onError }: Props): React.JSX.Element 
                     {installing ? <Loader2 size={13} className="animate-spin" /> : <RotateCw size={13} />}
                     {actionLabel}
                   </button>
+                  {tool.id !== 'builtin-omniroute' && (
+                    <button
+                      type="button"
+                      disabled={!installed || installing || openingToolId === tool.id}
+                      onClick={() => void handleOpen(tool)}
+                      title={!installed ? 'Disponível após a instalação' : 'Abrir pasta do repositório'}
+                      className="flex items-center gap-1.5 rounded bg-steam-elevated px-3 py-1.5 text-xs font-semibold text-steam-text hover:bg-steam-accent/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {openingToolId === tool.id ? <Loader2 size={13} className="animate-spin" /> : <FolderOpen size={13} />}
+                      {openingToolId === tool.id ? 'Abrindo…' : 'Abrir'}
+                    </button>
+                  )}
                   {tool.source === 'custom' && (
                     <button
                       type="button"

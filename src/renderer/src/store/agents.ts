@@ -11,8 +11,8 @@ interface AgentsState {
   load: () => Promise<void>;
   initEvents: () => () => void;
   setViewMode: (mode: AgentViewMode) => Promise<void>;
-  createProfile: (input: { name: string; repoId: string; command: string; args?: string[] }) => Promise<AgentProfile>;
-  updateProfile: (id: string, patch: { name?: string; repoId?: string; command?: string; args?: string[] }) => Promise<void>;
+  createProfile: (input: { name: string; repoId: string; command: string; args?: string[]; monitorProvider?: AgentProfile['monitorProvider'] }) => Promise<AgentProfile>;
+  updateProfile: (id: string, patch: { name?: string; repoId?: string; command?: string; args?: string[]; monitorProvider?: AgentProfile['monitorProvider'] }) => Promise<void>;
   removeProfile: (id: string) => Promise<void>;
   startRun: (profileId: string, prompt?: string) => Promise<void>;
   stopRun: (id: string) => Promise<void>;

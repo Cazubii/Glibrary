@@ -85,6 +85,31 @@ export function opengraphCoverUrl(owner: string, repo: string): string {
   return `https://opengraph.githubassets.com/1/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
 }
 
+export interface GithubUser {
+  login: string;
+  name?: string;
+  email?: string;
+  avatarUrl?: string;
+}
+
+/** Extrai a identidade da resposta de /user; lança quando o token não tem conta associada. */
+export function parseGithubUser(data: unknown): GithubUser {
+  if (data == null || typeof data !== 'object' || typeof (data as Record<string, unknown>)['login'] !== 'string') {
+    throw new Error('Resposta inesperada da API do GitHub (/user)');
+  }
+  const d = data as Record<string, unknown>;
+  const user: GithubUser = { login: d['login'] as string };
+  if (typeof d['name'] === 'string') user.name = d['name'];
+  if (typeof d['email'] === 'string') user.email = d['email'];
+  if (typeof d['avatar_url'] === 'string') user.avatarUrl = d['avatar_url'];
+  return user;
+}
+
+export async function fetchGithubUser(token: string): Promise<GithubUser> {
+  const data = await fetchJson('https://api.github.com/user', token);
+  return parseGithubUser(data);
+}
+
 /** Baixa o conteúdo cru de um arquivo (ex.: raw.githubusercontent.com). */
 export function fetchText(url: string, token?: string): Promise<string> {
   return new Promise((resolve, reject) => {

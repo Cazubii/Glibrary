@@ -3,7 +3,7 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { simpleGit } from 'simple-git';
-import { GitService } from '../src/main/services/git-service';
+import { githubAuthConfig, GitService } from '../src/main/services/git-service';
 
 let root: string;
 let origin: string;
@@ -35,6 +35,16 @@ describe('GitService', () => {
     await expect(fs.stat(target)).resolves.toBeTruthy();
     expect(stages.length).toBeGreaterThan(0);
     expect(service.isCloning('r1')).toBe(false);
+  });
+
+  it('formata a config auth no formato que simple-git recebe', async () => {
+    const config = githubAuthConfig('test-token');
+    expect(config).toEqual([
+      `http.extraHeader=Authorization: basic ${Buffer.from('x-access-token:test-token').toString('base64')}`
+    ]);
+    await expect(simpleGit({ baseDir: origin, config }).status()).resolves.toMatchObject({
+      current: 'main'
+    });
   });
 
   it('fetchStatus reflete limpo e sem atraso', async () => {

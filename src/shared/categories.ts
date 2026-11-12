@@ -55,3 +55,67 @@ export function isKnownAssetCategoryRaw(raw: unknown): boolean {
   const normalized = raw.trim().toLowerCase().replace(/\s+/g, '-');
   return CATEGORY_KEYS.has(normalized);
 }
+
+/** Palavras-chave (pt/en) por categoria para inferência em agentes/skills sem `category:`. */
+const CATEGORY_KEYWORDS: Array<{ category: AssetCategory; keywords: string[] }> = [
+  {
+    category: 'banco-de-dados',
+    keywords: ['banco de dados', 'database', 'sql', 'postgres', 'mysql', 'sqlite', 'mongodb', 'redis', 'schema', 'migration', 'prisma', 'drizzle', 'query']
+  },
+  {
+    category: 'testes',
+    keywords: ['teste', 'testes', 'test', 'testing', 'e2e', 'end-to-end', 'unit', 'tdd', 'jest', 'vitest', 'playwright', 'pytest', 'coverage', 'qa']
+  },
+  {
+    category: 'devops',
+    keywords: ['devops', 'deploy', 'docker', 'kubernetes', 'k8s', 'terraform', 'infraestrutura', 'infrastructure', 'pipeline', 'ci/cd', 'ci ', ' cd', 'github actions', 'release', 'monitoring']
+  },
+  {
+    category: 'documentacao',
+    keywords: ['documenta', 'documen', 'docs', 'readme', 'changelog', 'adr', 'wiki', 'blog', 'escrev', 'writing', 'tutorial', 'tradu']
+  },
+  {
+    category: 'frontend',
+    keywords: ['frontend', 'front-end', 'front end', 'react', 'vue', 'angular', 'next.js', 'nextjs', 'svelte', 'tailwind', 'componente', 'component', 'browser', 'navegador', 'html', 'web']
+  },
+  {
+    category: 'backend',
+    keywords: ['backend', 'back-end', 'back end', 'api', 'servidor', 'server', 'rest', 'graphql', 'endpoint', 'webhook', 'node', 'express', 'fastapi', 'django']
+  },
+  {
+    category: 'design',
+    keywords: ['design', 'designer', 'ui', 'ux', 'logo', 'figma', 'layout', 'estilo', 'style', 'css', 'cor', 'icone', 'icon', 'visual', 'paleta', 'tipograf', 'typograph', 'wireframe', 'interface']
+  },
+  {
+    category: 'codigo',
+    keywords: ['codigo', 'código', 'code', 'review', 'refactor', 'refatora', 'debug', 'bug', 'lint', 'clean code', 'terminal', 'cli', 'script', 'reviso', 'revisão']
+  }
+];
+
+const KEYWORD_MATCHERS: Array<{ category: AssetCategory; matchers: RegExp[] }> =
+  CATEGORY_KEYWORDS.map(({ category, keywords }) => ({
+    category,
+    matchers: keywords.map((keyword) => {
+      const escaped = keyword.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`\\b${escaped}\\b`, 'i');
+    })
+  }));
+
+/**
+ * Infere uma AssetCategory a partir de texto livre (nome/descrição do frontmatter ou
+ * nome do arquivo), por contagem de palavras-chave (match por fronteira de palavra,
+ * sem caixa. Empate = primeira na ordem fixa acima (do mais específico ao mais genérico).
+ * Sem match: null.
+ */
+export function inferAssetCategory(text: string | undefined): AssetCategory | null {
+  let best: AssetCategory | null = null;
+  let bestScore = 0;
+  for (const { category, matchers } of KEYWORD_MATCHERS) {
+    const score = matchers.filter((matcher) => matcher.test(text ?? '')).length;
+    if (score > bestScore) {
+      best = category;
+      bestScore = score;
+    }
+  }
+  return best;
+}

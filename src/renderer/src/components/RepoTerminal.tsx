@@ -1,117 +1,118 @@
-import { useEffect, useRef, useState } from 'react';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import '@xterm/xterm/css/xterm.css';
-import { api } from '../lib/api';
+import { useCallback, useEffect } from 'react';
+import { Plus, X } from 'lucide-react';
+import type { TerminalSessionSummary } from '@shared/types';
+import TerminalSessionView from './TerminalSessionView';
+import { terminalCwdKey, useTerminalsStore } from '../store/terminals';
 
 interface Props {
   cwd: string;
-  persistent?: boolean;
   onActivity?: () => void;
+  onClose?: () => void;
 }
 
-/** Terminal real (PTY) embutido, com sessão por drawer aberto. */
-export default function RepoTerminal({ cwd, persistent = false, onActivity }: Props): React.JSX.Element {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [exited, setExited] = useState<number | null>(null);
+export default function RepoTerminal({ cwd, onActivity, onClose }: Props): React.JSX.Element | null {
+  const group = useTerminalsStore((state) => {
+    const key = terminalCwdKey(cwd);
+    return state.groups[key] ?? Object.values(state.groups).find((item) => terminalCwdKey(item.cwd) === key);
+  });
+  const openPanel = useTerminalsStore((state) => state.openPanel);
+  const hidePanel = useTerminalsStore((state) => state.hidePanel);
+  const createTerminal = useTerminalsStore((state) => state.createTerminal);
+  const selectTerminal = useTerminalsStore((state) => state.selectTerminal);
+  const closeTerminal = useTerminalsStore((state) => state.closeTerminal);
+  const markExited = useTerminalsStore((state) => state.markExited);
+  const onExit = useCallback((id: string, exitCode: number) => markExited(id, exitCode), [markExited]);
+  const closePanel = useCallback(() => {
+    hidePanel(cwd);
+    onClose?.();
+  }, [cwd, hidePanel, onClose]);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (container == null) return;
-    setError(null);
-    setExited(null);
-    const term = new Terminal({
-      fontSize: 13,
-      cursorBlink: true,
-      theme: { background: '#1b202b', foreground: '#d5d9e0', cursor: '#66c0f4' }
-    });
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-    term.open(container);
-    term.onData((data) => {
-      if (terminalId != null) api.terminalInput(terminalId, data);
-    });
-    term.onResize(({ cols, rows }) => {
-      if (terminalId != null) api.terminalResize(terminalId, cols, rows);
-    });
+    void openPanel(cwd);
+  }, [cwd, openPanel]);
 
-    const observer = new ResizeObserver(() => fit.fit());
-    observer.observe(container);
+  if (group != null && !group.panelOpen) return null;
 
-    let terminalId: string | null = null;
-    let disposed = false;
-    let opening = true;
-    const pendingOutput = new Map<string, Array<{ data: string; sequence?: number }>>();
-    const offOutput = api.onTerminalOutput(({ id, data, sequence }) => {
-      onActivity?.();
-      if (id === terminalId) {
-        term.write(data);
-      } else if (opening) {
-        const pending = pendingOutput.get(id) ?? [];
-        pending.push({ data, ...(sequence != null ? { sequence } : {}) });
-        pendingOutput.set(id, pending);
-      }
-    });
-    const offExit = api.onTerminalExit(({ id, exitCode }) => {
-      if (id !== terminalId) return;
-      terminalId = null;
-      setExited(exitCode);
-      term.write(`\r\n\x1b[90m[ Processo encerrado (código ${exitCode}) ]\x1b[0m\r\n`);
-    });
-
-    const openTerminal = persistent
-      ? api.terminalOpen(cwd)
-      : api.terminalCreate(cwd).then((id) => ({ id, snapshot: '', sequence: 0 }));
-
-    openTerminal
-      .then((result) => {
-        if (disposed) {
-          if (persistent) void api.terminalDetach(result.id).catch(() => undefined);
-          else api.terminalKill(result.id);
-          return;
-        }
-        terminalId = result.id;
-        opening = false;
-        if (result.snapshot !== '') term.write(result.snapshot);
-        const buffered = pendingOutput.get(result.id) ?? [];
-        for (const output of buffered) {
-          if (output.sequence == null || output.sequence > result.sequence) term.write(output.data);
-        }
-        pendingOutput.delete(result.id);
-        pendingOutput.clear();
-        fit.fit();
-        term.focus();
-      })
-      .catch((e: unknown) => {
-        setError(e instanceof Error ? e.message : String(e));
-        term.write(`\r\n\x1b[31m${e instanceof Error ? e.message : String(e)}\x1b[0m\r\n`);
-      });
-
-    return () => {
-      disposed = true;
-      observer.disconnect();
-      offOutput();
-      offExit();
-      if (terminalId != null) {
-        if (persistent) void api.terminalDetach(terminalId).catch(() => undefined);
-        else api.terminalKill(terminalId);
-      }
-      term.dispose();
-    };
-  }, [cwd, onActivity, persistent]);
+  const sessions: TerminalSessionSummary[] = group?.sessions ?? [];
+  const active = sessions.find((session) => session.id === group?.activeId);
+  const loading = group?.loading ?? true;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-[#1b202b]">
-      {error != null && (
-        <div className="bg-steam-error/15 px-3 py-1 text-xs text-steam-error">{error}</div>
-      )}
-      {exited != null && (
-        <div className="bg-steam-warn/15 px-3 py-1 text-xs text-steam-warn">
-          Sessão encerrada (código {exited}). Feche o painel para abrir uma nova.
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded border border-steam-elevated bg-[#1b202b]" aria-label="Terminais do projeto">
+      <div className="flex min-h-10 items-center gap-2 border-b border-steam-elevated bg-steam-panel px-2">
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" role="tablist" aria-label="Sessões do terminal">
+          {sessions.map((session) => (
+            <div key={session.id} className="flex shrink-0 items-center rounded-t border border-b-0 border-steam-elevated bg-steam-panel">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={session.id === group?.activeId}
+                aria-label={`${session.name}${session.status === 'exited' ? ', encerrado' : ''}`}
+                onClick={() => selectTerminal(cwd, session.id)}
+                className={`min-h-8 max-w-48 truncate px-3 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-steam-accent ${
+                  session.id === group?.activeId ? 'text-steam-accent' : 'text-steam-text/70 hover:text-steam-text'
+                }`}
+              >
+                {session.name}
+                {session.status === 'exited' && <span className="ml-2 text-steam-warn">Encerrado</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => void closeTerminal(cwd, session.id)}
+                className="mr-1 rounded p-1 text-steam-text/50 transition-colors hover:bg-steam-elevated hover:text-steam-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steam-accent"
+                aria-label={`Fechar ${session.name}`}
+              >
+                <X size={12} aria-hidden="true" />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => void createTerminal(cwd)}
+          disabled={loading}
+          className="inline-flex min-h-8 shrink-0 items-center justify-center rounded px-2 text-steam-text/75 transition-colors hover:bg-steam-elevated hover:text-steam-text disabled:cursor-wait disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steam-accent"
+          aria-label="Novo terminal"
+          title="Novo terminal"
+        >
+          <Plus size={15} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={closePanel}
+          className="inline-flex min-h-8 shrink-0 items-center gap-1 rounded px-2 text-xs text-steam-text/65 transition-colors hover:bg-steam-elevated hover:text-steam-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steam-accent"
+          aria-label="Fechar painel do terminal"
+          title="Fechar painel"
+        >
+          Fechar painel <X size={13} aria-hidden="true" />
+        </button>
+      </div>
+
+      {group?.error != null && <div className="bg-steam-error/15 px-3 py-1.5 text-xs text-steam-error" role="alert">{group.error}</div>}
+      {active != null ? (
+        <TerminalSessionView
+          key={active.id}
+          session={active}
+          onExit={onExit}
+          onClosePanel={closePanel}
+          onActivity={onActivity}
+        />
+      ) : loading ? (
+        <div className="flex min-h-48 flex-1 items-center justify-center text-xs text-steam-text/55" role="status">
+          Carregando terminais…
+        </div>
+      ) : (
+        <div className="flex min-h-48 flex-1 flex-col items-center justify-center gap-3 text-sm text-steam-text/60">
+          <span>Nenhum terminal aberto</span>
+          <button
+            type="button"
+            onClick={() => void createTerminal(cwd)}
+            className="rounded border border-steam-elevated px-3 py-2 text-xs text-steam-text transition-colors hover:bg-steam-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steam-accent"
+          >
+            Novo terminal
+          </button>
         </div>
       )}
-      <div ref={containerRef} className="flex-1" />
-    </div>
+    </section>
   );
 }

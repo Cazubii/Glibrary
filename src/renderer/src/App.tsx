@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, FolderGit2, Library, BarChart3, Boxes, Bot, Moon, Search, Sun, Wrench, X } from 'lucide-react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { AlertCircle, CheckCircle2, Activity, Library, BarChart3, Boxes, Bot, FolderGit2, Moon, Search, ScanSearch, Sun, Wrench, X } from 'lucide-react';
 import { useLibraryStore } from './store/library';
+import GithubAccountMenu from './components/GithubAccountMenu';
 import AssetLibraryPage from './pages/AssetLibraryPage';
-import DashboardPage from './pages/DashboardPage';
-import ProjectsPage from './pages/ProjectsPage';
-import CollectionsPage from './pages/CollectionsPage';
-import GithubSearchPage from './pages/GithubSearchPage';
-import AgentesPage from './pages/AgentesPage';
-import NativeToolsPage from './pages/NativeToolsPage';
 
-type Page = 'library' | 'dashboard' | 'projects' | 'collections' | 'search' | 'agentes' | 'ferramentas';
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
+const CollectionsPage = lazy(() => import('./pages/CollectionsPage'));
+const GithubSearchPage = lazy(() => import('./pages/GithubSearchPage'));
+const RepoAnalysisPage = lazy(() => import('./pages/RepoAnalysisPage'));
+const ConsumoPage = lazy(() => import('./pages/ConsumoPage'));
+const ToolsPage = lazy(() => import('./pages/ToolsPage'));
+const AgentesPage = lazy(() => import('./pages/AgentesPage'));
+
+type Page = 'library' | 'dashboard' | 'projects' | 'collections' | 'search' | 'analyze' | 'consumo' | 'ferramentas' | 'agentes';
 type ToastKind = 'error' | 'success';
 
 interface Toast { id: number; message: string; kind: ToastKind }
@@ -75,10 +79,13 @@ export default function App(): React.JSX.Element {
         <button type="button" onClick={() => setPage('library')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'library' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Library size={15}/>Biblioteca</button>
         <button type="button" onClick={() => setPage('collections')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'collections' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Boxes size={15}/>Coleções</button>
         <button type="button" onClick={() => setPage('search')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'search' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Search size={15}/>Busca</button>
+        <button type="button" onClick={() => setPage('analyze')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'analyze' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><ScanSearch size={15}/>Análise</button>
+        <button type="button" onClick={() => setPage('consumo')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'consumo' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Activity size={15}/>Consumo</button>
         <button type="button" onClick={() => setPage('agentes')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'agentes' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Bot size={15}/>Agentes</button>
         <button type="button" onClick={() => setPage('ferramentas')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'ferramentas' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Wrench size={15}/>Ferramentas</button>
       </nav>
       <span className="ml-2 hidden shrink-0 whitespace-nowrap text-sm text-steam-text/50 2xl:block">Skills · Agents · Bases · Projetos</span>
+      <GithubAccountMenu onError={onError} />
       <button
         type="button"
         onClick={toggleTheme}
@@ -90,19 +97,25 @@ export default function App(): React.JSX.Element {
       </button>
     </header>
     <div className="flex min-h-0 flex-1">
-      {page === 'library'
-        ? <AssetLibraryPage onError={onError} onSuccess={onSuccess}/>
-        : page === 'dashboard'
-          ? <DashboardPage onError={onError} onSuccess={onSuccess}/>
-          : page === 'projects'
-            ? <ProjectsPage onError={onError} onSuccess={onSuccess}/>
-          : page === 'collections'
-            ? <CollectionsPage onError={onError} onSuccess={onSuccess}/>
-            : page === 'agentes'
-              ? <AgentesPage/>
-              : page === 'ferramentas'
-                ? <NativeToolsPage onError={onError}/>
-                : <GithubSearchPage onError={onError} onSuccess={onSuccess}/>}
+      <Suspense fallback={<div className="m-auto text-sm text-steam-text/50">Carregando página…</div>}>
+        {page === 'library'
+          ? <AssetLibraryPage onError={onError} onSuccess={onSuccess}/>
+          : page === 'dashboard'
+            ? <DashboardPage onError={onError} onSuccess={onSuccess}/>
+            : page === 'projects'
+              ? <ProjectsPage onError={onError} onSuccess={onSuccess}/>
+            : page === 'collections'
+              ? <CollectionsPage onError={onError} onSuccess={onSuccess}/>
+              : page === 'search'
+                ? <GithubSearchPage onError={onError} onSuccess={onSuccess}/>
+                : page === 'analyze'
+                  ? <RepoAnalysisPage onError={onError} onSuccess={onSuccess}/>
+                  : page === 'consumo'
+                    ? <ConsumoPage onError={onError} onSuccess={onSuccess}/>
+                    : page === 'agentes'
+                      ? <AgentesPage/>
+                      : <ToolsPage onError={onError}/>}
+      </Suspense>
     </div>
     <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex flex-col gap-2">{toasts.map((toast) => <div key={toast.id} className={`pointer-events-auto flex max-w-sm items-start gap-2 rounded px-4 py-3 text-sm text-white shadow-lg ${toast.kind === 'success' ? 'bg-steam-green' : 'bg-steam-error'}`} role="status">{toast.kind === 'success' ? <CheckCircle2 size={16} className="mt-0.5 shrink-0"/> : <AlertCircle size={16} className="mt-0.5 shrink-0"/>}<span className="flex-1">{toast.message}</span><button type="button" onClick={() => setToasts((items) => items.filter((item) => item.id !== toast.id))} aria-label="Fechar aviso"><X size={14}/></button></div>)}</div>
   </div>;

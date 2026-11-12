@@ -4,10 +4,12 @@ import { copyFileSync, existsSync, statSync } from 'fs';
 import { readFile, rm, writeFile } from 'fs/promises';
 import { spawn } from 'child_process';
 import { basename, join, resolve } from 'path';
-import type { DetectionResult, IpcResult, Repo, Settings } from '../../shared/types';
+import type { DetectionResult, GitStatusDetail, GithubUser, IpcResult, Repo, Settings } from '../../shared/types';
 import {
   AddLocalInputSchema,
   AddByUrlInputSchema,
+  AuthTokenInputSchema,
+  CommitInputSchema,
   RepoIdInputSchema,
   RepoUpdateInputSchema,
   RepoRemoveInputSchema,
@@ -19,7 +21,7 @@ import { migrateLibrary } from '../services/library-store';
 import type { GitService } from '../services/git-service';
 import { detectProject } from '../services/detector';
 import { applyDetection } from '../services/detector/apply';
-import { fetchRepoMeta, encodeToken, decodeToken } from '../services/github-api';
+import { fetchRepoMeta, fetchGithubUser, encodeToken, decodeToken } from '../services/github-api';
 import { downloadCover } from '../services/cover-service';
 import {
   isValidGitUrl,
@@ -88,6 +90,14 @@ export function registerRepoIpc(
 ): void {
   const githubToken = (): string | undefined =>
     decodeToken(store.getSettings().githubToken);
+  /** Resolve a pasta local de um repo OU de um projeto da biblioteca. */
+  const gitTarget = (id: string): string => {
+    const repoLocal = store.getRepo(id)?.localPath;
+    if (repoLocal != null && repoLocal !== '') return repoLocal;
+    const project = store.listProjects().find((p) => p.id === id);
+    if (project?.localPath != null && project.localPath !== '') return project.localPath;
+    throw new Error('Repositório/projeto sem pasta local');
+  };
   ipcMain.handle(IpcChannels.libraryGet, async (): Promise<IpcResult<unknown>> => {
     try {
       return ok(store.get());
@@ -565,6 +575,69 @@ export function registerRepoIpc(
         });
         broadcastStatus(id, updated.status);
         return ok(updated);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.githubAuthCheck,
+    async (_event, raw: unknown): Promise<IpcResult<GithubUser>> => {
+      try {
+        const { token } = AuthTokenInputSchema.parse(raw);
+        return ok(await fetchGithubUser(token));
+      } catch (e) {
+        return fail(e instanceof Error && e.message.includes('HTTP 401')
+          ? new Error('Token inválido ou sem autorização no GitHub')
+          : e);
+      }
+    },
+  );
+
+  ipcMain.handle(IpcChannels.githubAuthMe, async (): Promise<IpcResult<GithubUser | null>> => {
+    try {
+      const token = decodeToken(store.getSettings().githubToken);
+      if (token == null) return ok(null);
+      return ok(await fetchGithubUser(token));
+    } catch (e) {
+      // token salvo mas inválido/expirado: sessão tratada como desconectada
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('HTTP 401')) return ok(null);
+      return fail(e);
+    }
+  });
+
+  ipcMain.handle(
+    IpcChannels.repoGitStatus,
+    async (_event, raw: unknown): Promise<IpcResult<GitStatusDetail>> => {
+      try {
+        const { id } = RepoIdInputSchema.parse(raw);
+        return ok(await git.listChanges(gitTarget(id)));
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.repoCommit,
+    async (_event, raw: unknown): Promise<IpcResult<{ commit: string }>> => {
+      try {
+        const { id, message } = CommitInputSchema.parse(raw);
+        return ok(await git.commitAll(gitTarget(id), message));
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.repoPush,
+    async (_event, raw: unknown): Promise<IpcResult<{ branch: string }>> => {
+      try {
+        const { id } = RepoIdInputSchema.parse(raw);
+        return ok(await git.push(gitTarget(id), githubToken()));
       } catch (e) {
         return fail(e);
       }

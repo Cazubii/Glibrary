@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { join } from 'path';
 import { homedir } from 'os';
 import { z } from 'zod';
-import type { Agent, AgentProfile, BaseItem, Kit, LibraryFile, ProjectRef, Repo, Settings, Skill, ToolEntry, TopRepos, UsageEvent } from '../../shared/types';
+import type { Agent, AgentProfile, BaseItem, Kit, LibraryFile, ProjectRef, Repo, Settings, Skill, ToolEntry, TopRepos, TopScope, UsageEvent } from '../../shared/types';
 import {
   AgentProfileInputSchema,
   AgentProfileSchema,
@@ -55,8 +55,9 @@ export function defaultSettings(reposRoot: string): Settings {
     terminalPreference: 'auto',
     theme: 'dark',
     viewMode: 'grid',
-    checkUpdatesOnStart: true,
-    inheritTags: true
+    checkUpdatesOnStart: false,
+    inheritTags: true,
+    userTools: []
   };
 }
 
@@ -111,7 +112,7 @@ const zLegacyLibrary = z.object({
     reposRoot: z.string(), scanFolders: z.array(z.string()).default([]), githubToken: z.string().optional(),
     editorCommand: z.string().default('code'), terminalPreference: z.string().default('auto'),
     theme: z.enum(['dark', 'light']).default('dark'), viewMode: z.enum(['grid', 'list']).default('grid'),
-    checkUpdatesOnStart: z.boolean().default(true)
+    checkUpdatesOnStart: z.boolean().default(false)
   })
 });
 
@@ -159,7 +160,6 @@ export class LibraryStore {
         await this.save();
       } catch {
         this.data = emptyLibrary(this.data.settings.reposRoot);
-        await this.save();
       }
     }
     if (this.seedBuiltinTools()) await this.save();
@@ -267,7 +267,7 @@ export class LibraryStore {
     return this.data.agentProfiles;
   }
 
-  async addAgentProfile(input: { name: string; repoId: string; command: string; args?: string[] }): Promise<AgentProfile> {
+  async addAgentProfile(input: { name: string; repoId: string; command: string; args?: string[]; monitorProvider?: AgentProfile['monitorProvider'] }): Promise<AgentProfile> {
     const parsed = AgentProfileInputSchema.parse(input);
     const profile = AgentProfileSchema.parse({
       id: randomUUID(),
@@ -275,6 +275,7 @@ export class LibraryStore {
       repoId: parsed.repoId,
       command: parsed.command,
       args: parsed.args,
+      monitorProvider: parsed.monitorProvider,
       createdAt: new Date().toISOString()
     });
     this.data.agentProfiles.push(profile);
@@ -282,7 +283,7 @@ export class LibraryStore {
     return profile;
   }
 
-  async updateAgentProfile(id: string, patch: { name?: string; repoId?: string; command?: string; args?: string[]; lastRunAt?: string }): Promise<AgentProfile> {
+  async updateAgentProfile(id: string, patch: { name?: string; repoId?: string; command?: string; args?: string[]; monitorProvider?: AgentProfile['monitorProvider']; lastRunAt?: string }): Promise<AgentProfile> {
     const index = this.data.agentProfiles.findIndex((item) => item.id === id);
     if (index === -1) throw new Error(`Perfil não encontrado: ${id}`);
     const merged = AgentProfileSchema.parse({
@@ -291,6 +292,7 @@ export class LibraryStore {
       ...(patch.repoId != null ? { repoId: patch.repoId } : {}),
       ...(patch.command != null ? { command: patch.command.trim() } : {}),
       ...(patch.args != null ? { args: patch.args } : {}),
+      ...(patch.monitorProvider != null ? { monitorProvider: patch.monitorProvider } : {}),
       ...(patch.lastRunAt != null ? { lastRunAt: patch.lastRunAt } : {})
     });
     this.data.agentProfiles[index] = merged;
@@ -405,16 +407,26 @@ export class LibraryStore {
   listAgents(): Agent[] { return this.data.agents; }
   listBases(): BaseItem[] { return this.data.bases; }
   listProjects(): ProjectRef[] { return this.data.projects; }
-  getTopRepos(windowDays = 30): TopRepos {
+  getTopRepos(windowDays = 30, scope: TopScope = 'all'): TopRepos {
+    if (scope !== 'all') {
+      const key = `${scope}:${windowDays}`;
+      return this.data.topReposScopes?.[key] ?? { fetchedAt: '', repos: [], windowDays, scope };
+    }
     return windowDays === 7
       ? (this.data.topRepos7 ?? { fetchedAt: '', repos: [], windowDays: 7 })
       : this.data.topRepos;
   }
 
   /** Substitui a lista de top repos (busca do GitHub no startup ou manual), por janela de dias. */
-  async setTopRepos(next: { fetchedAt: string; repos: LibraryFile['topRepos']['repos']; windowDays?: number }): Promise<void> {
+  async setTopRepos(next: { fetchedAt: string; repos: LibraryFile['topRepos']['repos']; windowDays?: number; scope?: TopScope }): Promise<void> {
     const parsed = TopReposSchema.parse(next);
-    if (parsed.windowDays === 7) {
+    if (parsed.scope != null && parsed.scope !== 'all') {
+      const key = `${parsed.scope}:${parsed.windowDays ?? 30}`;
+      this.data = LibraryFileSchema.parse({
+        ...this.data,
+        topReposScopes: { ...this.data.topReposScopes, [key]: parsed }
+      });
+    } else if (parsed.windowDays === 7) {
       this.data = LibraryFileSchema.parse({ ...this.data, topRepos7: parsed });
     } else {
       this.data.topRepos = parsed;

@@ -19,6 +19,7 @@ import type { ProjectRepoSummary } from '../../../shared/github-projects';
 import { api } from '../lib/api';
 import { findLibraryRepo } from '../store/projects';
 import { useLibraryStore } from '../store/library';
+import { useTerminalGroup, useTerminalsStore } from '../store/terminals';
 import RepoTerminal from '../components/RepoTerminal';
 
 interface Props {
@@ -49,6 +50,10 @@ export default function DevWorkspacePage({ project, repo: initialRepo, onBack, o
   const [busy, setBusy] = useState<'branch' | 'sync' | 'push' | 'discard' | null>(null);
   const [branchName, setBranchName] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const terminalGroup = useTerminalGroup(workspace?.workspacePath);
+  const terminalPanelOpen = terminalGroup?.panelOpen ?? true;
+  const openTerminalPanel = useTerminalsStore((state) => state.openPanel);
+  const hideTerminalPanel = useTerminalsStore((state) => state.hidePanel);
   const activityTimer = useRef<number | null>(null);
 
   const refreshStatus = useCallback(async (repoId: string): Promise<void> => {
@@ -368,15 +373,32 @@ export default function DevWorkspacePage({ project, repo: initialRepo, onBack, o
             </div>
           </section>
 
-          <section className="flex min-h-80 flex-1 flex-col" aria-labelledby="workspace-terminal-title">
+          <section className={`flex flex-col ${terminalPanelOpen ? 'min-h-80 flex-1' : ''}`} aria-labelledby="workspace-terminal-title">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <h2 id="workspace-terminal-title" className="text-sm font-semibold">Terminal</h2>
               <code className="min-w-0 truncate text-[11px] text-steam-text/50" title={workspace.workspacePath}>{workspace.workspacePath}</code>
               {busy === 'branch' && <span className="text-[11px] text-steam-text/60" role="status">Atualizando branch…</span>}
+              <button
+                type="button"
+                onClick={() => {
+                  if (terminalPanelOpen) hideTerminalPanel(workspace.workspacePath);
+                  else void openTerminalPanel(workspace.workspacePath);
+                }}
+                aria-expanded={terminalPanelOpen}
+                className="ml-auto inline-flex min-h-8 items-center rounded border border-steam-elevated px-2.5 text-xs text-steam-text/85 transition-colors hover:bg-steam-panel focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steam-accent"
+              >
+                {terminalPanelOpen ? 'Fechar terminal' : 'Abrir terminal'}
+              </button>
             </div>
-            <div className="h-[min(58vh,680px)] min-h-72 overflow-hidden rounded border border-steam-elevated bg-[#1b202b]">
-              <RepoTerminal cwd={workspace.workspacePath} persistent onActivity={refreshAfterTerminalActivity} />
-            </div>
+            {terminalPanelOpen && (
+              <div className="h-[min(58vh,680px)] min-h-72 overflow-hidden rounded border border-steam-elevated bg-[#1b202b]">
+                <RepoTerminal
+                  cwd={workspace.workspacePath}
+                  onActivity={refreshAfterTerminalActivity}
+                  onClose={() => hideTerminalPanel(workspace.workspacePath)}
+                />
+              </div>
+            )}
           </section>
         </>
       ) : null}

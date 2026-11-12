@@ -1,5 +1,7 @@
 import type {
   DetectionResult,
+  GitStatusDetail,
+  GithubUser,
   IpcResult,
   LibraryFile,
   Agent,
@@ -21,13 +23,18 @@ import type {
   Settings,
   TopRepos,
   TopRepo,
+  TopScope,
+  RepoAnalysis,
   UsageEvent,
   ToolEntry,
   ToolInstallRun,
   ToolStatus,
   DevWorkspaceCloseResult,
   DevWorkspaceOpenResult,
-  DevWorkspaceStatus
+  DevWorkspaceStatus,
+  TerminalAttachResult,
+  TerminalListResult,
+  TerminalSessionSummary
 } from '../../../shared/types';
 import type { ToolStatus as SystemToolStatus } from '../../../shared/tools';
 import { IpcChannels } from '../../../shared/ipc-channels';
@@ -126,8 +133,8 @@ export const api = {
     unwrap(window.api.invoke(IpcChannels.tagsRename, { from, to })),
   tagsDelete: (name: string): Promise<null> =>
     unwrap(window.api.invoke(IpcChannels.tagsDelete, { name })),
-  topReposGet: (windowDays?: number): Promise<TopRepos> =>
-    unwrap(window.api.invoke(IpcChannels.topReposGet, { windowDays })),
+  topReposGet: (windowDays?: number, scope?: TopScope): Promise<TopRepos> =>
+    unwrap(window.api.invoke(IpcChannels.topReposGet, { windowDays, ...(scope ? { scope } : {}) })),
   githubSearch: (query: string, language?: string, limit = 25): Promise<{ fetchedAt: string; totalCount: number; repos: TopRepo[] }> =>
     unwrap(
       window.api.invoke(IpcChannels.githubSearch, {
@@ -136,8 +143,10 @@ export const api = {
         limit
       })
     ),
-  topReposRefresh: (windowDays?: number): Promise<TopRepos> =>
-    unwrap(window.api.invoke(IpcChannels.topReposRefresh, { windowDays })),
+  topReposRefresh: (windowDays?: number, scope?: TopScope): Promise<TopRepos> =>
+    unwrap(window.api.invoke(IpcChannels.topReposRefresh, { windowDays, ...(scope ? { scope } : {}) })),
+  repoAnalyze: (url: string): Promise<RepoAnalysis> =>
+    unwrap(window.api.invoke(IpcChannels.githubRepoAnalyze, { url })),
   onTopReposChanged: (listener: (payload: IpcResult<TopRepos>) => void) =>
     window.api.on(IpcChannels.topReposChanged, (payload: unknown) => {
       listener(payload as IpcResult<TopRepos>);
@@ -313,14 +322,45 @@ export const api = {
       listener(payload as { id: string; status: Repo['status'] });
     }),
 
-  terminalCreate: (cwd: string): Promise<string> =>
-    unwrap<{ id: string }>(window.api.invoke(IpcChannels.terminalCreate, { cwd })).then((data) => data.id),
+  githubAuthCheck: (token: string): Promise<GithubUser> =>
+    unwrap<GithubUser>(window.api.invoke(IpcChannels.githubAuthCheck, { token })),
 
-  terminalOpen: (cwd: string): Promise<{ id: string; snapshot: string; sequence: number }> =>
-    unwrap<{ id: string; snapshot: string; sequence: number }>(window.api.invoke(IpcChannels.terminalOpen, { cwd })),
+  usageRecord: (kind: 'skill' | 'agent', id: string): Promise<UsageEvent> =>
+    unwrap<UsageEvent>(window.api.invoke(IpcChannels.usageRecord, { kind, id })),
 
-  terminalDetach: (id: string): Promise<void> =>
-    unwrap<null>(window.api.invoke(IpcChannels.terminalDetach, { id })).then(() => undefined),
+  userToolRun: (toolId: string, projectId: string): Promise<{ started: boolean; code?: number; output?: string }> =>
+    unwrap<{ started: boolean; code?: number; output?: string }>(
+      window.api.invoke(IpcChannels.userToolRun, { toolId, projectId })
+    ),
+
+  githubAuthMe: (): Promise<GithubUser | null> =>
+    unwrap<GithubUser | null>(window.api.invoke(IpcChannels.githubAuthMe)),
+
+  repoGitStatus: (id: string): Promise<GitStatusDetail> =>
+    unwrap<GitStatusDetail>(window.api.invoke(IpcChannels.repoGitStatus, { id })),
+
+  repoCommit: (id: string, message: string): Promise<{ commit: string }> =>
+    unwrap<{ commit: string }>(window.api.invoke(IpcChannels.repoCommit, { id, message })),
+
+  repoPush: (id: string): Promise<{ branch: string }> =>
+    unwrap<{ branch: string }>(window.api.invoke(IpcChannels.repoPush, { id })),
+
+  terminalList: (cwd: string): Promise<TerminalListResult> =>
+    unwrap<TerminalListResult>(window.api.invoke(IpcChannels.terminalList, { cwd })),
+
+  terminalCreateSession: (cwd: string): Promise<TerminalSessionSummary> =>
+    unwrap<TerminalSessionSummary>(window.api.invoke(IpcChannels.terminalSessionCreate, { cwd })),
+
+  terminalAttach: (id: string, cols?: number, rows?: number): Promise<TerminalAttachResult> =>
+    unwrap<TerminalAttachResult>(
+      window.api.invoke(IpcChannels.terminalAttach, { id, ...(cols != null ? { cols } : {}), ...(rows != null ? { rows } : {}) })
+    ),
+
+  terminalClose: (id: string): Promise<void> =>
+    unwrap<null>(window.api.invoke(IpcChannels.terminalClose, { id })).then(() => undefined),
+
+  terminalDetach: (id: string, attachmentId: string): Promise<void> =>
+    unwrap<null>(window.api.invoke(IpcChannels.terminalDetach, { id, attachmentId })).then(() => undefined),
 
   terminalInput: (id: string, data: string): void => {
     window.api.send(IpcChannels.terminalInput, { id, data });
@@ -328,10 +368,6 @@ export const api = {
 
   terminalResize: (id: string, cols: number, rows: number): void => {
     window.api.send(IpcChannels.terminalResize, { id, cols, rows });
-  },
-
-  terminalKill: (id: string): void => {
-    window.api.send(IpcChannels.terminalKill, { id });
   },
 
   onTerminalOutput: (listener: (payload: { id: string; data: string; sequence?: number }) => void) =>
@@ -347,10 +383,10 @@ export const api = {
   agentProfilesList: (): Promise<AgentProfile[]> =>
     unwrap<AgentProfile[]>(window.api.invoke(IpcChannels.agentProfilesList)),
 
-  agentProfilesCreate: (input: { name: string; repoId: string; command: string; args?: string[] }): Promise<AgentProfile> =>
+  agentProfilesCreate: (input: { name: string; repoId: string; command: string; args?: string[]; monitorProvider?: AgentProfile['monitorProvider'] }): Promise<AgentProfile> =>
     unwrap<AgentProfile>(window.api.invoke(IpcChannels.agentProfilesCreate, input)),
 
-  agentProfilesUpdate: (id: string, patch: { name?: string; repoId?: string; command?: string; args?: string[] }): Promise<AgentProfile> =>
+  agentProfilesUpdate: (id: string, patch: { name?: string; repoId?: string; command?: string; args?: string[]; monitorProvider?: AgentProfile['monitorProvider'] }): Promise<AgentProfile> =>
     unwrap<AgentProfile>(window.api.invoke(IpcChannels.agentProfilesUpdate, { id, patch })),
 
   agentProfilesRemove: (id: string): Promise<null> =>
@@ -391,6 +427,9 @@ export const api = {
 
   toolsInstall: (id: string): Promise<ToolInstallRun> =>
     unwrap<ToolInstallRun>(window.api.invoke(IpcChannels.toolsInstall, { id })),
+
+  toolsOpen: (id: string): Promise<null> =>
+    unwrap<null>(window.api.invoke(IpcChannels.toolsOpen, { id })),
 
   toolsDetect: detectNativeTools,
 

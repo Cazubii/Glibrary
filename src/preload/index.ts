@@ -4,8 +4,7 @@ import type { GlibraryApi } from '../shared/types';
 
 const terminalSendChannels = new Set<string>([
   IpcChannels.terminalInput,
-  IpcChannels.terminalResize,
-  IpcChannels.terminalKill
+  IpcChannels.terminalResize
 ]);
 
 const api: GlibraryApi = {

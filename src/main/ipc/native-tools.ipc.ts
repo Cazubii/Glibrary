@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { ipcMain, shell } from 'electron';
 import { z } from 'zod';
 import type { IpcResult, LogLine, ToolEntry, ToolInstallRun, ToolStatus } from '../../shared/types';
 import { ToolInputSchema } from '../../shared/schemas';
@@ -40,6 +40,16 @@ export function registerNativeToolsIpc(manager: ToolManager): void {
     try {
       const { id } = ToolIdInputSchema.parse(raw);
       return ok(await manager.install(id));
+    } catch (error) { return fail(error); }
+  });
+
+  ipcMain.handle(IpcChannels.toolsOpen, async (_event, raw: unknown): Promise<IpcResult<null>> => {
+    try {
+      const { id } = ToolIdInputSchema.parse(raw);
+      const directory = await manager.getInstalledDirectory(id);
+      const error = await shell.openPath(directory);
+      if (error !== '') throw new Error(error);
+      return ok(null);
     } catch (error) { return fail(error); }
   });
 

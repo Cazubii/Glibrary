@@ -5,6 +5,7 @@ import type { ProjectRepoSummary } from '../../../../shared/github-projects';
 import type { Repo } from '../../../../shared/types';
 import { api } from '../../lib/api';
 import type { ProjectCloneState } from '../../store/projects';
+import { useTerminalGroup, useTerminalsStore } from '../../store/terminals';
 import RepoTerminal from '../RepoTerminal';
 
 interface Props {
@@ -34,7 +35,10 @@ export default function ProjectWorkspace({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [branchName, setBranchName] = useState('');
   const [branchBusy, setBranchBusy] = useState(false);
-  const [terminalOpen, setTerminalOpen] = useState(false);
+  const terminalGroup = useTerminalGroup(localPath);
+  const terminalPanelOpen = terminalGroup?.panelOpen ?? false;
+  const openTerminalPanel = useTerminalsStore((state) => state.openPanel);
+  const hideTerminalPanel = useTerminalsStore((state) => state.hidePanel);
 
   const refreshBranches = useCallback(async (): Promise<void> => {
     if (repoId == null || localPath == null || localPath === '' || repo?.status === 'missing') return;
@@ -267,16 +271,20 @@ export default function ProjectWorkspace({
               </div>
               <button
                 type="button"
-                onClick={() => setTerminalOpen((open) => !open)}
-                aria-expanded={terminalOpen}
+                onClick={() => {
+                  if (localPath == null) return;
+                  if (terminalPanelOpen) hideTerminalPanel(localPath);
+                  else void openTerminalPanel(localPath);
+                }}
+                aria-expanded={terminalPanelOpen}
                 className="inline-flex min-h-9 items-center gap-2 rounded border border-steam-elevated px-3 text-xs font-medium text-steam-text/90 transition-colors duration-150 hover:bg-steam-panel hover:text-steam-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steam-accent"
               >
-                <TerminalSquare size={14} aria-hidden="true" /> {terminalOpen ? 'Fechar terminal' : 'Abrir terminal'}
+                <TerminalSquare size={14} aria-hidden="true" /> {terminalPanelOpen ? 'Fechar terminal' : 'Abrir terminal'}
               </button>
             </div>
-            {terminalOpen && (
+            {terminalPanelOpen && (
               <div className="mt-3 h-72 max-h-[45vh] min-h-48 overflow-hidden rounded border border-steam-elevated" aria-label="Terminal interativo do repositório">
-                <RepoTerminal cwd={localPath} />
+                <RepoTerminal cwd={localPath} onClose={() => { if (localPath != null) hideTerminalPanel(localPath); }} />
               </div>
             )}
           </section>

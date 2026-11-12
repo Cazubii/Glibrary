@@ -1,11 +1,23 @@
 import { ipcMain } from 'electron';
 import { z } from 'zod';
 import { IpcChannels } from '../../shared/ipc-channels';
-import type { IpcResult } from '../../shared/types';
+import type {
+  IpcResult,
+  TerminalAttachResult,
+  TerminalListResult,
+  TerminalSessionSummary
+} from '../../shared/types';
 import type { TerminalEvents, TerminalManager } from '../services/terminal-manager';
 
 const CreateInput = z.object({
   cwd: z.string().min(1),
+  cols: z.number().int().min(2).max(500).optional(),
+  rows: z.number().int().min(2).max(200).optional()
+});
+
+const CwdInput = z.object({ cwd: z.string().min(1) });
+const AttachInput = z.object({
+  id: z.string().min(1),
   cols: z.number().int().min(2).max(500).optional(),
   rows: z.number().int().min(2).max(200).optional()
 });
@@ -18,33 +30,53 @@ const ResizeInput = z.object({
   rows: z.number().int().min(2).max(200)
 });
 
-const IdInput = z.object({ id: z.string() });
+const IdInput = z.object({ id: z.string().min(1) });
+const DetachInput = z.object({ id: z.string().min(1), attachmentId: z.string().uuid() });
 
 export function registerTerminalIpc(manager: TerminalManager): void {
-  ipcMain.handle(IpcChannels.terminalCreate, async (event, raw: unknown): Promise<IpcResult<{ id: string }>> => {
+  ipcMain.handle(IpcChannels.terminalList, async (_event, raw: unknown): Promise<IpcResult<TerminalListResult>> => {
     try {
-      const input = CreateInput.parse(raw);
-      const sink: TerminalEvents = {
-        send: (channel, payload) => {
-          if (!event.sender.isDestroyed()) event.sender.send(channel, payload);
-        }
-      };
-      const id = manager.create(sink, input.cwd, input.cols, input.rows);
-      return { ok: true, data: { id } };
+      const input = CwdInput.parse(raw);
+      return { ok: true, data: manager.list(input.cwd) };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
   });
 
-  ipcMain.handle(IpcChannels.terminalOpen, async (event, raw: unknown): Promise<IpcResult<{ id: string; snapshot: string; sequence: number }>> => {
+  ipcMain.handle(
+    IpcChannels.terminalSessionCreate,
+    async (_event, raw: unknown): Promise<IpcResult<TerminalSessionSummary>> => {
+      try {
+        const input = CreateInput.parse(raw);
+        return { ok: true, data: manager.create(input.cwd, input.cols, input.rows) };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    IpcChannels.terminalAttach,
+    async (event, raw: unknown): Promise<IpcResult<TerminalAttachResult>> => {
+      try {
+        const input = AttachInput.parse(raw);
+        const sink: TerminalEvents = {
+          send: (channel, payload) => {
+            if (!event.sender.isDestroyed()) event.sender.send(channel, payload);
+          }
+        };
+        return { ok: true, data: manager.attach(input.id, sink, input.cols, input.rows) };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+  );
+
+  ipcMain.handle(IpcChannels.terminalClose, async (_event, raw: unknown): Promise<IpcResult<null>> => {
     try {
-      const input = CreateInput.parse(raw);
-      const sink: TerminalEvents = {
-        send: (channel, payload) => {
-          if (!event.sender.isDestroyed()) event.sender.send(channel, payload);
-        }
-      };
-      return { ok: true, data: manager.open(sink, input.cwd, input.cols, input.rows) };
+      const { id } = IdInput.parse(raw);
+      manager.close(id);
+      return { ok: true, data: null };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
@@ -52,8 +84,8 @@ export function registerTerminalIpc(manager: TerminalManager): void {
 
   ipcMain.handle(IpcChannels.terminalDetach, async (_event, raw: unknown): Promise<IpcResult<null>> => {
     try {
-      const { id } = IdInput.parse(raw);
-      manager.detach(id);
+      const { id, attachmentId } = DetachInput.parse(raw);
+      manager.detach(id, attachmentId);
       return { ok: true, data: null };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -78,12 +110,4 @@ export function registerTerminalIpc(manager: TerminalManager): void {
     }
   });
 
-  ipcMain.on(IpcChannels.terminalKill, (_event, raw: unknown) => {
-    try {
-      const { id } = IdInput.parse(raw);
-      manager.kill(id);
-    } catch {
-      // idem
-    }
-  });
 }

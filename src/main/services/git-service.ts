@@ -2,20 +2,11 @@ import {
   simpleGit,
   type SimpleGit,
   type SimpleGitProgressEvent,
-  type PullResult
+  type PullResult,
+  type StatusResult,
 } from 'simple-git';
 import { join } from 'path';
 import type { GitBranchList, LocalBranchSummary, RemoteBranchSummary } from '../../shared/git-branches';
-
-/** Indica se o remote usa GitHub em HTTP ou SSH. */
-export function isGithubRemote(remoteUrl: string): boolean {
-  return /^https:\/\/(www\.)?github\.com\//i.test(remoteUrl) || /^git@github\.com:/i.test(remoteUrl);
-}
-
-/** Valor do header HTTP Basic para PAT do GitHub. */
-export function githubAuthHeader(token: string): string {
-  return `Authorization: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`;
-}
 
 export interface CloneProgress {
   percent: number | null;
@@ -29,6 +20,50 @@ export interface FetchStatus {
 }
 
 export type ProgressCallback = (progress: CloneProgress) => void;
+
+/** Mapeia o status do simple-git para o formato compartilhado com o renderer. */
+export function summarizeStatus(status: StatusResult): {
+  branch: string | null;
+  ahead: number;
+  behind: number;
+  files: Array<{ path: string; state: 'staged' | 'modified' | 'untracked' }>;
+} {
+  const files = status.files.map((f) => ({
+    path: f.path,
+    state:
+      f.working_dir === ' ' && f.index !== ' ' ? ('staged' as const)
+      : f.working_dir === '?' ? ('untracked' as const)
+      : ('modified' as const)
+  }));
+  return {
+    branch: status.current ?? null,
+    ahead: status.ahead ?? 0,
+    behind: status.behind ?? 0,
+    files
+  };
+}
+
+/** Mascara tokens/acessos que possam vazar em mensagens de erro do git. */
+export function sanitizeGitOutput(text: string): string {
+  return text
+    .replace(/x-access-token:[^@\s]+@/g, 'x-access-token:***@')
+    .replace(/:\/\/[^@/\s:]+:[^@/\s]+@/g, '://***@')
+    .replace(/\bgh[po]_[A-Za-z0-9]{20,}\b/g, '***');
+}
+
+/** Indica se o remote usa github.com em http(s)/ssh (push com header de autorizacao). */
+export function isGithubRemote(remoteUrl: string): boolean {
+  return /^https:\/\/(www\.)?github\.com\//i.test(remoteUrl) || /^git@github\.com:/i.test(remoteUrl);
+}
+
+/** Valor do header HTTP Basic para PAT do GitHub (convencao x-access-token). */
+export function githubAuthHeader(token: string): string {
+  return `Authorization: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`;
+}
+
+export function githubAuthConfig(token: string): string[] {
+  return [`http.extraHeader=${githubAuthHeader(token)}`];
+}
 
 export class GitService {
   private readonly clones = new Map<string, { cancel: () => void }>();
@@ -49,7 +84,7 @@ export class GitService {
     const target = join(destParent, name);
     const git: SimpleGit = simpleGit({
       ...(token != null && token !== '' && isGithubRemote(url)
-        ? { config: ['-c', `http.extraHeader=${githubAuthHeader(token)}`] }
+        ? { config: githubAuthConfig(token) }
         : {}),
       progress: ({ method, stage, progress }: SimpleGitProgressEvent) => {
         if (method === 'clone') {
@@ -98,7 +133,7 @@ export class GitService {
 
   async fetchStatus(localPath: string): Promise<FetchStatus> {
     const git = this.at(localPath);
-    await git.fetch(['--all', '--prune', '--quiet']).catch(() => undefined);
+    await git.fetch(['--prune', '--quiet']).catch(() => undefined);
     const status = await git.status();
     return {
       behindBy: status.behind ?? 0,
@@ -129,7 +164,10 @@ export class GitService {
   async listBranches(localPath: string): Promise<GitBranchList> {
     const git = this.at(localPath);
     await git.fetch(['--all', '--prune', '--quiet']).catch(() => undefined);
-    const [localResult, remoteResult] = await Promise.all([git.branchLocal(), git.branch(['-r'])]);
+    const [localResult, remoteResult] = await Promise.all([
+      git.branchLocal(),
+      git.branch(['-r'])
+    ]);
     const local: LocalBranchSummary[] = localResult.all
       .map((name) => ({ name, current: name === localResult.current }))
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -190,5 +228,61 @@ export class GitService {
     }
     await git.checkout(['-b', localName, branch]);
     return localName;
+  }
+
+  /** Status detalhado (branch, ahead/behind, arquivos) para a aba Git. */
+  async listChanges(localPath: string): Promise<{
+    branch: string | null;
+    ahead: number;
+    behind: number;
+    files: Array<{ path: string; state: 'staged' | 'modified' | 'untracked' }>;
+  }> {
+    const git = this.at(localPath);
+    await git.fetch(['--prune', '--quiet']).catch(() => undefined);
+    return summarizeStatus(await git.status());
+  }
+
+  /** `git add -A` + commit. Requer user.name/email configurados no git do usuário. */
+  async commitAll(localPath: string, message: string): Promise<{ commit: string }> {
+    const git = this.at(localPath);
+    for (const key of ['user.name', 'user.email']) {
+      let value = '';
+      try {
+        value = (await git.getConfig(key)).value ?? '';
+      } catch {
+        value = '';
+      }
+      if (value === '') {
+        throw new Error(
+          `Git sem identidade: configure "${key}" (git config --global ${key} "valor") antes de commitar`
+        );
+      }
+    }
+    await git.add(['-A']);
+    try {
+      const summary = await git.commit(message);
+      return { commit: summary.commit };
+    } catch (e) {
+      throw new Error(sanitizeGitOutput(e instanceof Error ? e.message : String(e)));
+    }
+  }
+
+  /** Push para origin; usa PAT como header HTTP (nunca persiste o token em config/url). */
+  async push(localPath: string, token?: string): Promise<{ branch: string }> {
+    const remote = await this.getRemoteUrl(localPath);
+    if (remote == null) throw new Error('Repositório sem remote origin configurado');
+    const branch = (await this.at(localPath).branch()).current;
+    if (branch == null || branch === '') throw new Error('Branch atual indefinida (HEAD detached?)');
+    const useHeader = token != null && token !== '' && isGithubRemote(remote);
+    const git =
+      useHeader && token != null
+        ? simpleGit({ baseDir: localPath, config: githubAuthConfig(token) })
+        : this.at(localPath);
+    try {
+      await git.push(['-u', 'origin', branch]);
+      return { branch };
+    } catch (e) {
+      throw new Error(sanitizeGitOutput(e instanceof Error ? e.message : String(e)));
+    }
   }
 }

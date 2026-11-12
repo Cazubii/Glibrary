@@ -122,6 +122,15 @@ export const DevWorkspaceCreateBranchInputSchema = z.object({
   defaultBranch: z.string().trim().min(1).max(255)
 }).strict()
 
+export const UserToolSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1).max(60),
+  command: z.string().trim().min(1).max(500),
+  description: z.string().trim().max(300).optional(),
+  enabled: z.boolean().default(false),
+  keepAlive: z.boolean().default(false)
+})
+
 export const SettingsSchema = z.object({
   reposRoot: z.string().min(1),
   basesRoot: z.string().min(1).default('BASES'),
@@ -135,6 +144,7 @@ export const SettingsSchema = z.object({
   viewMode: z.enum(['grid', 'list']),
   checkUpdatesOnStart: z.boolean(),
   inheritTags: z.boolean().default(true),
+  userTools: z.array(UserToolSchema).default([]),
   agentsViewMode: z.enum(['painel', 'grid']).optional(),
 })
 
@@ -239,14 +249,18 @@ export const TopRepoSchema = z.object({
   createdAt: z.string().optional()
 });
 
+export const TopScopeSchema = z.enum(['all', 'claude', 'codex', 'opencode']);
+
 export const TopReposSchema = z.object({
   fetchedAt: z.string().default(''),
   repos: z.array(TopRepoSchema).default([]),
-  windowDays: z.number().int().min(1).max(90).optional()
+  windowDays: z.number().int().min(1).max(90).optional(),
+  scope: TopScopeSchema.optional()
 });
 
 export const TopWindowInputSchema = z.object({
-  windowDays: z.number().int().optional()
+  windowDays: z.number().int().optional(),
+  scope: TopScopeSchema.optional()
 });
 
 export const AgentProfileSchema = z.object({
@@ -255,6 +269,7 @@ export const AgentProfileSchema = z.object({
   repoId: z.string().min(1),
   command: z.string().trim().min(1).max(500),
   args: z.array(z.string().min(1).max(500)).max(20).default([]),
+  monitorProvider: z.enum(['auto', 'claude-code', 'opencode', 'generic']).optional(),
   createdAt: z.string(),
   lastRunAt: z.string().optional()
 });
@@ -263,7 +278,8 @@ export const AgentProfileInputSchema = z.object({
   name: z.string().trim().min(1).max(80),
   repoId: z.string().min(1),
   command: z.string().trim().min(1).max(500),
-  args: z.array(z.string().min(1).max(500)).max(20).default([])
+  args: z.array(z.string().min(1).max(500)).max(20).default([]),
+  monitorProvider: z.enum(['auto', 'claude-code', 'opencode', 'generic']).default('auto')
 });
 
 export const AgentProfileUpdateInputSchema = z
@@ -274,7 +290,8 @@ export const AgentProfileUpdateInputSchema = z
         name: z.string().trim().min(1).max(80).optional(),
         repoId: z.string().min(1).optional(),
         command: z.string().trim().min(1).max(500).optional(),
-        args: z.array(z.string().min(1).max(500)).max(20).optional()
+        args: z.array(z.string().min(1).max(500)).max(20).optional(),
+        monitorProvider: z.enum(['auto', 'claude-code', 'opencode', 'generic']).optional()
       })
       .strict()
   })
@@ -282,12 +299,53 @@ export const AgentProfileUpdateInputSchema = z
 
 export const AgentRunStatusSchema = z.enum(['running', 'done', 'stopped', 'error']);
 
+export const AgentTokenUsageSchema = z.object({
+  inputTokens: z.number().nonnegative(),
+  outputTokens: z.number().nonnegative(),
+  cacheReadTokens: z.number().nonnegative(),
+  cacheWriteTokens: z.number().nonnegative(),
+  reasoningTokens: z.number().nonnegative(),
+  costUsd: z.number().nonnegative(),
+  model: z.string().optional(),
+  accountKey: z.string().optional(),
+  accountLabel: z.string().optional(),
+  updatedAt: z.string()
+});
+
+export const AgentActivitySchema = z.object({
+  id: z.string().min(1),
+  at: z.string(),
+  kind: z.enum(['status', 'tool', 'subagent', 'usage']),
+  label: z.string().min(1).max(240),
+  agentId: z.string().optional(),
+  parentAgentId: z.string().optional(),
+  agentType: z.string().optional(),
+  status: z.enum(['running', 'done', 'waiting', 'error']).optional()
+});
+
+export const AgentSubagentSchema = z.object({
+  id: z.string().min(1),
+  parentId: z.string().optional(),
+  name: z.string().min(1).max(120),
+  status: z.enum(['running', 'done', 'waiting', 'error']),
+  startedAt: z.string(),
+  finishedAt: z.string().optional()
+});
+
 export const AgentRunSchema = z.object({
   id: z.string().min(1),
   profileId: z.string().min(1),
   profileName: z.string().min(1),
   repoId: z.string().min(1),
   repoName: z.string().min(1),
+  cwd: z.string().optional(),
+  provider: z.enum(['claude-code', 'opencode', 'generic']).optional(),
+  providerSessionId: z.string().optional(),
+  accountKey: z.string().optional(),
+  accountLabel: z.string().optional(),
+  tokenUsage: AgentTokenUsageSchema.optional(),
+  activity: z.array(AgentActivitySchema).max(100).optional(),
+  subagents: z.array(AgentSubagentSchema).max(200).optional(),
   command: z.string().min(1),
   prompt: z.string().optional(),
   status: AgentRunStatusSchema,
@@ -350,6 +408,7 @@ export const LibraryFileSchema = z.object({
   usage: z.array(UsageEventSchema).default([]),
   topRepos: TopReposSchema.default({ fetchedAt: '', repos: [] }),
   topRepos7: TopReposSchema.default({ fetchedAt: '', repos: [] }),
+  topReposScopes: z.record(z.string(), TopReposSchema).default({}),
   settings: SettingsSchema,
   agentProfiles: z.array(AgentProfileSchema).default([]),
   tools: z.array(ToolEntrySchema).default([])
@@ -452,4 +511,22 @@ export const ProcessRunInputSchema = z.object({
   id: z.string().min(1),
   kind: z.enum(['install', 'start', 'extra']),
   extraIndex: z.number().int().nonnegative().optional()
+})
+
+export const CommitInputSchema = z.object({
+  id: z.string().min(1),
+  message: z.string().trim().min(1).max(500)
+})
+
+export const AuthTokenInputSchema = z.object({
+  token: z.string().min(10)
+})
+
+export const UserToolsPatchSchema = z.object({
+  userTools: z.array(UserToolSchema).max(50)
+})
+
+export const ToolRunInputSchema = z.object({
+  toolId: z.string().min(1),
+  projectId: z.string().min(1)
 })

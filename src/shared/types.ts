@@ -19,11 +19,46 @@ export interface TopRepos {
   repos: TopRepo[];
   /** Janela (em dias) desta lista; ausente = 30 (legado). */
   windowDays?: number;
+  /** Escopo de ecossistema desta lista; ausente = 'all' (legado). */
+  scope?: TopScope;
 }
 
 /** Janelas suportadas da aba Top GitHub. */
 export const TOP_WINDOWS = [7, 30] as const;
 export type TopWindow = (typeof TOP_WINDOWS)[number];
+
+/** Escopos de ecossistema da aba Top GitHub. */
+export const TOP_SCOPES = ['all', 'claude', 'codex', 'opencode'] as const;
+export type TopScope = (typeof TOP_SCOPES)[number];
+
+/** Análise heurística de um repo público do GitHub (área "Análise"). */
+export interface RepoAnalysis {
+  owner: string;
+  name: string;
+  fullName: string;
+  remoteUrl: string;
+  description?: string;
+  stars: number;
+  forks: number;
+  watchers: number;
+  openIssues: number;
+  language?: string;
+  topics: string[];
+  license?: string;
+  createdAt?: string;
+  pushedAt?: string;
+  archived: boolean;
+  homepage?: string;
+  defaultBranch?: string;
+  readmeSize?: number;
+  contributorsCount?: number;
+  releasesLastYear: number;
+  /** Pontos positivos em pt-BR. */
+  pros: string[];
+  /** Pontos negativos em pt-BR. */
+  cons: string[];
+  analysisAt: string;
+}
 
 export type RepoStatus =
   | 'not_cloned' // só no catálogo (tem URL, não tem pasta)
@@ -151,7 +186,19 @@ export interface Settings {
   viewMode: 'grid' | 'list';
   checkUpdatesOnStart: boolean;
   inheritTags: boolean; // projetos herdam tags dos skills/agents/bases associados
+  userTools?: UserTool[]; // ferramentas do usuário; ligadas ficam nos projetos
   agentsViewMode?: AgentViewMode; // modo de visualização da página Agentes
+}
+
+/** Ferramenta configurada pelo usuário (nome + comando) com chave on/off. */
+export interface UserTool {
+  id: string;
+  name: string;
+  command: string;
+  description?: string;
+  enabled: boolean;
+  /** true = processo de longa duração (dev server); roda desacoplado, sem capturar saída. */
+  keepAlive?: boolean;
 }
 
 export interface UsageEvent {
@@ -257,6 +304,8 @@ export interface LibraryFile {
   topRepos: TopRepos;
   /** Cache da lista de 7 dias; admitido opcional para library.json v2 existente. */
   topRepos7?: TopRepos;
+  /** Caches de topo por ecossistema, chaveados como "scope:windowDays". */
+  topReposScopes?: Record<string, TopRepos>;
   settings: Settings;
 }
 
@@ -270,7 +319,68 @@ export interface LogLine {
   text: string;
 }
 
+export type TerminalSessionStatus = 'running' | 'exited';
+
+export interface TerminalSessionSummary {
+  id: string;
+  cwd: string;
+  name: string;
+  status: TerminalSessionStatus;
+  createdAt: string;
+  exitCode?: number;
+}
+
+export interface TerminalListResult {
+  cwd: string;
+  sessions: TerminalSessionSummary[];
+}
+
+export interface TerminalAttachResult {
+  id: string;
+  attachmentId: string;
+  snapshot: string;
+  sequence: number;
+  status: TerminalSessionStatus;
+  exitCode?: number;
+}
+
 export type AgentViewMode = 'painel' | 'grid';
+
+export type AgentProvider = 'claude-code' | 'opencode' | 'generic';
+export type AgentProviderChoice = 'auto' | AgentProvider;
+
+export interface AgentTokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  reasoningTokens: number;
+  costUsd: number;
+  model?: string;
+  accountKey?: string;
+  accountLabel?: string;
+  updatedAt: string;
+}
+
+export interface AgentActivity {
+  id: string;
+  at: string;
+  kind: 'status' | 'tool' | 'subagent' | 'usage';
+  label: string;
+  agentId?: string;
+  parentAgentId?: string;
+  agentType?: string;
+  status?: 'running' | 'done' | 'waiting' | 'error';
+}
+
+export interface AgentSubagent {
+  id: string;
+  parentId?: string;
+  name: string;
+  status: 'running' | 'done' | 'waiting' | 'error';
+  startedAt: string;
+  finishedAt?: string;
+}
 
 export interface AgentProfile {
   id: string;
@@ -278,6 +388,7 @@ export interface AgentProfile {
   repoId: string;
   command: string;
   args: string[];
+  monitorProvider?: AgentProviderChoice;
   createdAt: string;
   lastRunAt?: string;
 }
@@ -290,6 +401,14 @@ export interface AgentRun {
   profileName: string; // snapshot do nome do perfil
   repoId: string;
   repoName: string;
+  cwd?: string;
+  provider?: AgentProvider;
+  providerSessionId?: string;
+  accountKey?: string;
+  accountLabel?: string;
+  tokenUsage?: AgentTokenUsage;
+  activity?: AgentActivity[];
+  subagents?: AgentSubagent[];
   command: string; // linha completa executada
   prompt?: string; // tarefa inicial do sub-agente
   status: AgentRunStatus;
@@ -333,7 +452,7 @@ export interface RunHandle {
 
 export interface GlibraryApi {
   invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
-  send: (channel: 'terminal:input' | 'terminal:resize' | 'terminal:kill', ...args: unknown[]) => void;
+  send: (channel: 'terminal:input' | 'terminal:resize', ...args: unknown[]) => void;
   on: (channel: string, listener: (...args: unknown[]) => void) => () => void;
 }
 
@@ -357,4 +476,25 @@ export interface ScanProgress {
 export interface ScanFolderSuggestion {
   path: string;
   exists: boolean;
+}
+
+export interface GithubUser {
+  login: string;
+  name?: string;
+  email?: string;
+  avatarUrl?: string;
+}
+
+export type GitFileState = 'staged' | 'modified' | 'untracked';
+
+export interface GitFile {
+  path: string;
+  state: GitFileState;
+}
+
+export interface GitStatusDetail {
+  branch: string | null;
+  ahead: number;
+  behind: number;
+  files: GitFile[];
 }
