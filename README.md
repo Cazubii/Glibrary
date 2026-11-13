@@ -28,7 +28,7 @@ Quem trabalha com agentes acaba com Skills espalhadas em várias pastas, dezenas
 
 O app abre em **Início**, mantém o tema escuro e claro e organiza as tarefas em cinco áreas principais. Coleções, Análise de repositório e Consumo detalhado ficam disponíveis em Configurações por **Mostrar recursos avançados**.
 
-Os termos de Git, agentes e consumo agora aparecem com nomes simples e explicações acessíveis por teclado. Falhas frequentes agora explicam o que ocorreu e como seguir, com detalhes técnicos recolhidos. A primeira abertura agora orienta a configuração e a escolha do primeiro projeto.
+Os termos de Git, agentes e consumo agora aparecem com nomes simples e explicações acessíveis por teclado. Falhas frequentes agora explicam o que ocorreu e como seguir, com detalhes técnicos recolhidos. A primeira abertura agora orienta a configuração e a escolha do primeiro projeto. O login pelo navegador usa o Device Flow do GitHub App quando o client ID público estiver configurado; o token pessoal continua nas opções avançadas.
 
 ## Para onde vai
 
@@ -36,7 +36,7 @@ Os termos de Git, agentes e consumo agora aparecem com nomes simples e explicaç
 - Receitas completas para criar, entender e publicar projetos.
 - Instaladores para Windows, macOS e Linux, com atualização automática.
 
-OAuth do GitHub depende do client ID do mantenedor. A preferência inicial pelo modo simples, a CLI recomendada e a assinatura dos instaladores também aguardam decisão.
+O login pelo navegador depende do client ID público do GitHub App do mantenedor e de habilitar Device Flow; até lá, o PAT avançado continua disponível. A preferência inicial pelo modo simples, a CLI recomendada e a assinatura dos instaladores também aguardam decisão.
 ## Detalhes técnicos
 
 - Descobre Skills em arquivos `SKILL.md` nas origens configuradas. Por padrão, procura em `~/.claude/skills`, `~/.opencode/skills` e `~/.agents/skills`.
@@ -63,6 +63,8 @@ pnpm test
 pnpm build
 pnpm dist
 ```
+
+Para habilitar o login do GitHub sem token, copie `.env.example` para `.env.local` e preencha `GLIBRARY_GITHUB_OAUTH_CLIENT_ID` com o client ID público informado pelo mantenedor. Não configure client secret em um app desktop.
 
 ## Dados e segurança
 

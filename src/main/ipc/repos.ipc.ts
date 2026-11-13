@@ -5,11 +5,12 @@ import { copyFileSync, existsSync, statSync } from 'fs';
 import { readFile, rm, writeFile } from 'fs/promises';
 import { spawn } from 'child_process';
 import { basename, join, resolve } from 'path';
-import type { DetectionResult, GitStatusDetail, GithubUser, IpcResult, Repo, Settings } from '../../shared/types';
+import type { DetectionResult, GitStatusDetail, GithubOAuthDeviceSession, GithubOAuthPollResult, GithubUser, IpcResult, Repo, Settings } from '../../shared/types';
 import {
   AddLocalInputSchema,
   AddByUrlInputSchema,
   AuthTokenInputSchema,
+  GithubOAuthSessionInputSchema,
   CommitInputSchema,
   RepoIdInputSchema,
   RepoUpdateInputSchema,
@@ -22,7 +23,8 @@ import { migrateLibrary } from '../services/library-store';
 import type { GitService } from '../services/git-service';
 import { detectProject } from '../services/detector';
 import { applyDetection } from '../services/detector/apply';
-import { fetchRepoMeta, fetchGithubUser, encodeToken, decodeToken } from '../services/github-api';
+import { fetchRepoMeta, fetchGithubUser, encodeToken } from '../services/github-api';
+import { GithubOAuthService, getGithubAccessToken } from '../services/github-oauth';
 import { downloadCover } from '../services/cover-service';
 import {
   isValidGitUrl,
@@ -89,8 +91,8 @@ export function registerRepoIpc(
   git: GitService,
   coversDir: string,
 ): void {
-  const githubToken = (): string | undefined =>
-    decodeToken(store.getSettings().githubToken);
+  const githubOAuth = new GithubOAuthService(store);
+  const githubToken = (): Promise<string | undefined> => getGithubAccessToken(store);
   /** Resolve a pasta local de um repo OU de um projeto da biblioteca. */
   const gitTarget = (id: string): string => {
     const repoLocal = store.getRepo(id)?.localPath;
@@ -289,7 +291,7 @@ export function registerRepoIpc(
 
         if (gh != null) {
           try {
-            const meta = await fetchRepoMeta(gh.owner, gh.repo, { token: githubToken() });
+            const meta = await fetchRepoMeta(gh.owner, gh.repo, { token: await githubToken() });
             repo.description = meta.description;
             repo.stars = meta.stars;
             repo.language = meta.language;
@@ -314,7 +316,7 @@ export function registerRepoIpc(
                 store.getSettings().reposRoot,
                 name,
                 (progress) => broadcast(IpcChannels.cloneProgress, { id: saved.id, ...progress }),
-                githubToken(),
+                await githubToken(),
               );
               const detection = await detectProject(target);
               const updated = await store.updateRepo(
@@ -360,7 +362,7 @@ export function registerRepoIpc(
               store.getSettings().reposRoot,
               name,
               (progress) => broadcast(IpcChannels.cloneProgress, { id, ...progress }),
-              githubToken(),
+              await githubToken(),
             );
             const detection = await detectProject(target);
             const updated = await store.updateRepo(
@@ -427,7 +429,7 @@ export function registerRepoIpc(
         if (!repo) return fail(new Error('Repositório não encontrado'));
         const gh = repo.remoteUrl != null ? parseGithubRepo(repo.remoteUrl) : null;
         if (gh == null) return fail(new Error('Não é um repositório GitHub'));
-        const meta = await fetchRepoMeta(gh.owner, gh.repo, { token: githubToken() });
+        const meta = await fetchRepoMeta(gh.owner, gh.repo, { token: await githubToken() });
         const coverPath =
           (await downloadCover(coversDir, id, gh.owner, gh.repo)) ?? repo.coverPath;
         const updated = await store.updateRepo(id, {
@@ -583,6 +585,47 @@ export function registerRepoIpc(
   );
 
   ipcMain.handle(
+    IpcChannels.githubOAuthStatus,
+    async (): Promise<IpcResult<{ configured: boolean }>> => ok({ configured: githubOAuth.isConfigured() }),
+  );
+
+  ipcMain.handle(
+    IpcChannels.githubOAuthStart,
+    async (): Promise<IpcResult<GithubOAuthDeviceSession>> => {
+      try {
+        return ok(await githubOAuth.startDeviceFlow());
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.githubOAuthPoll,
+    async (_event, raw: unknown): Promise<IpcResult<GithubOAuthPollResult>> => {
+      try {
+        const { sessionId } = GithubOAuthSessionInputSchema.parse(raw);
+        return ok(await githubOAuth.pollDeviceFlow(sessionId));
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.githubOAuthCancel,
+    async (_event, raw: unknown): Promise<IpcResult<null>> => {
+      try {
+        const { sessionId } = GithubOAuthSessionInputSchema.parse(raw);
+        githubOAuth.cancelDeviceFlow(sessionId);
+        return ok(null);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  ipcMain.handle(
     IpcChannels.githubAuthCheck,
     async (_event, raw: unknown): Promise<IpcResult<GithubUser>> => {
       try {
@@ -598,7 +641,7 @@ export function registerRepoIpc(
 
   ipcMain.handle(IpcChannels.githubAuthMe, async (): Promise<IpcResult<GithubUser | null>> => {
     try {
-      const token = decodeToken(store.getSettings().githubToken);
+      const token = await githubToken();
       if (token == null) return ok(null);
       return ok(await fetchGithubUser(token));
     } catch (e) {
@@ -638,7 +681,7 @@ export function registerRepoIpc(
     async (_event, raw: unknown): Promise<IpcResult<{ branch: string }>> => {
       try {
         const { id } = RepoIdInputSchema.parse(raw);
-        return ok(await git.push(gitTarget(id), githubToken()));
+        return ok(await git.push(gitTarget(id), await githubToken()));
       } catch (e) {
         return fail(e);
       }
@@ -675,6 +718,12 @@ export function registerRepoIpc(
         if (patch.githubToken != null) {
           patch.githubToken =
             patch.githubToken === '' ? '' : encodeToken(patch.githubToken);
+          patch.githubRefreshToken = '';
+          patch.githubTokenExpiresAt = undefined;
+          patch.githubRefreshTokenExpiresAt = undefined;
+        } else if (patch.githubRefreshToken != null) {
+          patch.githubRefreshToken =
+            patch.githubRefreshToken === '' ? '' : encodeToken(patch.githubRefreshToken);
         }
         return ok(await store.updateSettings(patch));
       } catch (e) {

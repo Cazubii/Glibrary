@@ -16,6 +16,22 @@ const samples = [
     title: 'A conexão com o GitHub precisa ser renovada'
   },
   {
+    label: 'expired GitHub App refresh token',
+    message: 'Sua sessão do GitHub expirou. Entre novamente para continuar.',
+    title: 'A conexão com o GitHub precisa ser renovada',
+    nextStep: 'Abra Projetos e conecte sua conta novamente.'
+  },
+  {
+    label: 'GitHub App not configured',
+    message: 'A entrada rápida do GitHub depende da configuração OAuth do aplicativo.',
+    title: 'A entrada rápida do GitHub ainda não está disponível'
+  },
+  {
+    label: 'GitHub Device Flow disabled',
+    message: 'O login simplificado não está habilitado na configuração do GitHub App.',
+    title: 'A entrada rápida do GitHub ainda não está disponível'
+  },
+  {
     label: 'merge conflict',
     message: 'error: Pulling is not possible because you have unmerged files.',
     title: 'Há mudanças que não podem ser combinadas automaticamente'
@@ -65,6 +81,9 @@ describe('translateError', () => {
     expect(result.title).toBe('A conexão com o GitHub precisa ser renovada');
     expect(result.technicalDetails).not.toContain('ghp_abcdefghijklmnopqrstuvwxyz123456');
     expect(result.technicalDetails).toContain('https://***@github.com');
+
+    const refresh = translateError(new Error('bad_refresh_token ghr_abcdefghijklmnopqrstuvwxyz123456'));
+    expect(refresh.technicalDetails).not.toContain('ghr_abcdefghijklmnopqrstuvwxyz123456');
   });
 
   it('gives an honest generic recovery step for unknown errors', () => {

@@ -1,35 +1,44 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
+import { loadEnv } from 'vite'
 
-export default defineConfig({
-  main: {
-    plugins: [externalizeDepsPlugin()],
-    resolve: {
-      alias: {
-        '@shared': resolve('src/shared')
-      }
-    }
-  },
-  preload: {
-    plugins: [externalizeDepsPlugin()],
-    resolve: {
-      alias: {
-        '@shared': resolve('src/shared')
-      }
-    }
-  },
-  renderer: {
-    resolve: {
-      alias: {
-        '@renderer': resolve('src/renderer/src'),
-        '@shared': resolve('src/shared')
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), 'GLIBRARY_')
+  const githubClientId = env['GLIBRARY_GITHUB_OAUTH_CLIENT_ID'] ?? ''
+
+  return {
+    main: {
+      define: {
+        __GLIBRARY_GITHUB_OAUTH_CLIENT_ID__: JSON.stringify(githubClientId)
       },
-      dedupe: ['react', 'react-dom']
+      plugins: [externalizeDepsPlugin()],
+      resolve: {
+        alias: {
+          '@shared': resolve('src/shared')
+        }
+      }
     },
-    optimizeDeps: {
-      include: ['react', 'react-dom', 'react-dom/client', 'zustand', 'lucide-react']
+    preload: {
+      plugins: [externalizeDepsPlugin()],
+      resolve: {
+        alias: {
+          '@shared': resolve('src/shared')
+        }
+      }
     },
-    plugins: [react()]
+    renderer: {
+      resolve: {
+        alias: {
+          '@renderer': resolve('src/renderer/src'),
+          '@shared': resolve('src/shared')
+        },
+        dedupe: ['react', 'react-dom']
+      },
+      optimizeDeps: {
+        include: ['react', 'react-dom', 'react-dom/client', 'zustand', 'lucide-react']
+      },
+      plugins: [react()]
+    }
   }
 })

@@ -162,6 +162,9 @@ export const SettingsSchema = z.object({
   agentFolders: z.array(z.string()).default([]),
   scanFolders: z.array(z.string()),
   githubToken: z.string().optional(),
+  githubRefreshToken: z.string().optional(),
+  githubTokenExpiresAt: z.number().int().positive().optional(),
+  githubRefreshTokenExpiresAt: z.number().int().positive().optional(),
   editorCommand: z.string().min(1),
   terminalPreference: z.string().min(1),
   theme: z.enum(['dark', 'light']),
@@ -532,6 +535,10 @@ export const RepoRemoveInputSchema = z.object({
 })
 
 export const SettingsPatchSchema = SettingsSchema.partial()
+
+export const GithubOAuthSessionInputSchema = z.object({
+  sessionId: z.string().uuid()
+})
 
 export const ProcessRunInputSchema = z.object({
   id: z.string().min(1),

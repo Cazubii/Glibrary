@@ -447,3 +447,21 @@ Git, Node.js e os CLIs Claude Code, OpenCode, Codex, Gemini e Aider são detecta
 
 ### Checklist só aparece depois que a pessoa conclui ou dispensa o assistente
 As cinco etapas ficam em Início e são marcadas pela própria pessoa; o painel some quando todas estiverem concluídas. A conta GitHub segue opcional e usa a tela PAT existente. Device Flow aguarda a F3 e o client ID OAuth do mantenedor.
+
+## 2026-11-13 — Login GitHub por Device Flow
+
+**Contexto:** o fluxo atual exige gerar e colar manualmente um Personal Access Token com escopo amplo `repo`, o que é uma barreira para iniciantes.
+
+**Decisão de implementação:** preparar autenticação desktop pelo Device Flow de um GitHub App. A documentação do GitHub recomenda esse fluxo para apps desktop, e GitHub Apps permitem permissões de repositório mais específicas do que OAuth Apps. O client ID é público e será injetado no build pela variável `GLIBRARY_GITHUB_OAUTH_CLIENT_ID`; nenhum `client_secret` será empacotado. O login fica desativado e explica a dependência enquanto o client ID estiver vazio.
+
+- Permissões iniciais propostas: `Metadata: read` e `Contents: read/write`; a instalação do app e a seleção de repositórios determinam onde pode atuar. `Administration: write` fica fora do escopo inicial e só será avaliada se a F7 precisar criar repositórios remotos.
+- Pedir `offline_access` para access token de 8 horas e refresh token de 6 meses; renovar antes do vencimento e guardar a rotação dos dois tokens cifrada com `safeStorage`.
+- O código temporário de dispositivo fica apenas na memória do processo principal; o renderer recebe o código de uso único e nunca recebe device/access/refresh token.
+- “Sair deste computador” apaga as credenciais locais, mas não revoga a autorização remota. A interface aponta Configurações > Integrações > Aplicações para revogar o GitHub App e Developer settings > Personal access tokens para revogar um PAT.
+- PAT permanece em “Opções avançadas” e continua cifrado por `safeStorage`; ao salvar PAT, dados de renovação OAuth antigos são apagados.
+
+**Comparação:** OAuth App também suporta Device Flow, mas usa escopos tradicionais como `repo`, que combina acesso de leitura e escrita a repositórios privados. GitHub App foi escolhido por permitir permissões granulares; essa escolha depende de registrar um GitHub App e habilitar Device Flow pelo mantenedor. Nenhum app foi registrado pelo executor.
+
+**Decisão pendente do mantenedor:** fornecer o client ID e habilitar Device Flow nas configurações do GitHub App. O `client_secret` e a assinatura de código não são necessários para o fluxo de dispositivo.
+
+Referências oficiais: [Device Flow e user access tokens](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app), [renovação e expiração](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/refreshing-user-access-tokens), [permissões GitHub App versus OAuth App](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/differences-between-github-apps-and-oauth-apps), [habilitar Device Flow](https://docs.github.com/en/apps/maintaining-github-apps/modifying-a-github-app-registration), [revogar autorização](https://docs.github.com/en/apps/using-github-apps/reviewing-and-revoking-authorization-of-github-apps).

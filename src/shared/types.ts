@@ -191,6 +191,9 @@ export interface Settings {
   skillFolders: string[];
   agentFolders: string[]; // pastas com arquivos .md de agentes
   githubToken?: string; // opcional; salvar com safeStorage
+  githubRefreshToken?: string; // token cifrado de renovação OAuth
+  githubTokenExpiresAt?: number;
+  githubRefreshTokenExpiresAt?: number;
   editorCommand: string; // padrão: "code"
   terminalPreference: 'auto' | string;
   theme: 'dark' | 'light'; // padrão: dark (estilo Steam)
@@ -510,6 +513,20 @@ export interface GithubUser {
   email?: string;
   avatarUrl?: string;
 }
+
+export interface GithubOAuthDeviceSession {
+  sessionId: string;
+  userCode: string;
+  verificationUri: string;
+  expiresAt: number;
+  intervalSeconds: number;
+}
+
+export type GithubOAuthPollResult =
+  | { status: 'pending'; intervalSeconds: number }
+  | { status: 'complete'; user: GithubUser }
+  | { status: 'expired' }
+  | { status: 'denied' };
 
 export type GitFileState = 'staged' | 'modified' | 'untracked';
 

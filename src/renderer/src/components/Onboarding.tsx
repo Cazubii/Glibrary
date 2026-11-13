@@ -234,7 +234,7 @@ export default function Onboarding({ onDone, onError, onOpenTools, onOpenLibrary
               <p className="mt-1 text-xs leading-5 text-steam-text/55">Use o botão GitHub no topo da janela para conectar ou sair. Depois, volte e confira o estado aqui.</p>
               <button type="button" onClick={() => void refreshGithub()} disabled={checkingGithub} className="mt-3 rounded border border-steam-elevated px-3 py-1.5 text-xs hover:bg-steam-elevated disabled:opacity-50">Atualizar estado da conta</button>
             </div>
-            <p className="text-xs text-steam-text/45">O login sem copiar um token depende da configuração OAuth do mantenedor e será oferecido numa atualização futura.</p>
+            <p className="text-xs text-steam-text/45">A entrada pelo navegador depende da configuração do aplicativo GitHub pelo mantenedor. Quando ela estiver pronta, você não precisará criar nem copiar um token.</p>
           </div>
         )}
 

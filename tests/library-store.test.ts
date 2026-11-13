@@ -501,4 +501,33 @@ describe('LibraryStore — kits e uso', () => {
     expect(migrated.settings.onboarding.status).toBe('not-started');
     expect(migrated.kits).toEqual([]);
   });
+
+  it('persiste access token e refresh token já cifrados sem quebrar a biblioteca v2', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.updateSettings({
+      githubToken: 'safe:access',
+      githubRefreshToken: 'safe:refresh',
+      githubTokenExpiresAt: 1_800_000_000_000,
+      githubRefreshTokenExpiresAt: 1_800_500_000_000
+    });
+
+    const saved = JSON.parse(await fs.readFile(join(dir, 'library.json'), 'utf-8')) as { settings: Record<string, unknown> };
+    const backup = JSON.parse(await fs.readFile(join(dir, 'library.backup.json'), 'utf-8')) as { settings: Record<string, unknown> };
+    expect(saved.settings).toMatchObject({
+      githubToken: 'safe:access',
+      githubRefreshToken: 'safe:refresh',
+      githubTokenExpiresAt: 1_800_000_000_000,
+      githubRefreshTokenExpiresAt: 1_800_500_000_000
+    });
+    expect(backup.settings).toEqual(saved.settings);
+
+    const reloaded = await new LibraryStore(dir, join(dir, 'repos')).load();
+    expect(reloaded.settings).toMatchObject({
+      githubToken: 'safe:access',
+      githubRefreshToken: 'safe:refresh',
+      githubTokenExpiresAt: 1_800_000_000_000,
+      githubRefreshTokenExpiresAt: 1_800_500_000_000
+    });
+  });
 });

@@ -3,6 +3,8 @@ import type {
   IpcError,
   GitStatusDetail,
   GithubUser,
+  GithubOAuthDeviceSession,
+  GithubOAuthPollResult,
   IpcResult,
   LibraryFile,
   Agent,
@@ -338,6 +340,18 @@ export const api = {
 
   githubAuthCheck: (token: string): Promise<GithubUser> =>
     unwrap<GithubUser>(window.api.invoke(IpcChannels.githubAuthCheck, { token })),
+
+  githubOAuthStatus: (): Promise<{ configured: boolean }> =>
+    unwrap<{ configured: boolean }>(window.api.invoke(IpcChannels.githubOAuthStatus)),
+
+  githubOAuthStart: (): Promise<GithubOAuthDeviceSession> =>
+    unwrap<GithubOAuthDeviceSession>(window.api.invoke(IpcChannels.githubOAuthStart)),
+
+  githubOAuthPoll: (sessionId: string): Promise<GithubOAuthPollResult> =>
+    unwrap<GithubOAuthPollResult>(window.api.invoke(IpcChannels.githubOAuthPoll, { sessionId })),
+
+  githubOAuthCancel: (sessionId: string): Promise<void> =>
+    unwrap<void>(window.api.invoke(IpcChannels.githubOAuthCancel, { sessionId })),
 
   usageRecord: (kind: 'skill' | 'agent', id: string): Promise<UsageEvent> =>
     unwrap<UsageEvent>(window.api.invoke(IpcChannels.usageRecord, { kind, id })),
