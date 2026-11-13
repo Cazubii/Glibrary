@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { LibraryStore, emptyLibrary } from '../src/main/services/library-store';
+import { LibraryStore, emptyLibrary, migrateLibrary } from '../src/main/services/library-store';
 import type { BaseItem, ProjectRef, Repo, Skill } from '../src/shared/types';
 
 let dir: string;
@@ -440,5 +440,18 @@ describe('LibraryStore — kits e uso', () => {
     expect(lib.kits).toEqual([]);
     expect(lib.usage).toEqual([]);
     expect(lib.settings.inheritTags).toBe(true);
+    expect(lib.settings.showAdvancedResources).toBe(true);
+  });
+
+  it('preenche showAdvancedResources ao carregar uma biblioteca v2 anterior', () => {
+    const library = emptyLibrary('C:/repos');
+    const oldSettings: Record<string, unknown> = { ...library.settings };
+    delete oldSettings['showAdvancedResources'];
+
+    const migrated = migrateLibrary({ ...library, settings: oldSettings });
+
+    expect((migrated.settings as unknown as Record<string, unknown>)['showAdvancedResources']).toBe(true);
+    expect(migrated.settings.reposRoot).toBe('C:/repos');
+    expect(migrated.kits).toEqual([]);
   });
 });

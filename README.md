@@ -19,26 +19,25 @@ Quem trabalha com agentes acaba com Skills espalhadas em várias pastas, dezenas
 
 | Área | O que você encontra |
 |---|---|
-| **Biblioteca** | Skills (`SKILL.md`), agentes, Bases e projetos num só catálogo, com busca (`Ctrl+K`), tags, favoritos e filtros. Os arquivos de Skill nunca são alterados. |
-| **Bases** | Repositórios e templates usados como ponto de partida, registrados por URL Git ou pasta local e clonados para `~/BASES`. |
-| **Projetos** | Cada projeto ligado às Skills, agentes e Bases que usa, com notas próprias. Abre a pasta, o editor, o terminal ou a página no GitHub. |
-| **Coleções** | Conjuntos reutilizáveis de recursos (ex.: "Stack React + Tailwind") para aplicar a um projeto de uma vez. |
-| **Dashboard** | Uso por categoria, recursos mais usados nos projetos, tags mais usadas, aberturas por mês e projetos antigos. |
-| **Busca GitHub** | Busca de repositórios em linguagem natural e destaques dos últimos 7 dias. |
-| **Agentes** | Perfis salvos para rodar sub-agentes de linha de comando (Claude Code, Codex CLI, Gemini CLI, Aider) com histórico, duração e logs de cada execução. |
-| **Ferramentas** | Instalação de ferramentas de desenvolvimento no ambiente local. |
+| **Início** | Painel com próximos passos e projetos locais recentes. |
+| **Projetos** | Pastas deste computador, repositórios do GitHub, área de desenvolvimento, Git e terminal. |
+| **Biblioteca** | Skills, agentes, modelos de projeto (Bases) e Coleções. |
+| **Descobrir** | Busca de repositórios, Top GitHub dos últimos 7 dias e análise de projetos. |
+| **Agentes** | Execuções e consumo; detalhes avançados podem ser ocultados em Configurações. |
+| **Ferramentas** | Instalação e verificação de ferramentas no menu Configurações. |
 
-Tema escuro e claro, interface em português.
+O app abre em **Início**, mantém o tema escuro e claro e organiza as tarefas em cinco áreas principais. Coleções, Análise de repositório e Consumo detalhado ficam disponíveis em Configurações por **Mostrar recursos avançados**.
 
 ## Para onde vai
 
-- Área de desenvolvimento com terminais por projeto dentro do app.
-- Editar o projeto direto na branch principal a partir do app.
-- Integração mais funda com o GitHub para gerenciar os repositórios sem sair do app.
-- Instaladores prontos para Windows, macOS e Linux nas releases.
+- Primeira abertura guiada, com ferramentas, conta GitHub, pasta e projeto inicial.
+- Linguagem simples e explicações curtas junto de Git, agentes e consumo.
+- Mensagens de erro com próximos passos e detalhes técnicos recolhidos.
+- Revisão das mudanças, linha de trabalho protegida, desfazer e limites de gasto.
+- Receitas completas para criar, entender e publicar projetos.
+- Instaladores para Windows, macOS e Linux, com atualização automática.
 
-Sugestões e contribuições são bem-vindas: veja [Contribuir](#contribuir).
-
+OAuth do GitHub depende do client ID do mantenedor. A preferência inicial pelo modo simples, a CLI recomendada e a assinatura dos instaladores também aguardam decisão.
 ## Detalhes técnicos
 
 - Descobre Skills em arquivos `SKILL.md` nas origens configuradas. Por padrão, procura em `~/.claude/skills`, `~/.opencode/skills` e `~/.agents/skills`.
