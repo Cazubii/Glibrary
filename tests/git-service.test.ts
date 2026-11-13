@@ -15,6 +15,8 @@ beforeAll(async () => {
   await fs.mkdir(origin, { recursive: true });
   const git = simpleGit({ baseDir: origin });
   await git.init(['--initial-branch=main']);
+  await git.addConfig('user.name', 'Teste');
+  await git.addConfig('user.email', 'teste@example.test');
   await fs.writeFile(join(origin, 'README.md'), '# demo\n');
   await git.add('.');
   await git.commit('initial');
