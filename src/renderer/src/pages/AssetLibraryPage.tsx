@@ -18,6 +18,7 @@ import UserToolRunDialog, { type PendingToolRun } from '../components/UserToolRu
 import { AgentCard, BaseCard, ProjectCard, SkillCard, TopRepoCard } from '../components/AssetCards';
 
 type Section = 'skills' | 'agents' | 'bases' | 'projects' | 'top';
+type AssetLibraryMode = 'resources' | 'projects' | 'top';
 type Assets = { skills: Skill[]; agents: Agent[]; bases: BaseItem[]; projects: ProjectRef[] };
 /** Cache das buscas de Top, chaveado como "janela:escopo". */
 type TopCache = Record<string, TopRepos>;
@@ -40,11 +41,12 @@ const unwrapTop = (payload: unknown): TopRepos | null =>
 interface Props {
   onError: (message: string) => void;
   onSuccess?: (message: string) => void;
+  mode?: AssetLibraryMode;
 }
-export default function AssetLibraryPage({ onError, onSuccess }: Props): React.JSX.Element {
-  const [section, setSection] = useState<Section>('skills');
+export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources' }: Props): React.JSX.Element {
+  const [section, setSection] = useState<Section>(mode === 'projects' ? 'projects' : mode === 'top' ? 'top' : 'skills');
   const [assets, setAssets] = useState<Assets>(empty);
-  const [topWindow, setTopWindow] = useState<TopWindow>(30);
+  const [topWindow, setTopWindow] = useState<TopWindow>(mode === 'top' ? 7 : 30);
   const [topScope, setTopScope] = useState<TopScope>('all');
   const [topCache, setTopCache] = useState<TopCache>(() => ({
     [topCacheKey(7, 'all')]: emptyTop(7, 'all'),
@@ -100,6 +102,7 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
   );
   useEffect(() => { void refresh(); }, [refresh]);
   const loadTop = useCallback(async () => {
+    if (mode !== 'top') return;
     const key = topCacheKey(topWindow, topScope);
     if (topCache[key]?.fetchedAt) return;
     try {
@@ -107,7 +110,7 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
       setTopCache((prev) => ({ ...prev, [key]: { ...top, windowDays: topWindow, scope: topScope } }));
     }
     catch (e) { onError(e instanceof Error ? e.message : String(e)); }
-  }, [onError, topCache, topWindow, topScope]);
+  }, [mode, onError, topCache, topWindow, topScope]);
   useEffect(() => { void loadTop(); }, [loadTop]);
   const refreshKnown = useCallback(async () => {
     try {
@@ -464,7 +467,14 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
     }
   };
   const noResultsAction = <button type="button" onClick={clearFilters} className="rounded border border-steam-elevated px-3 py-1.5 text-xs text-steam-text/70 hover:text-steam-accent">Limpar busca e filtros</button>;
-  const tab = (key: Section, label: string, icon: React.ReactNode, count: number): React.JSX.Element => <button type="button" onClick={() => setSection(key)} aria-pressed={section === key} className={`flex items-center gap-2 rounded px-3 py-2 text-sm ${section === key ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}>{icon}{label}<span className="text-xs opacity-60">{count}</span></button>;
+  const tab = (key: Section, label: string, icon: React.ReactNode, count: number): React.JSX.Element => <button type="button" onClick={() => setSection(key)} aria-current={section === key ? 'page' : undefined} className={`flex items-center gap-2 rounded px-3 py-2 text-sm ${section === key ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}>{icon}{label}<span className="text-xs opacity-60">{count}</span></button>;
+
+  const pageHeading = mode === 'projects' ? 'Projetos neste computador' : mode === 'top' ? 'Top GitHub' : 'Biblioteca';
+  const pageDescription = mode === 'projects'
+    ? 'Seus projetos locais, com acesso ao Git, terminal e agentes.'
+    : mode === 'top'
+      ? 'Repositórios em alta no GitHub para descobrir novas ideias e recursos.'
+      : 'Skills, agentes e modelos de projeto que você pode reutilizar.';
 
   const toggleCategory = (sectionKey: Extract<Section, 'skills' | 'agents'>, category: AssetCategory): void =>
     setCategories((prev) => {
@@ -481,15 +491,15 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
 
   return <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
     <header className="flex items-center gap-4 border-b border-steam-elevated/50 px-6 py-4">
-      <div><h1 className="text-xl font-semibold">Biblioteca</h1><p className="mt-1 text-xs text-steam-text/50">Skills, agentes, repositórios-base e projetos que os utilizam.</p></div>
+      <div><h1 className="text-xl font-semibold">{pageHeading}</h1><p className="mt-1 text-xs text-steam-text/50">{pageDescription}</p></div>
       <label className="ml-auto relative">
-        <span className="sr-only">Buscar na biblioteca</span>
+        <span className="sr-only">{mode === 'top' ? 'Filtrar a lista Top GitHub' : mode === 'projects' ? 'Buscar nos projetos locais' : 'Buscar na biblioteca'}</span>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Escape') { setQuery(''); (e.target as HTMLInputElement).blur(); } }}
-          placeholder="Buscar… (Ctrl+K)"
-          id="library-search"
+          placeholder={mode === 'top' ? 'Filtrar…' : mode === 'projects' ? 'Buscar projetos…' : 'Buscar… (Ctrl+K)'}
+          id={mode === 'resources' ? 'library-search' : mode === 'projects' ? 'local-projects-search' : 'top-repos-search'}
           className={`w-64 rounded border bg-steam-panel px-3 py-2 pr-8 text-sm outline-none focus:border-steam-accent ${query ? 'border-steam-accent' : 'border-steam-elevated'}`}
         />
         {query && (
@@ -504,9 +514,13 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
         )}
       </label>
     </header>
-    <nav className="flex gap-2 border-b border-steam-elevated/30 px-6 py-3">{tab('skills', 'Skills', <WandSparkles size={16}/>, assets.skills.length)}{tab('agents', 'Agents', <Bot size={16}/>, assets.agents.length)}{tab('bases', 'Bases', <Layers3 size={16}/>, assets.bases.length)}{tab('projects', 'Projetos', <BriefcaseBusiness size={16}/>, assets.projects.length)}{tab('top', 'Top GitHub', <Flame size={16}/>, activeTop.repos.length)}</nav>
+    <nav aria-label={`Seções de ${pageHeading}`} className="flex gap-2 border-b border-steam-elevated/30 px-6 py-3">
+      {mode === 'resources' && <>{tab('skills', 'Skills', <WandSparkles size={16}/>, assets.skills.length)}{tab('agents', 'Agentes', <Bot size={16}/>, assets.agents.length)}{tab('bases', 'Bases', <Layers3 size={16}/>, assets.bases.length)}</>}
+      {mode === 'projects' && tab('projects', 'Projetos locais', <BriefcaseBusiness size={16}/>, assets.projects.length)}
+      {mode === 'top' && tab('top', 'Top 7 dias', <Flame size={16}/>, activeTop.repos.length)}
+    </nav>
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
-      <OutdatedBanner
+      {mode !== 'top' && <OutdatedBanner
         onError={onError}
         onCheckOnStartChange={(enabled) => {
           void updateSettings({ checkUpdatesOnStart: enabled }).catch((e: unknown) =>
@@ -514,7 +528,7 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
           );
         }}
         checkOnStart={settings?.checkUpdatesOnStart ?? false}
-      />
+      />}
       {scanIssues.length > 0 && (section === 'skills' || section === 'agents') && (
         <div className="mb-4 rounded border border-steam-warn/40 bg-steam-warn/10 px-4 py-3 text-sm">
           <p className="flex items-center gap-2 font-medium text-steam-warn">
