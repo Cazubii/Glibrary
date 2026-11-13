@@ -141,6 +141,7 @@ export const SettingsSchema = z.object({
   editorCommand: z.string().min(1),
   terminalPreference: z.string().min(1),
   theme: z.enum(['dark', 'light']),
+  showAdvancedResources: z.boolean(),
   viewMode: z.enum(['grid', 'list']),
   checkUpdatesOnStart: z.boolean(),
   inheritTags: z.boolean().default(true),
