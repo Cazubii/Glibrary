@@ -29,7 +29,7 @@ interface Props {
   onToggleFavorite: (id: string) => void;
   onOpenRepo: (id: string) => void;
   onReload: () => void;
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
 }
 
 function matchesFilter(repo: Repo, filter: SidebarFilter): boolean {
