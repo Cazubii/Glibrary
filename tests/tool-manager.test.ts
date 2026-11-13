@@ -84,7 +84,8 @@ describe('ToolManager', () => {
     const installCall = fake.calls.find(({ command }) => command === 'node');
     expect(installCall?.args?.[0]).toBe('-e');
     expect(installCall?.args?.[1]).toContain('https://github.com/marmottajr/habblaud');
-    expect(installCall?.args?.[1]).toContain(join(toolsRoot, 'habblaud'));
+    // O script embute o caminho como literal JSON (barras invertidas escapadas no Windows).
+    expect(installCall?.args?.[1]).toContain(JSON.stringify(join(toolsRoot, 'habblaud')));
     expect(installCall?.cwd).toBe(toolsRoot);
     expect(run.prompt).toContain('npm install');
   });
