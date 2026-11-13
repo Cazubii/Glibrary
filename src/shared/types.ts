@@ -183,6 +183,7 @@ export interface Settings {
   editorCommand: string; // padrão: "code"
   terminalPreference: 'auto' | string;
   theme: 'dark' | 'light'; // padrão: dark (estilo Steam)
+  showAdvancedResources: boolean; // fallback true até o mantenedor definir o padrão simples
   viewMode: 'grid' | 'list';
   checkUpdatesOnStart: boolean;
   inheritTags: boolean; // projetos herdam tags dos skills/agents/bases associados
