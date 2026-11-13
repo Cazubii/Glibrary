@@ -19,23 +19,18 @@ Quem trabalha com agentes acaba com Skills espalhadas em várias pastas, dezenas
 
 | Área | O que você encontra |
 |---|---|
-| **Biblioteca** | Skills (`SKILL.md`), agentes, Bases e projetos num só catálogo, com busca (`Ctrl+K`), tags, favoritos e filtros. Os arquivos de Skill nunca são alterados. |
-| **Bases** | Repositórios e templates usados como ponto de partida, registrados por URL Git ou pasta local e clonados para `~/BASES`. |
-| **Projetos** | Cada projeto ligado às Skills, agentes e Bases que usa, com notas próprias. Abre a pasta, o editor, o terminal ou a página no GitHub. |
-| **Coleções** | Conjuntos reutilizáveis de recursos (ex.: "Stack React + Tailwind") para aplicar a um projeto de uma vez. |
-| **Dashboard** | Uso por categoria, recursos mais usados nos projetos, tags mais usadas, aberturas por mês e projetos antigos. |
-| **Busca GitHub** | Busca de repositórios em linguagem natural e destaques dos últimos 7 dias. |
-| **Agentes** | Perfis salvos para rodar sub-agentes de linha de comando (Claude Code, Codex CLI, Gemini CLI, Aider) com histórico, duração e logs de cada execução. |
-| **Ferramentas** | Instalação de ferramentas de desenvolvimento no ambiente local. |
+| **Início** | Painel GitHub, projetos locais recentes e um resumo do uso da biblioteca. |
+| **Projetos** | Projetos neste computador, repositórios da conta GitHub, área de desenvolvimento, Git e terminal. |
+| **Biblioteca** | Skills, agentes e Bases; Coleções continuam disponíveis com recursos avançados. |
+| **Descobrir** | Busca GitHub, Top dos últimos 7 dias e análise de repositórios. |
+| **Agentes** | Execuções e histórico; Consumo detalhado continua disponível com recursos avançados. |
+| **Configurações** | Tema, ferramentas e preferência para mostrar recursos avançados. |
 
 Tema escuro e claro, interface em português.
 
 ## Para onde vai
 
-- Área de desenvolvimento com terminais por projeto dentro do app.
-- Editar o projeto direto na branch principal a partir do app.
-- Integração mais funda com o GitHub para gerenciar os repositórios sem sair do app.
-- Instaladores prontos para Windows, macOS e Linux nas releases.
+As próximas frentes vão completar o onboarding guiado, explicar termos no contexto, traduzir erros com próximos passos, proteger alterações antes de publicar, oferecer receitas de ponta a ponta e distribuir instaladores com atualização. O login OAuth depende do client ID do mantenedor; a assinatura dos instaladores também aguarda decisão. A preferência inicial pelo modo simples e a CLI de agente recomendada seguem pendentes.
 
 Sugestões e contribuições são bem-vindas: veja [Contribuir](#contribuir).
 
