@@ -5,6 +5,8 @@ import {
   AgentIdInputSchema,
   AgentProfileInputSchema,
   AgentProfileUpdateInputSchema,
+  AgentRunChangesInputSchema,
+  AgentRunChangesResolveInputSchema,
   AgentRunStartInputSchema
 } from '../../shared/schemas';
 import { IpcChannels } from '../../shared/ipc-channels';
@@ -76,4 +78,19 @@ export function registerAgentRunsIpc(store: LibraryStore, manager: AgentRunManag
       return ok(manager.getLogs(id));
     } catch (e) { return fail(e); }
   });
+
+  ipcMain.handle(IpcChannels.agentRunsGetChanges, async (_event, raw: unknown): Promise<IpcResult<Awaited<ReturnType<AgentRunManager['getAgentChanges']>>>> => {
+    try {
+      const { id } = AgentRunChangesInputSchema.parse(raw);
+      return ok(await manager.getAgentChanges(id));
+    } catch (e) { return fail(e); }
+  });
+
+  ipcMain.handle(IpcChannels.agentRunsResolveChanges, async (_event, raw: unknown): Promise<IpcResult<Awaited<ReturnType<AgentRunManager['resolveAgentChanges']>>>> => {
+    try {
+      const input = AgentRunChangesResolveInputSchema.parse(raw);
+      return ok(await manager.resolveAgentChanges(input.id, input.action));
+    } catch (e) { return fail(e); }
+  });
 }
+

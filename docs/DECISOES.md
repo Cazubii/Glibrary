@@ -465,3 +465,15 @@ As cinco etapas ficam em Início e são marcadas pela própria pessoa; o painel 
 **Decisão pendente do mantenedor:** fornecer o client ID e habilitar Device Flow nas configurações do GitHub App. O `client_secret` e a assinatura de código não são necessários para o fluxo de dispositivo.
 
 Referências oficiais: [Device Flow e user access tokens](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app), [renovação e expiração](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/refreshing-user-access-tokens), [permissões GitHub App versus OAuth App](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/differences-between-github-apps-and-oauth-apps), [habilitar Device Flow](https://docs.github.com/en/apps/maintaining-github-apps/modifying-a-github-app-registration), [revogar autorização](https://docs.github.com/en/apps/using-github-apps/reviewing-and-revoking-authorization-of-github-apps).
+
+## 2026-11-13 — F6 Rede de proteção
+
+### Revisão de versão e recuperação Git
+O salvamento primeiro mostra os arquivos e o diff; só depois da confirmação prepara e salva exatamente a revisão exibida. Se os arquivos mudarem enquanto a tela está aberta, é exigida uma nova revisão. No modo simples, agentes iniciados em `main` ou `master` passam para `glibrary/<data>-<assunto>`; o processo principal também exige confirmação antes de enviar diretamente para essas branches. Desfazer usa reset misto apenas para um commit local ainda não enviado, preservando os arquivos. Para um commit enviado, Reverter cria um novo commit local e não publica automaticamente.
+
+### Descarte do agente depende do snapshot e do projeto salvo
+O Glibrary captura quais arquivos já estavam sujos antes da execução e não os inclui no resumo. Ao terminar, grava hash SHA-256 dos caminhos novos e alterados que estavam limpos no início. O processo principal compara a pasta real da execução com o caminho atual salvo para o projeto e compara novamente o hash antes de apagar/restaurar. Arquivos que mudaram depois do snapshot permanecem no resumo e não são descartados. “Manter” limpa apenas o resumo; “Descartar” pede confirmação com os nomes dos arquivos.
+
+### Limites de custo usam somente telemetria disponível
+Os tetos opcionais por execução e por dia ficam em `settings.agentRunBudgetUsd` e `settings.agentDailyBudgetUsd`, sem mudar `library.json` v2. O dia é local e o custo vem da telemetria de Claude Code ou OpenCode; um comando genérico não inicia enquanto houver teto configurado. O aviso aparece a 80%, e o processo principal para a execução ao receber um valor que alcança o teto. No limite diário, para todas as execuções monitoradas ativas. Como a medição depende do provedor, o valor reportado pela CLI é a referência usada pelo aplicativo.
+

@@ -146,9 +146,14 @@ export default function App(): React.JSX.Element {
           <SettingsMenu
             showAdvancedResources={showAdvancedResources}
             theme={theme}
+            agentRunBudgetUsd={settings?.agentRunBudgetUsd}
+            agentDailyBudgetUsd={settings?.agentDailyBudgetUsd}
             toolsOpen={view === 'tools'}
             onAdvancedResourcesChange={setAdvancedResources}
             onThemeToggle={toggleTheme}
+            onBudgetChange={async (patch) => {
+              try { await updateSettings(patch); } catch (settingsError) { onError(settingsError); }
+            }}
             onOpenTools={() => setView('tools')}
           />
         </div>
@@ -247,3 +252,4 @@ export default function App(): React.JSX.Element {
     </div>
   );
 }
+

@@ -1,12 +1,14 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { createWriteStream, promises as fs, type WriteStream } from 'fs';
 import { randomUUID } from 'crypto';
-import { join } from 'path';
+import { isAbsolute, join, resolve } from 'path';
 import treeKill from 'tree-kill';
-import type { AgentActivity, AgentProfile, AgentProvider, AgentRun, AgentSubagent, AgentTokenUsage, LogLine } from '../../shared/types';
+import type { AgentActivity, AgentChangesResolution, AgentProfile, AgentProvider, AgentRun, AgentSubagent, AgentTokenUsage, GitChangePreview, LogLine } from '../../shared/types';
 import { IpcChannels } from '../../shared/ipc-channels';
 import type { LibraryStore } from './library-store';
 import type { AgentRunStore } from './agent-run-store';
+import { GitService } from './git-service';
+import { evaluateAgentBudget } from './git-protection';
 import { startClaudeTelemetryReceiver, type AgentTelemetryUpdate, type ClaudeTelemetryReceiver } from './agent-telemetry';
 
 const BUFFER_LIMIT = 5000;
@@ -40,6 +42,7 @@ interface RunEntry {
   hooks: RunHooks;
   monitor?: ClaudeTelemetryReceiver;
   outputPending: string;
+  baselinePaths: Set<string> | null;
 }
 
 /** Monta a linha de comando do agente: command + args + prompt citado como último argumento. */
@@ -83,10 +86,20 @@ function recordAt(record: Record<string, unknown> | undefined, key: string): Rec
   return value != null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
+function localDayKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function runDayKey(run: AgentRun): string | null {
+  const date = new Date(run.startedAt);
+  return Number.isNaN(date.getTime()) ? null : localDayKey(date);
+}
+
 export class AgentRunManager {
   private readonly active = new Map<string, RunEntry>();
   private readonly buffers = new Map<string, LogLine[]>();
   private readonly persistQueues = new Map<string, Promise<void>>();
+  private readonly resolvingChanges = new Set<string>();
 
   constructor(
     private readonly store: LibraryStore,
@@ -95,6 +108,7 @@ export class AgentRunManager {
     private readonly emit: AgentEmitFn,
     private readonly spawnFn: SpawnFn = spawn,
     private readonly killFn: KillFn = (pid, signal) => treeKill(pid, signal),
+    private readonly git: GitService = new GitService(),
   ) {}
 
   listProfiles(): AgentProfile[] {
@@ -116,6 +130,64 @@ export class AgentRunManager {
     return this.buffers.get(runId) ?? [];
   }
 
+  async getAgentChanges(runId: string): Promise<GitChangePreview> {
+    const run = this.findRun(runId);
+    if (run.status === 'running') throw new Error('Aguarde o agente terminar antes de revisar os arquivos.');
+    const changes = run.agentChanges ?? [];
+    if (changes.length === 0) throw new Error('Esta execução não tem alterações pendentes para revisar.');
+    const workingPath = await this.resolveRunWorkingPath(run);
+    return this.git.previewChanges(workingPath, changes.map((change) => change.path));
+  }
+
+  async resolveAgentChanges(runId: string, action: 'keep' | 'discard'): Promise<AgentChangesResolution> {
+    if (this.resolvingChanges.has(runId)) throw new Error('Aguarde a resolução atual das alterações.');
+    this.resolvingChanges.add(runId);
+    try {
+      const run = this.findRun(runId);
+      if (run.status === 'running') throw new Error('Aguarde o agente terminar antes de resolver as alterações.');
+      const changes = run.agentChanges ?? [];
+      if (changes.length === 0) throw new Error('Esta execução não tem alterações pendentes para resolver.');
+
+      let discarded: string[] = [];
+      let skipped: string[] = [];
+      if (action === 'discard') {
+        const workingPath = await this.resolveRunWorkingPath(run);
+        ({ discarded, skipped } = await this.git.discardAgentChanges(workingPath, changes));
+      }
+
+      const remaining = changes.filter((change) => skipped.includes(change.path));
+      const resolved: AgentRun = { ...run };
+      if (remaining.length > 0) resolved.agentChanges = remaining;
+      else delete resolved.agentChanges;
+      await this.runStore.upsert(resolved);
+      this.emitChanged(resolved);
+      return { run: resolved, discarded, skipped };
+    } finally {
+      this.resolvingChanges.delete(runId);
+    }
+  }
+
+  private findRun(runId: string): AgentRun {
+    const run = this.runStore.list().find((candidate) => candidate.id === runId);
+    if (run == null) throw new Error('Execução de agente não encontrada.');
+    return run;
+  }
+
+  private async resolveRunWorkingPath(run: AgentRun): Promise<string> {
+    if (run.cwd == null || !isAbsolute(run.cwd)) throw new Error('A pasta desta execução não pode ser confirmada com segurança.');
+    const repo = this.store.getRepo(run.repoId);
+    if (repo == null) throw new Error('O projeto desta execução não existe mais na biblioteca.');
+    const approvedPaths = [repo.localPath, repo.devSession?.workspacePath]
+      .filter((path): path is string => path != null && path.trim() !== '');
+    const requestedPath = await fs.realpath(resolve(run.cwd));
+    const canonicalPaths = await Promise.all(approvedPaths.map((path) => fs.realpath(path).catch(() => null)));
+    const comparisonPath = (path: string): string => process.platform === 'win32' ? path.toLocaleLowerCase('en-US') : path;
+    if (!canonicalPaths.some((path) => path != null && comparisonPath(path) === comparisonPath(requestedPath))) {
+      throw new Error('A pasta da execução não corresponde mais ao projeto salvo. Nenhum arquivo foi alterado.');
+    }
+    return requestedPath;
+  }
+
   /** Hooks do processo ativo (usado pelos testes para simular saída/erro). */
   getActiveHooks(runId: string): RunHooks | undefined {
     return this.active.get(runId)?.hooks;
@@ -126,9 +198,23 @@ export class AgentRunManager {
     if (profile == null) throw new Error('Perfil não encontrado');
     const repo = this.store.getRepo(profile.repoId);
     if (repo == null) throw new Error('Repositório não encontrado');
-    if (repo.localPath == null || repo.localPath === '') throw new Error('Repositório sem pasta local');
+    const workingPath = repo.devSession?.workspacePath?.trim() || repo.localPath;
+    if (workingPath == null || workingPath === '') throw new Error('Repositório sem pasta local');
 
     const provider = resolveProvider(profile);
+    const settings = this.store.getSettings();
+    const hasBudgetLimit = settings.agentRunBudgetUsd != null || settings.agentDailyBudgetUsd != null;
+    if (hasBudgetLimit && provider === 'generic') {
+      throw new Error('Este comando não informa o custo ao Glibrary. Use Claude Code ou OpenCode monitorado, ou remova o limite de gasto.');
+    }
+    const now = new Date();
+    if (settings.agentDailyBudgetUsd != null && this.dailyCost(localDayKey(now)) >= settings.agentDailyBudgetUsd) {
+      throw new Error('O limite diário de gasto já foi atingido. Ajuste o limite nas Configurações ou tente novamente amanhã.');
+    }
+    if (!settings.showAdvancedResources) await this.git.ensureWorkingBranch(workingPath, prompt, now);
+    const baselinePaths = await this.git.listChanges(workingPath)
+      .then((status) => new Set(status.files.map((file) => file.path)))
+      .catch(() => null);
     const command = buildAgentCommand(profile, prompt, provider);
     const run: AgentRun = {
       id: randomUUID(),
@@ -136,7 +222,7 @@ export class AgentRunManager {
       profileName: profile.name,
       repoId: repo.id,
       repoName: repo.name,
-      cwd: repo.localPath,
+      cwd: workingPath,
       provider,
       command: provider === 'generic' ? command : `${provider === 'claude-code' ? 'Claude Code' : 'OpenCode'} · monitoramento local`,
       ...(provider === 'generic' && prompt != null && prompt.trim() !== '' ? { prompt } : {}),
@@ -173,7 +259,7 @@ export class AgentRunManager {
     let proc: ChildProcess;
     try {
       proc = this.spawnFn(command, {
-        cwd: repo.localPath,
+        cwd: workingPath,
         env: environment,
         shell: true
       });
@@ -189,7 +275,8 @@ export class AgentRunManager {
       stopRequested: false,
       hooks: {},
       monitor,
-      outputPending: ''
+      outputPending: '',
+      baselinePaths
     };
     this.active.set(run.id, entry);
     this.buffers.set(run.id, []);
@@ -311,6 +398,7 @@ export class AgentRunManager {
       entry.run.accountKey = usage.accountKey;
       entry.run.accountLabel = usage.accountLabel;
       this.recordActivity(entry, { kind: 'usage', label: 'Uso da sessão atualizado', status: 'done' });
+      void this.enforceBudget(entry);
       return;
     }
 
@@ -370,6 +458,7 @@ export class AgentRunManager {
         usage.accountKey = update.accountKey;
         usage.accountLabel = update.accountLabel ?? `Claude Code · …${update.accountKey.slice(-6)}`;
       }
+      await this.enforceBudget(entry);
     }
     if (update.activity != null) {
       if (update.activity.kind === 'subagent' && update.activity.agentId != null) {
@@ -397,6 +486,46 @@ export class AgentRunManager {
       updatedAt: new Date().toISOString()
     };
     return run.tokenUsage;
+  }
+
+  private dailyCost(dayKey: string): number {
+    const runs = new Map<string, AgentRun>();
+    for (const run of this.runStore.list()) {
+      if (runDayKey(run) === dayKey) runs.set(run.id, run);
+    }
+    for (const entry of this.active.values()) {
+      if (runDayKey(entry.run) === dayKey) runs.set(entry.run.id, entry.run);
+    }
+    let total = 0;
+    for (const run of runs.values()) total += run.tokenUsage?.costUsd ?? 0;
+    return total;
+  }
+
+  private async enforceBudget(entry: RunEntry): Promise<void> {
+    const settings = this.store.getSettings();
+    if (settings.agentRunBudgetUsd == null && settings.agentDailyBudgetUsd == null) return;
+    const runCostUsd = entry.run.tokenUsage?.costUsd ?? 0;
+    const evaluation = evaluateAgentBudget({
+      runCostUsd,
+      dailyCostUsd: this.dailyCost(localDayKey(new Date())),
+      ...(settings.agentRunBudgetUsd != null ? { runLimitUsd: settings.agentRunBudgetUsd } : {}),
+      ...(settings.agentDailyBudgetUsd != null ? { dailyLimitUsd: settings.agentDailyBudgetUsd } : {})
+    });
+    if (evaluation.warning && !entry.run.budgetWarning) {
+      entry.run.budgetWarning = true;
+      this.recordActivity(entry, { kind: 'status', label: 'Você chegou a 80% de um limite de gasto configurado.', status: 'waiting' });
+    }
+    if (evaluation.exceeded == null || entry.run.budgetStopReason != null) return;
+    const entries = evaluation.exceeded === 'daily' ? [...this.active.values()] : [entry];
+    for (const current of entries) {
+      if (current.run.budgetStopReason != null) continue;
+      current.run.budgetStopReason = evaluation.exceeded;
+      current.run.lastError = evaluation.exceeded === 'daily'
+        ? 'Limite diário de gasto atingido; execução interrompida.'
+        : 'Limite de gasto desta execução atingido; execução interrompida.';
+      this.recordActivity(current, { kind: 'status', label: current.run.lastError, status: 'error' });
+      void this.stop(current.run.id);
+    }
   }
 
   private upsertSubagent(entry: RunEntry, input: Omit<AgentSubagent, 'startedAt'> & { startedAt?: string }): void {
@@ -462,6 +591,10 @@ export class AgentRunManager {
         }
       }
       const run: AgentRun = { ...entry.run };
+      if (run.cwd != null && entry.baselinePaths != null) {
+        const agentChanges = await this.git.captureAgentChanges(run.cwd, entry.baselinePaths).catch(() => []);
+        if (agentChanges.length > 0) run.agentChanges = agentChanges;
+      }
       run.exitCode = code;
       run.finishedAt = new Date().toISOString();
       run.durationMs = Math.max(0, Date.now() - Date.parse(run.startedAt));
@@ -513,3 +646,4 @@ export class AgentRunManager {
     }
   }
 }
+

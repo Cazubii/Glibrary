@@ -122,6 +122,11 @@ export const DevWorkspaceRepoInputSchema = z.object({
   repoId: z.string().trim().min(1).max(128)
 }).strict()
 
+export const DevWorkspacePushInputSchema = z.object({
+  repoId: z.string().trim().min(1).max(128),
+  confirmProtectedBranch: z.boolean().default(false)
+}).strict()
+
 export const DevWorkspaceBranchInputSchema = z.object({
   repoId: z.string().trim().min(1).max(128),
   branch: z.string().trim().min(1).max(255)
@@ -174,6 +179,8 @@ export const SettingsSchema = z.object({
   inheritTags: z.boolean().default(true),
   userTools: z.array(UserToolSchema).default([]),
   agentsViewMode: z.enum(['painel', 'grid']).optional(),
+  agentRunBudgetUsd: z.number().finite().min(0.01).max(10_000).optional(),
+  agentDailyBudgetUsd: z.number().finite().min(0.01).max(10_000).optional(),
   onboarding: OnboardingProgressSchema,
 })
 
@@ -341,6 +348,12 @@ export const AgentTokenUsageSchema = z.object({
   updatedAt: z.string()
 });
 
+export const AgentFileChangeSchema = z.object({
+  path: z.string().min(1).max(2048),
+  kind: z.enum(['tracked', 'untracked']),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/i)
+});
+
 export const AgentActivitySchema = z.object({
   id: z.string().min(1),
   at: z.string(),
@@ -373,6 +386,9 @@ export const AgentRunSchema = z.object({
   accountKey: z.string().optional(),
   accountLabel: z.string().optional(),
   tokenUsage: AgentTokenUsageSchema.optional(),
+  agentChanges: z.array(AgentFileChangeSchema).max(500).optional(),
+  budgetWarning: z.boolean().optional(),
+  budgetStopReason: z.enum(['execution', 'daily']).optional(),
   activity: z.array(AgentActivitySchema).max(100).optional(),
   subagents: z.array(AgentSubagentSchema).max(200).optional(),
   command: z.string().min(1),
@@ -392,6 +408,13 @@ export const AgentRunStartInputSchema = z
     prompt: z.string().trim().max(4000).optional()
   })
   .strict();
+
+export const AgentRunChangesInputSchema = z.object({ id: z.string().min(1) }).strict();
+
+export const AgentRunChangesResolveInputSchema = z.object({
+  id: z.string().min(1),
+  action: z.enum(['keep', 'discard'])
+}).strict();
 
 const GitHubToolUrlSchema = z.string().trim().regex(
   /^https:\/\/github\.com\/[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9_.-]+(?:\.git)?\/?$/i,
@@ -529,6 +552,11 @@ export const RepoIdInputSchema = z.object({
   id: z.string().min(1)
 })
 
+export const RepoPushInputSchema = z.object({
+  id: z.string().min(1),
+  confirmProtectedBranch: z.boolean().default(false)
+}).strict()
+
 export const RepoRemoveInputSchema = z.object({
   id: z.string().min(1),
   deleteFolder: z.boolean()
@@ -548,7 +576,8 @@ export const ProcessRunInputSchema = z.object({
 
 export const CommitInputSchema = z.object({
   id: z.string().min(1),
-  message: z.string().trim().min(1).max(500)
+  message: z.string().trim().min(1).max(500),
+  revision: z.string().regex(/^[a-f0-9]{64}$/i)
 })
 
 export const AuthTokenInputSchema = z.object({
@@ -563,3 +592,4 @@ export const ToolRunInputSchema = z.object({
   toolId: z.string().min(1),
   projectId: z.string().min(1)
 })
+

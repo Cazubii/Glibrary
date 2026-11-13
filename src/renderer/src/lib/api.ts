@@ -1,6 +1,7 @@
 import type {
   DetectionResult,
   IpcError,
+  GitChangePreview,
   GitStatusDetail,
   GithubUser,
   GithubOAuthDeviceSession,
@@ -10,6 +11,7 @@ import type {
   Agent,
   AgentProfile,
   AgentRun,
+  AgentChangesResolution,
   AgentsScanResult,
   BaseItem,
   Kit,
@@ -216,8 +218,8 @@ export const api = {
   devWorkspaceSync: (repoId: string): Promise<{ updated: boolean; summary: string; status: DevWorkspaceStatus }> =>
     unwrap<{ updated: boolean; summary: string; status: DevWorkspaceStatus }>(window.api.invoke(IpcChannels.devWorkspaceSync, { repoId })),
 
-  devWorkspacePush: (repoId: string): Promise<{ branch: string; status: DevWorkspaceStatus }> =>
-    unwrap<{ branch: string; status: DevWorkspaceStatus }>(window.api.invoke(IpcChannels.devWorkspacePush, { repoId })),
+  devWorkspacePush: (repoId: string, confirmProtectedBranch = false): Promise<{ branch: string; status: DevWorkspaceStatus }> =>
+    unwrap<{ branch: string; status: DevWorkspaceStatus }>(window.api.invoke(IpcChannels.devWorkspacePush, { repoId, confirmProtectedBranch })),
 
   repoPull: (id: string): Promise<{ updated: boolean; summary: string }> =>
     unwrap<{ updated: boolean; summary: string }>(window.api.invoke(IpcChannels.repoPull, { id })),
@@ -367,11 +369,20 @@ export const api = {
   repoGitStatus: (id: string): Promise<GitStatusDetail> =>
     unwrap<GitStatusDetail>(window.api.invoke(IpcChannels.repoGitStatus, { id })),
 
-  repoCommit: (id: string, message: string): Promise<{ commit: string }> =>
-    unwrap<{ commit: string }>(window.api.invoke(IpcChannels.repoCommit, { id, message })),
+  repoGitPreview: (id: string): Promise<GitChangePreview> =>
+    unwrap<GitChangePreview>(window.api.invoke(IpcChannels.repoGitPreview, { id })),
 
-  repoPush: (id: string): Promise<{ branch: string }> =>
-    unwrap<{ branch: string }>(window.api.invoke(IpcChannels.repoPush, { id })),
+  repoCommit: (id: string, message: string, revision: string): Promise<{ commit: string }> =>
+    unwrap<{ commit: string }>(window.api.invoke(IpcChannels.repoCommit, { id, message, revision })),
+
+  repoGitUndo: (id: string): Promise<{ branch: string; commit: string }> =>
+    unwrap<{ branch: string; commit: string }>(window.api.invoke(IpcChannels.repoGitUndo, { id })),
+
+  repoGitRevert: (id: string): Promise<{ branch: string; commit: string }> =>
+    unwrap<{ branch: string; commit: string }>(window.api.invoke(IpcChannels.repoGitRevert, { id })),
+
+  repoPush: (id: string, confirmProtectedBranch = false): Promise<{ branch: string }> =>
+    unwrap<{ branch: string }>(window.api.invoke(IpcChannels.repoPush, { id, confirmProtectedBranch })),
 
   terminalList: (cwd: string): Promise<TerminalListResult> =>
     unwrap<TerminalListResult>(window.api.invoke(IpcChannels.terminalList, { cwd })),
@@ -434,6 +445,12 @@ export const api = {
   agentRunsGetLogs: (id: string): Promise<LogLine[]> =>
     unwrap<LogLine[]>(window.api.invoke(IpcChannels.agentRunsGetLogs, { id })),
 
+  agentRunsGetChanges: (id: string): Promise<GitChangePreview> =>
+    unwrap<GitChangePreview>(window.api.invoke(IpcChannels.agentRunsGetChanges, { id })),
+
+  agentRunsResolveChanges: (id: string, action: 'keep' | 'discard'): Promise<AgentChangesResolution> =>
+    unwrap<AgentChangesResolution>(window.api.invoke(IpcChannels.agentRunsResolveChanges, { id, action })),
+
   onAgentRunsChanged: (listener: (run: AgentRun) => void) =>
     window.api.on(IpcChannels.agentRunsChanged, (payload: unknown) => {
       listener(payload as AgentRun);
@@ -474,3 +491,4 @@ export const api = {
       listener(payload as { id: string; line: LogLine });
     })
 };
+

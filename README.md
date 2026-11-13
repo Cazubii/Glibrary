@@ -30,9 +30,10 @@ O app abre em **Início**, mantém o tema escuro e claro e organiza as tarefas e
 
 Os termos de Git, agentes e consumo agora aparecem com nomes simples e explicações acessíveis por teclado. Falhas frequentes agora explicam o que ocorreu e como seguir, com detalhes técnicos recolhidos. A primeira abertura agora orienta a configuração e a escolha do primeiro projeto. O login pelo navegador usa o Device Flow do GitHub App quando o client ID público estiver configurado; o token pessoal continua nas opções avançadas.
 
+Antes de salvar uma versão, a pessoa pode revisar os arquivos e o diff. No modo simples, o Glibrary cria uma linha de trabalho para agentes, pede confirmação antes de enviar direto para `main`/`master` e oferece desfazer versões locais ou reverter versões já enviadas. Depois de cada execução, é possível revisar, manter ou descartar as mudanças do agente; arquivos editados depois são preservados. Limites opcionais por execução e por dia interrompem agentes monitorados ao atingir o valor e avisam aos 80%.
+
 ## Para onde vai
 
-- Revisão das mudanças, linha de trabalho protegida, desfazer e limites de gasto.
 - Receitas completas para criar, entender e publicar projetos.
 - Instaladores para Windows, macOS e Linux, com atualização automática.
 
@@ -89,3 +90,4 @@ Contribuições são bem-vindas. Leia [`CONTRIBUTING.md`](CONTRIBUTING.md), conf
 ## Licença
 
 Distribuído sob a licença MIT. Consulte [`LICENSE`](LICENSE).
+

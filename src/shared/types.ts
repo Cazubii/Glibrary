@@ -203,6 +203,8 @@ export interface Settings {
   inheritTags: boolean; // projetos herdam tags dos skills/agents/bases associados
   userTools?: UserTool[]; // ferramentas do usuário; ligadas ficam nos projetos
   agentsViewMode?: AgentViewMode; // modo de visualização da página Agentes
+  agentRunBudgetUsd?: number;
+  agentDailyBudgetUsd?: number;
   onboarding: OnboardingProgress;
 }
 
@@ -436,6 +438,9 @@ export interface AgentRun {
   accountKey?: string;
   accountLabel?: string;
   tokenUsage?: AgentTokenUsage;
+  agentChanges?: AgentFileChange[];
+  budgetWarning?: boolean;
+  budgetStopReason?: 'execution' | 'daily';
   activity?: AgentActivity[];
   subagents?: AgentSubagent[];
   command: string; // linha completa executada
@@ -447,6 +452,18 @@ export interface AgentRun {
   durationMs?: number;
   lastError?: string; // cauda do stderr quando falha
   logFile: string;
+}
+
+export interface AgentFileChange {
+  path: string;
+  kind: 'tracked' | 'untracked';
+  sha256: string;
+}
+
+export interface AgentChangesResolution {
+  run: AgentRun;
+  discarded: string[];
+  skipped: string[];
 }
 
 export type ToolSource = 'builtin' | 'custom';
@@ -535,9 +552,25 @@ export interface GitFile {
   state: GitFileState;
 }
 
+export interface GitNewFilePreview {
+  path: string;
+  content: string;
+  binary: boolean;
+  truncated: boolean;
+}
+
+export interface GitChangePreview {
+  revision: string;
+  files: GitFile[];
+  diff: string;
+  newFiles: GitNewFilePreview[];
+  truncated: boolean;
+}
+
 export interface GitStatusDetail {
   branch: string | null;
   ahead: number;
   behind: number;
   files: GitFile[];
 }
+

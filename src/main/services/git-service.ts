@@ -5,8 +5,12 @@ import {
   type PullResult,
   type StatusResult,
 } from 'simple-git';
-import { join } from 'path';
+import { createHash } from 'node:crypto';
+import { promises as fs } from 'node:fs';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { GitBranchList, LocalBranchSummary, RemoteBranchSummary } from '../../shared/git-branches';
+import type { AgentFileChange, GitChangePreview, GitFile, GitNewFilePreview } from '../../shared/types';
+import { buildWorkingBranchName, isProtectedBranch } from './git-protection';
 
 export interface CloneProgress {
   percent: number | null;
@@ -20,6 +24,53 @@ export interface FetchStatus {
 }
 
 export type ProgressCallback = (progress: CloneProgress) => void;
+
+const MAX_REVIEW_DIFF_CHARS = 500_000;
+const MAX_NEW_FILE_PREVIEW_BYTES = 100_000;
+const MAX_NEW_FILE_TOTAL_BYTES = 500_000;
+
+function pathIsWithin(root: string, candidate: string): boolean {
+  const fromRoot = relative(root, candidate);
+  return fromRoot !== '' && fromRoot !== '..' && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot);
+}
+
+function isBinary(buffer: Buffer): boolean {
+  return buffer.includes(0);
+}
+
+function clippedText(buffer: Buffer, limit: number): { text: string; truncated: boolean; binary: boolean } {
+  const truncated = buffer.length > limit;
+  const content = buffer.subarray(0, limit);
+  const binary = isBinary(buffer);
+  return {
+    text: binary ? `[Arquivo binário: ${buffer.length.toLocaleString('pt-BR')} bytes]` : content.toString('utf8'),
+    truncated,
+    binary
+  };
+}
+
+async function hashWorkspaceFile(root: string, relativePath: string): Promise<string | null> {
+  const absoluteFile = resolve(root, relativePath);
+  if (!pathIsWithin(root, absoluteFile)) return null;
+  let buffer: Buffer;
+  try {
+    const info = await fs.lstat(absoluteFile);
+    if (info.isDirectory()) return null;
+    if (info.isSymbolicLink()) {
+      buffer = Buffer.from(`Link simbólico para: ${await fs.readlink(absoluteFile)}`);
+    } else {
+      const realFile = await fs.realpath(absoluteFile);
+      if (!pathIsWithin(root, realFile)) return null;
+      buffer = await fs.readFile(realFile);
+    }
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return createHash('sha256').update('glibrary:missing').digest('hex');
+    }
+    return null;
+  }
+  return createHash('sha256').update(buffer).digest('hex');
+}
 
 /** Mapeia o status do simple-git para o formato compartilhado com o renderer. */
 export function summarizeStatus(status: StatusResult): {
@@ -207,6 +258,16 @@ export class GitService {
     await git.checkout(['-b', name, base]);
   }
 
+  /** Sai de main/master para uma linha de trabalho antes de o agente editar arquivos. */
+  async ensureWorkingBranch(localPath: string, prompt: string | undefined, date = new Date()): Promise<string | null> {
+    const current = await this.getCurrentBranch(localPath);
+    if (current == null || !isProtectedBranch(current)) return current;
+    const existing = (await this.at(localPath).branchLocal()).all;
+    const name = buildWorkingBranchName(prompt, date, existing);
+    await this.createBranch(localPath, name, current);
+    return name;
+  }
+
   /** Faz checkout local ou cria uma branch local acompanhando uma ref remota. */
   async checkoutBranch(localPath: string, branch: string): Promise<string> {
     const git = this.at(localPath);
@@ -242,6 +303,188 @@ export class GitService {
     return summarizeStatus(await git.status());
   }
 
+  /** Prepara uma revisão estável do diff e do conteúdo de arquivos ainda não rastreados. */
+  async previewChanges(localPath: string, onlyPaths?: readonly string[]): Promise<GitChangePreview> {
+    const git = this.at(localPath);
+    const status = await git.status();
+    const root = await fs.realpath(localPath);
+    const stateByPath = new Map<string, GitFile['state']>(
+      status.files.map((file) => [
+        file.path,
+        file.working_dir === ' ' && file.index !== ' ' ? 'staged'
+          : file.working_dir === '?' ? 'untracked'
+          : 'modified'
+      ])
+    );
+    const untracked = await git.raw(['ls-files', '--others', '--exclude-standard', '-z']);
+    const allowedPaths = onlyPaths == null ? null : new Set(onlyPaths);
+    const paths = [...new Set([
+      ...stateByPath.keys(),
+      ...untracked.split('\0').filter((path) => path !== '')
+    ])].filter((path) => allowedPaths == null || allowedPaths.has(path)).sort((a, b) => a.localeCompare(b));
+    const files: GitFile[] = [];
+    const newFiles: GitNewFilePreview[] = [];
+    const hash = createHash('sha256');
+    let fullDiff = '';
+    let remainingNewFileBytes = MAX_NEW_FILE_TOTAL_BYTES;
+    let truncated = false;
+
+    for (const path of paths) {
+      const inHead = await git.raw(['cat-file', '-e', `HEAD:${path}`]).then(() => true, () => false);
+      hash.update(path);
+      hash.update('\0');
+      if (inHead) {
+        const fileDiff = await git.diff(['--no-ext-diff', '--no-color', '--binary', 'HEAD', '--', path]);
+        hash.update('tracked\0');
+        hash.update(fileDiff);
+        fullDiff += fileDiff;
+        files.push({ path, state: stateByPath.get(path) ?? 'modified' });
+        continue;
+      }
+
+      const absoluteFile = resolve(root, path);
+      if (!pathIsWithin(root, absoluteFile)) continue;
+      let fileBuffer: Buffer;
+      try {
+        const info = await fs.lstat(absoluteFile);
+        if (info.isDirectory()) continue;
+        if (info.isSymbolicLink()) {
+          fileBuffer = Buffer.from(`Link simbólico para: ${await fs.readlink(absoluteFile)}`);
+        } else {
+          const realFile = await fs.realpath(absoluteFile);
+          if (!pathIsWithin(root, realFile)) continue;
+          fileBuffer = await fs.readFile(realFile);
+        }
+      } catch {
+        continue;
+      }
+
+      hash.update('new\0');
+      hash.update(fileBuffer);
+      hash.update('\0');
+      const previewLimit = Math.min(MAX_NEW_FILE_PREVIEW_BYTES, remainingNewFileBytes);
+      const display = clippedText(fileBuffer, previewLimit);
+      remainingNewFileBytes = Math.max(0, remainingNewFileBytes - Math.min(fileBuffer.length, previewLimit));
+      truncated ||= display.truncated;
+      newFiles.push({ path, content: display.text, binary: display.binary, truncated: display.truncated });
+      files.push({ path, state: stateByPath.get(path) ?? 'untracked' });
+    }
+
+    const diffTruncated = fullDiff.length > MAX_REVIEW_DIFF_CHARS;
+    truncated ||= diffTruncated;
+    return {
+      revision: hash.digest('hex'),
+      files,
+      diff: diffTruncated ? `${fullDiff.slice(0, MAX_REVIEW_DIFF_CHARS)}\n… diff reduzido para caber na revisão.` : fullDiff,
+      newFiles,
+      truncated
+    };
+  }
+
+  /** Registra apenas arquivos que estavam limpos antes da execução do agente. */
+  async captureAgentChanges(localPath: string, baselinePaths: ReadonlySet<string>): Promise<AgentFileChange[]> {
+    const git = this.at(localPath);
+    const status = await git.status();
+    const untracked = await git.raw(['ls-files', '--others', '--exclude-standard', '-z']);
+    const paths = [...new Set([
+      ...status.files.map((file) => file.path),
+      ...untracked.split('\0').filter((path) => path !== '')
+    ])].sort((a, b) => a.localeCompare(b));
+    const root = await fs.realpath(localPath);
+    const changes: AgentFileChange[] = [];
+    for (const path of paths) {
+      if (baselinePaths.has(path)) continue;
+      const inHead = await git.raw(['cat-file', '-e', `HEAD:${path}`]).then(() => true, () => false);
+      const sha256 = await hashWorkspaceFile(root, path);
+      if (sha256 == null) continue;
+      changes.push({ path, kind: inHead ? 'tracked' : 'untracked', sha256 });
+      if (changes.length >= 500) break;
+    }
+    return changes;
+  }
+
+  /** Descarta somente snapshots ainda idênticos; edições posteriores ficam intactas. */
+  async discardAgentChanges(localPath: string, changes: readonly AgentFileChange[]): Promise<{ discarded: string[]; skipped: string[] }> {
+    const git = this.at(localPath);
+    const status = await git.status();
+    const currentPaths = new Set(status.files.map((file) => file.path));
+    const untracked = await git.raw(['ls-files', '--others', '--exclude-standard', '-z']);
+    for (const path of untracked.split('\0')) if (path !== '') currentPaths.add(path);
+    const root = await fs.realpath(localPath);
+    const discarded: string[] = [];
+    const skipped: string[] = [];
+
+    for (const change of changes) {
+      const absoluteFile = resolve(root, change.path);
+      if (!pathIsWithin(root, absoluteFile) || !currentPaths.has(change.path)) {
+        skipped.push(change.path);
+        continue;
+      }
+      const currentHash = await hashWorkspaceFile(root, change.path);
+      if (currentHash !== change.sha256) {
+        skipped.push(change.path);
+        continue;
+      }
+      const inHead = await git.raw(['cat-file', '-e', `HEAD:${change.path}`]).then(() => true, () => false);
+      try {
+        if (change.kind === 'tracked') {
+          if (!inHead) {
+            skipped.push(change.path);
+            continue;
+          }
+          await git.raw(['restore', '--source=HEAD', '--staged', '--worktree', '--', change.path]);
+        } else {
+          if (inHead) {
+            skipped.push(change.path);
+            continue;
+          }
+          await git.raw(['reset', '-q', 'HEAD', '--', change.path]).catch(() => undefined);
+          const info = await fs.lstat(absoluteFile).catch(() => null);
+          if (info != null) {
+            if (info.isDirectory()) {
+              skipped.push(change.path);
+              continue;
+            }
+            await fs.unlink(absoluteFile);
+          }
+        }
+        discarded.push(change.path);
+      } catch {
+        skipped.push(change.path);
+      }
+    }
+    return { discarded, skipped };
+  }
+
+  /** Salva exatamente os arquivos revisados; se algo mudou, exige uma nova revisão. */
+  async commitReviewed(localPath: string, message: string, expectedRevision: string): Promise<{ commit: string }> {
+    if (!/^[a-f0-9]{64}$/i.test(expectedRevision)) throw new Error('A revisão das alterações não é válida.');
+    const git = this.at(localPath);
+    const before = await this.previewChanges(localPath);
+    if (before.files.length === 0) throw new Error('Não há alterações para salvar.');
+    if (before.revision !== expectedRevision) throw new Error('As alterações mudaram desde a revisão. Revise novamente antes de salvar.');
+
+    await git.add(['-A', '--', ...before.files.map((file) => file.path)]);
+    const after = await this.previewChanges(localPath);
+    if (after.revision !== expectedRevision) throw new Error('As alterações mudaram desde a revisão. Revise novamente antes de salvar.');
+
+    for (const key of ['user.name', 'user.email']) {
+      let value = '';
+      try {
+        value = (await git.getConfig(key)).value ?? '';
+      } catch {
+        value = '';
+      }
+      if (value === '') throw new Error(`Git sem identidade: configure "${key}" antes de salvar a versão.`);
+    }
+    try {
+      const summary = await git.commit(message);
+      return { commit: summary.commit };
+    } catch (error) {
+      throw new Error(sanitizeGitOutput(error instanceof Error ? error.message : String(error)));
+    }
+  }
+
   /** `git add -A` + commit. Requer user.name/email configurados no git do usuário. */
   async commitAll(localPath: string, message: string): Promise<{ commit: string }> {
     const git = this.at(localPath);
@@ -267,6 +510,52 @@ export class GitService {
     }
   }
 
+  /** Remove o último commit local sem apagar nem sobrescrever os arquivos. */
+  async undoLastUnsentCommit(localPath: string): Promise<{ branch: string; commit: string }> {
+    const git = this.at(localPath);
+    const status = await git.status();
+    const branch = status.current;
+    if (branch == null) throw new Error('Não foi possível identificar a linha de trabalho atual.');
+    const upstream = status.tracking ?? `origin/${branch}`;
+    const remoteRef = `refs/remotes/${upstream}`;
+    const remoteExists = await git.raw(['show-ref', '--verify', '--quiet', remoteRef]).then(() => true, () => false);
+    if (remoteExists) {
+      const ahead = Number((await git.raw(['rev-list', '--count', `${upstream}..HEAD`])).trim());
+      if (!Number.isFinite(ahead) || ahead < 1) throw new Error('A última versão já foi enviada. Use “Reverter” para criar uma nova versão de correção.');
+    }
+    const commit = (await git.raw(['rev-parse', 'HEAD'])).trim();
+    const parent = await git.raw(['rev-parse', '--verify', 'HEAD^']).then((value) => value.trim(), () => {
+      throw new Error('Não é possível desfazer a primeira versão deste projeto.');
+    });
+    await git.reset(['--mixed', parent]);
+    return { branch, commit };
+  }
+
+  /** Cria um commit de reversão somente quando HEAD está enviado e a pasta está limpa. */
+  async revertLastSentCommit(localPath: string): Promise<{ branch: string; commit: string }> {
+    const git = this.at(localPath);
+    const status = await git.status();
+    const branch = status.current;
+    if (branch == null) throw new Error('Não foi possível identificar a linha de trabalho atual.');
+    if (!status.isClean()) throw new Error('Salve ou revise as alterações locais antes de reverter uma versão enviada.');
+    if ((status.ahead ?? 0) > 0) throw new Error('Há versões que ainda não foram enviadas. Envie ou desfaça primeiro a última versão local.');
+    if ((status.behind ?? 0) > 0) throw new Error('Baixe as novidades do GitHub antes de reverter.');
+    const upstream = status.tracking ?? `origin/${branch}`;
+    const remoteRef = `refs/remotes/${upstream}`;
+    const remoteExists = await git.raw(['show-ref', '--verify', '--quiet', remoteRef]).then(() => true, () => false);
+    if (!remoteExists) throw new Error('Não foi possível confirmar que a última versão está no GitHub.');
+    await git.raw(['merge-base', '--is-ancestor', 'HEAD', upstream]).catch(() => {
+      throw new Error('Não foi possível confirmar que a versão atual foi enviada ao GitHub.');
+    });
+    const commit = (await git.raw(['rev-parse', 'HEAD'])).trim();
+    try {
+      await git.raw(['revert', '--no-edit', 'HEAD']);
+    } catch (error) {
+      throw new Error(sanitizeGitOutput(error instanceof Error ? error.message : String(error)));
+    }
+    return { branch, commit };
+  }
+
   /** Push para origin; usa PAT como header HTTP (nunca persiste o token em config/url). */
   async push(localPath: string, token?: string): Promise<{ branch: string }> {
     const remote = await this.getRemoteUrl(localPath);
@@ -286,3 +575,4 @@ export class GitService {
     }
   }
 }
+

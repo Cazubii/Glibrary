@@ -1,5 +1,8 @@
-import { Square } from 'lucide-react';
+import { AlertTriangle, Check, Eye, Square, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import type { AgentRun, LogLine } from '@shared/types';
+import { api } from '../lib/api';
+import AgentChangesDialog from './AgentChangesDialog';
 
 interface Props {
   run: AgentRun;
@@ -54,6 +57,29 @@ function nestingDepth(run: AgentRun, parentId: string | undefined): number {
 
 export default function AgentRunCard({ run, lines, running, onStop, onOpenLog, compact = false }: Props): React.JSX.Element {
   const status = statusStyle(run.status);
+  const [changesOpen, setChangesOpen] = useState(false);
+  const [resolvingChanges, setResolvingChanges] = useState(false);
+  const [resolutionError, setResolutionError] = useState<string | null>(null);
+  const [resolutionNote, setResolutionNote] = useState<string | null>(null);
+
+  const resolveChanges = async (action: 'keep' | 'discard'): Promise<void> => {
+    if (action === 'discard') {
+      const paths = (run.agentChanges ?? []).map((change) => `• ${change.path}`).join('\n');
+      if (!window.confirm(`Descartar as alterações do agente nestes arquivos?\n\n${paths}\n\nArquivos que mudaram depois do resumo serão preservados.`)) return;
+    }
+    setResolvingChanges(true);
+    setResolutionError(null);
+    setResolutionNote(null);
+    try {
+      const result = await api.agentRunsResolveChanges(run.id, action);
+      if (result.skipped.length > 0) setResolutionNote(`${result.skipped.length} arquivo(s) mudaram depois do resumo e foram preservados. Revise-os antes de tentar descartar novamente.`);
+    } catch (error) {
+      setResolutionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setResolvingChanges(false);
+    }
+  };
+
   return (
     <div className="rounded-lg border border-steam-elevated/50 bg-steam-panel p-3">
       <div className="flex items-center gap-2 text-sm">
@@ -108,11 +134,27 @@ export default function AgentRunCard({ run, lines, running, onStop, onOpenLog, c
       {!compact && run.status === 'error' && run.lastError != null && (
         <p className="mt-2 line-clamp-2 font-mono text-xs text-steam-error">{run.lastError}</p>
       )}
+      {run.budgetWarning && <p role="status" className="mt-2 flex items-start gap-1.5 rounded bg-steam-warn/10 px-2 py-1.5 text-xs text-steam-warn"><AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true"/>Você chegou a 80% de um limite de gasto configurado.</p>}
+      {run.budgetStopReason != null && <p role="alert" className="mt-2 rounded bg-steam-error/10 px-2 py-1.5 text-xs text-steam-error">{run.budgetStopReason === 'daily' ? 'O agente foi parado porque atingiu o limite diário de gasto.' : 'O agente foi parado porque atingiu o limite desta execução.'}</p>}
+      {run.status !== 'running' && (run.agentChanges?.length ?? 0) > 0 && (
+        <section className="mt-2 rounded-lg border border-steam-accent/30 bg-steam-accent/5 p-2" aria-label="Mudanças feitas pelo agente">
+          <p className="text-xs font-medium text-steam-text">O agente alterou {run.agentChanges?.length} arquivo(s)</p>
+          {resolutionNote != null && <p role="status" className="mt-1 text-[11px] text-steam-warn">{resolutionNote}</p>}
+          {resolutionError != null && <p role="alert" className="mt-1 text-[11px] text-steam-error">{resolutionError}</p>}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <button type="button" onClick={() => setChangesOpen(true)} className="inline-flex min-h-8 items-center gap-1 rounded border border-steam-elevated px-2 text-xs hover:bg-steam-elevated"><Eye size={13} aria-hidden="true"/>Ver mudanças</button>
+            <button type="button" onClick={() => void resolveChanges('keep')} disabled={resolvingChanges} className="inline-flex min-h-8 items-center gap-1 rounded border border-steam-elevated px-2 text-xs hover:bg-steam-elevated disabled:opacity-50"><Check size={13} aria-hidden="true"/>Manter</button>
+            <button type="button" onClick={() => void resolveChanges('discard')} disabled={resolvingChanges} className="inline-flex min-h-8 items-center gap-1 rounded border border-steam-error/40 px-2 text-xs text-steam-error hover:bg-steam-error/10 disabled:opacity-50"><Trash2 size={13} aria-hidden="true"/>Descartar</button>
+          </div>
+        </section>
+      )}
       {lines != null && lines.length > 0 && !compact && (
         <pre className="mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap font-mono text-[11px] leading-4 text-steam-text/70">
           {lines.slice(-8).map((l) => l.text).join('\n')}
         </pre>
       )}
+      {changesOpen && <AgentChangesDialog run={run} onClose={() => setChangesOpen(false)}/>}
     </div>
   );
 }
+

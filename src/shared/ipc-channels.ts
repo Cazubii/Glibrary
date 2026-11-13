@@ -95,7 +95,10 @@ export const IpcChannels = {
   usageRecord: 'usage:record',
   userToolRun: 'userTool:run',
   repoGitStatus: 'repo:gitStatus',
+  repoGitPreview: 'repo:gitPreview',
   repoCommit: 'repo:commit',
+  repoGitUndo: 'repo:gitUndo',
+  repoGitRevert: 'repo:gitRevert',
   repoPush: 'repo:push',
   agentProfilesList: 'agentProfiles:list',
   agentProfilesCreate: 'agentProfiles:create',
@@ -105,6 +108,8 @@ export const IpcChannels = {
   agentRunsStop: 'agentRuns:stop',
   agentRunsList: 'agentRuns:list',
   agentRunsGetLogs: 'agentRuns:getLogs',
+  agentRunsGetChanges: 'agentRuns:getChanges',
+  agentRunsResolveChanges: 'agentRuns:resolveChanges',
   agentRunsChanged: 'agentRuns:changed',
   agentRunsLog: 'agentRuns:log',
   toolsList: 'tools:list',
@@ -119,3 +124,4 @@ export const IpcChannels = {
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
+
