@@ -142,6 +142,19 @@ export const UserToolSchema = z.object({
   keepAlive: z.boolean().default(false)
 })
 
+export const OnboardingProgressSchema = z.object({
+  status: z.enum(['not-started', 'dismissed', 'completed']).default('not-started'),
+  currentStep: z.number().int().min(0).max(4).default(0),
+  completedChecklist: z.array(z.enum(['tools', 'github', 'project', 'agent', 'publish'])).default([]),
+  checklistVisible: z.boolean().default(false),
+  projectsRoot: z.string().optional()
+}).default({
+  status: 'not-started',
+  currentStep: 0,
+  completedChecklist: [],
+  checklistVisible: false
+});
+
 export const SettingsSchema = z.object({
   reposRoot: z.string().min(1),
   basesRoot: z.string().min(1).default('BASES'),
@@ -158,6 +171,7 @@ export const SettingsSchema = z.object({
   inheritTags: z.boolean().default(true),
   userTools: z.array(UserToolSchema).default([]),
   agentsViewMode: z.enum(['painel', 'grid']).optional(),
+  onboarding: OnboardingProgressSchema,
 })
 
 export const SkillSchema = z.object({

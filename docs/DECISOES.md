@@ -436,3 +436,14 @@ Erros comuns de Git, GitHub, sistema e ferramentas recebem mensagens em pt-BR. O
 Falhas de autenticação levam à área Projetos e ferramentas ausentes levam a Ferramentas. Conflitos, permissões, rede e outros casos mostram um próximo passo sem prometer uma ação automática.
 
 Registro de decisões tomadas durante a execução (diretriz 12 da spec).
+
+## 2026-11-13 — F2 Primeira experiência guiada
+
+### Assistente persistente com retomada e saída explícita
+O progresso fica em `settings.onboarding` no `library.json`: estado do assistente, passo atual, pasta de projetos, checklist e sua visibilidade. Bibliotecas novas começam em `not-started`; bibliotecas v1/v2 antigas com conteúdo são migradas para `dismissed`, sem interromper a pessoa. Bibliotecas antigas vazias recebem o assistente. A migração v2 é gravada pelo fluxo atômico existente e mantém a cópia de backup.
+
+### Verificação cobre CLIs suportados sem eleger o padrão
+Git, Node.js e os CLIs Claude Code, OpenCode, Codex, Gemini e Aider são detectados pela lista fixa de comandos. A detecção não escolhe nem recomenda um CLI; a decisão continua pendente do mantenedor.
+
+### Checklist só aparece depois que a pessoa conclui ou dispensa o assistente
+As cinco etapas ficam em Início e são marcadas pela própria pessoa; o painel some quando todas estiverem concluídas. A conta GitHub segue opcional e usa a tela PAT existente. Device Flow aguarda a F3 e o client ID OAuth do mantenedor.

@@ -9,6 +9,7 @@ import { useDashboardStore } from '../store/dashboard';
 import GithubAccountSection from '../components/dashboard/GithubAccountSection';
 import GithubCharts from '../components/dashboard/GithubCharts';
 import SyncedReposSection from '../components/dashboard/SyncedReposSection';
+import GettingStartedChecklist from '../components/GettingStartedChecklist';
 import RepoDetailPage from './RepoDetailPage';
 
 type Section = 'skills' | 'agents';
@@ -17,10 +18,12 @@ interface Props {
   onError: (error: unknown) => void;
   onSuccess: (message: string) => void;
   onOpenProjects: () => void;
+  onOpenTools: () => void;
+  onOpenAgents: () => void;
 }
 
 /** Aba inicial: conta GitHub, gráficos, projetos sincronizados e uso da biblioteca. */
-export default function DashboardPage({ onError, onSuccess, onOpenProjects }: Props): React.JSX.Element {
+export default function DashboardPage({ onError, onSuccess, onOpenProjects, onOpenTools, onOpenAgents }: Props): React.JSX.Element {
   const { account, loading, refreshing, error, load } = useDashboardStore();
   const [openRepoId, setOpenRepoId] = useState<string | null>(null);
   const [recentProjects, setRecentProjects] = useState<ProjectRef[] | null>(null);
@@ -65,6 +68,13 @@ export default function DashboardPage({ onError, onSuccess, onOpenProjects }: Pr
           {refreshing ? 'Atualizando…' : 'Atualizar'}
         </button>
       </header>
+
+      <GettingStartedChecklist
+        onError={onError}
+        onOpenTools={onOpenTools}
+        onOpenProjects={onOpenProjects}
+        onOpenAgents={onOpenAgents}
+      />
 
       {error != null && (
         <div role="alert" className="flex items-center gap-3 rounded border border-steam-error/40 bg-steam-error/10 px-4 py-3 text-sm text-steam-error">
