@@ -1,5 +1,13 @@
 # Decisões do projeto
 
+## 2026-11-13 — F0 Limpeza
+
+### Especificação v1 mantida como histórico
+`docs/arquivo/GLIBRARY_SPEC.md` registra a implementação original. README, AGENTS e este arquivo são a documentação viva da versão v2.
+
+### Onboarding legado preservado para a F2
+`src/renderer/src/components/Onboarding.tsx` continua no repositório para ser revisto e reaproveitado na primeira experiência guiada. A F2 deve adaptar o componente ao novo fluxo antes de decidir qualquer remoção.
+
 Registro de decisões tomadas durante a execução (diretriz 12 da spec).
 
 ## 2026-10-30 — Fase 0

@@ -80,7 +80,7 @@ src/renderer/    interface React
 tests/           testes da implementação v1 e serviços compartilhados
 ```
 
-`GLIBRARY_SPEC.md` documenta a implementação original v1. A direção v2 e suas decisões atuais estão registradas em `AGENTS.md` e `docs/DECISOES.md`.
+[`docs/arquivo/GLIBRARY_SPEC.md`](docs/arquivo/GLIBRARY_SPEC.md) documenta a implementação original v1. A direção v2 e suas decisões atuais estão registradas em `AGENTS.md` e `docs/DECISOES.md`.
 
 ## Contribuir
 

@@ -7,7 +7,7 @@ caminhos pessoais, nomes de projetos privados, credenciais ou dados de usuários
 
 Glibrary é um aplicativo desktop Electron para catalogar Skills de agentes (`SKILL.md`),
 repositórios-base e projetos que usam esses recursos. A biblioteca atual usa `library.json` v2;
-a especificação detalhada da versão original está arquivada em `GLIBRARY_SPEC.md`.
+a especificação detalhada da versão original está arquivada em `docs/arquivo/GLIBRARY_SPEC.md`.
 
 - `src/shared/`: tipos, schemas Zod, canais IPC e utilitários sem dependência de Electron.
 - `src/main/`: inicialização Electron, armazenamento, operações Git e handlers IPC.
