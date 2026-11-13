@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron';
+import { translateError } from '../services/error-translator';
 import type { GitBranchList } from '../../shared/git-branches';
 import type {
   DevWorkspaceCloseResult,
@@ -22,7 +23,7 @@ function ok<T>(data: T): IpcResult<T> {
 }
 
 function fail(error: unknown): IpcResult<never> {
-  return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  return { ok: false, error: translateError(error) };
 }
 
 export function registerDevWorkspaceIpc(

@@ -1,4 +1,5 @@
 import { ipcMain, shell } from 'electron';
+import { translateError } from '../services/error-translator';
 import { z } from 'zod';
 import type { IpcResult, LogLine, ToolEntry, ToolInstallRun, ToolStatus } from '../../shared/types';
 import { ToolInputSchema } from '../../shared/schemas';
@@ -13,7 +14,7 @@ function ok<T>(data: T): IpcResult<T> {
 }
 
 function fail(error: unknown): IpcResult<never> {
-  return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  return { ok: false, error: translateError(error) };
 }
 
 export function registerNativeToolsIpc(manager: ToolManager): void {

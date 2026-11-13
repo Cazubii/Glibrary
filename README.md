@@ -28,12 +28,11 @@ Quem trabalha com agentes acaba com Skills espalhadas em várias pastas, dezenas
 
 O app abre em **Início**, mantém o tema escuro e claro e organiza as tarefas em cinco áreas principais. Coleções, Análise de repositório e Consumo detalhado ficam disponíveis em Configurações por **Mostrar recursos avançados**.
 
-Os termos de Git, agentes e consumo agora aparecem com nomes simples e explicações acessíveis por teclado.
+Os termos de Git, agentes e consumo agora aparecem com nomes simples e explicações acessíveis por teclado. Falhas frequentes agora explicam o que ocorreu e como seguir, com detalhes técnicos recolhidos.
 
 ## Para onde vai
 
 - Primeira abertura guiada, com ferramentas, conta GitHub, pasta e projeto inicial.
-- Mensagens de erro com próximos passos e detalhes técnicos recolhidos.
 - Revisão das mudanças, linha de trabalho protegida, desfazer e limites de gasto.
 - Receitas completas para criar, entender e publicar projetos.
 - Instaladores para Windows, macOS e Linux, com atualização automática.

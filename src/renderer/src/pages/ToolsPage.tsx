@@ -7,7 +7,7 @@ import { useLibraryStore } from '../store/library';
 import NativeToolsPanel from '../components/NativeToolsPanel';
 
 interface Props {
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
 }
 
 function ToggleSwitch({

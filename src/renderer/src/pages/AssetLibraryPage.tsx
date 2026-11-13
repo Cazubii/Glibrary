@@ -39,7 +39,7 @@ const unwrapTop = (payload: unknown): TopRepos | null =>
     : null;
 
 interface Props {
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
   onSuccess?: (message: string) => void;
   mode?: AssetLibraryMode;
 }
@@ -91,7 +91,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
     try {
       const data = await api.assetsGet();
       setAssets((prev) => ({ ...prev, ...data }));
-    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    } catch (e) { onError(e); }
   }, [onError]);
   const respond = useCallback(
     (message: string): void => {
@@ -109,14 +109,14 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       const top = await api.topReposGet(topWindow, topScope);
       setTopCache((prev) => ({ ...prev, [key]: { ...top, windowDays: topWindow, scope: topScope } }));
     }
-    catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    catch (e) { onError(e); }
   }, [mode, onError, topCache, topWindow, topScope]);
   useEffect(() => { void loadTop(); }, [loadTop]);
   const refreshKnown = useCallback(async () => {
     try {
       const lib = await api.libraryGet();
       setKnownUrls([...lib.repos.map((repo) => repo.remoteUrl), ...lib.bases.map((base) => base.remoteUrl)].filter((url): url is string => Boolean(url)));
-    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    } catch (e) { onError(e); }
   }, [onError]);
   useEffect(() => { void refreshKnown(); }, [refreshKnown]);
   const knownSet = useMemo(() => new Set(knownUrls.map((url) => normalizeGitUrl(url))), [knownUrls]);
@@ -137,7 +137,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       const top = await api.topReposRefresh(topWindow, topScope);
       setTopCache((prev) => ({ ...prev, [topCacheKey(topWindow, topScope)]: { ...top, windowDays: topWindow, scope: topScope } }));
     }
-    catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    catch (e) { onError(e); }
     finally { setBusy(false); }
   };
 
@@ -148,7 +148,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       respond(`${repo.owner}/${repo.name} adicionado ao catálogo (não clonado).`);
       await refreshKnown();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
 
@@ -160,7 +160,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       respond(`SKILL.md de ${repo.owner}/${repo.name} importado. Veja a aba Skills.`);
       await refresh();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setImportBusy(null);
     }
@@ -174,7 +174,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       respond(`${imported.length} agente(s) importados de ${repo.owner}/${repo.name}. Veja a aba Agents.`);
       await refresh();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setImportBusy(null);
     }
@@ -194,7 +194,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       await refresh();
       respond(`Sincronização concluída: ${result.skills.length} skill(s).`);
     }
-    catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    catch (e) { onError(e); }
     finally { setBusy(false); }
   };
 
@@ -212,7 +212,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       await refresh();
       respond(`Sincronização concluída: ${result.agents.length} agente(s).`);
     }
-    catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    catch (e) { onError(e); }
     finally { setBusy(false); }
   };
 
@@ -225,7 +225,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       const result = await api.agentsScan();
       setScanIssues(result.issues);
       await refresh();
-    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    } catch (e) { onError(e); }
     finally { setBusy(false); }
   };
 
@@ -239,7 +239,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       setScanIssues(result.issues);
       await refresh();
       respond(`Origem adicionada. Sincronização encontrou ${result.skills.length} skill(s).`);
-    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    } catch (e) { onError(e); }
     finally { setBusy(false); }
   };
 
@@ -249,7 +249,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       setBaseName(''); setBaseUrl(''); setBasePath(''); setShowBaseForm(false);
       respond(`Base "${created.name}" adicionada.`);
       await refresh();
-    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    } catch (e) { onError(e); }
   };
 
   const cloneBase = async (base: BaseItem): Promise<void> => {
@@ -258,7 +258,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       const updated = await api.baseClone(base.id);
       respond(`Base "${base.name}" clonada${updated.localPath ? ` para ${updated.localPath}` : ''}.`);
       await refresh();
-    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    } catch (e) { onError(e); }
     finally { setCloningId(null); }
   };
 
@@ -270,7 +270,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       respond('Removido da biblioteca.');
       await refresh();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
 
@@ -333,7 +333,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       });
       await refresh();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
       throw e;
     }
   };
@@ -350,7 +350,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       });
       await refresh();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
       throw e;
     }
   };
@@ -362,7 +362,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       await api.skillUpdate(skill.id, patch);
       await refresh();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
   const setSkillFavorite = async (skill: Skill, favorite: boolean): Promise<void> => updateSkillTags(skill, { favorite });
@@ -372,7 +372,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       await api.agentUpdate(agent.id, patch);
       await refresh();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
   const updateBaseTags = async (base: BaseItem, tags: string[]): Promise<void> => {
@@ -380,7 +380,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       await api.baseUpdate(base.id, { tags });
       await refresh();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
   const setBaseFavorite = async (base: BaseItem, favorite: boolean): Promise<void> => {
@@ -388,7 +388,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       await api.baseUpdate(base.id, { favorite });
       await refresh();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
   const updateProjectTags = async (project: ProjectRef, tags: string[]): Promise<void> => {
@@ -396,7 +396,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       await api.projectUpdate(project.id, { tags });
       await refresh();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
   const setProjectFavorite = async (project: ProjectRef, favorite: boolean): Promise<void> => {
@@ -404,7 +404,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
       await api.projectUpdate(project.id, { favorite });
       await refresh();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
 
@@ -524,7 +524,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
         onError={onError}
         onCheckOnStartChange={(enabled) => {
           void updateSettings({ checkUpdatesOnStart: enabled }).catch((e: unknown) =>
-            onError(e instanceof Error ? e.message : String(e))
+            onError(e)
           );
         }}
         checkOnStart={settings?.checkUpdatesOnStart ?? false}
@@ -576,7 +576,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
                 onOpen={() =>
                   void api
                     .skillOpen(skill.id)
-                    .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
+                    .catch((e: unknown) => onError(e))
                 }
                 onRemove={() => setPendingRemove({ kind: 'skill', id: skill.id, name: skill.name })}
               />
@@ -610,7 +610,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
                 onOpen={() =>
                   void api
                     .agentOpen(agent.id)
-                    .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
+                    .catch((e: unknown) => onError(e))
                 }
                 onRemove={() => setPendingRemove({ kind: 'agent', id: agent.id, name: agent.name })}
               />
@@ -675,7 +675,7 @@ export default function AssetLibraryPage({ onError, onSuccess, mode = 'resources
                     await api.projectUpdate(project.id, patch);
                     await refresh();
                   } catch (e) {
-                    onError(e instanceof Error ? e.message : String(e));
+                    onError(e);
                   }
                 }}
                 onTagsChange={(tags) => void updateProjectTags(project, tags)}

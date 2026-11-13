@@ -1,4 +1,5 @@
 import { ipcMain, shell, dialog, BrowserWindow } from 'electron';
+import { translateError } from '../services/error-translator';
 import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
 import { exec as execCb } from 'child_process';
@@ -62,10 +63,7 @@ const KitAddInput = z.object({
 });
 function ok<T>(data: T): IpcResult<T> { return { ok: true, data }; }
 function fail(error: unknown): IpcResult<never> {
-  if (error instanceof z.ZodError) {
-    return { ok: false, error: error.issues.map((issue) => issue.message).join('; ') };
-  }
-  return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  return { ok: false, error: translateError(error) };
 }
 
 export function registerAssetsIpc(store: LibraryStore, git: GitService): void {

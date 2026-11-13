@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, Library, X } from 'lucide-react';
 import type { AreaSection, PrimaryArea } from './navigation';
 import { getAreaSections } from './navigation';
 import { useLibraryStore } from './store/library';
+import { GlibraryApiError } from './lib/api';
 import GithubAccountMenu from './components/GithubAccountMenu';
 import { AreaNavigation, AreaSectionNavigation } from './components/AreaNavigation';
 import SettingsMenu from './components/SettingsMenu';
@@ -27,8 +28,8 @@ type SectionSelections = {
 };
 type ToastKind = 'error' | 'success';
 
-interface Toast { id: number; message: string; kind: ToastKind }
-type PushToast = (message: string, kind?: ToastKind) => void;
+interface Toast { id: number; message: string; kind: ToastKind; presentation?: GlibraryApiError['presentation'] }
+type PushToast = (message: unknown, kind?: ToastKind) => void;
 
 export default function App(): React.JSX.Element {
   const { loaded, error, load, settings, updateSettings } = useLibraryStore();
@@ -45,8 +46,12 @@ export default function App(): React.JSX.Element {
   const pendingSearch = useRef(false);
   const pushToast: PushToast = useCallback((message, kind = 'error') => {
     const id = Date.now() + Math.random();
-    setToasts((items) => [...items, { id, message, kind }]);
-    setTimeout(() => setToasts((items) => items.filter((item) => item.id !== id)), 5000);
+    const presentation = message instanceof GlibraryApiError ? message.presentation : undefined;
+    const displayMessage = message instanceof Error ? message.message : typeof message === 'string' ? message : 'Não foi possível concluir esta ação.';
+    setToasts((items) => [...items, { id, message: displayMessage, kind, ...(presentation != null ? { presentation } : {}) }]);
+    if (kind === 'success' || presentation == null) {
+      setTimeout(() => setToasts((items) => items.filter((item) => item.id !== id)), 5000);
+    }
   }, []);
   const onError: PushToast = useCallback((message) => pushToast(message, 'error'), [pushToast]);
   const onSuccess: PushToast = useCallback((message) => pushToast(message, 'success'), [pushToast]);
@@ -57,11 +62,11 @@ export default function App(): React.JSX.Element {
 
   const toggleTheme = (): void => {
     const next = theme === 'dark' ? 'light' : 'dark';
-    updateSettings({ theme: next }).catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
+    updateSettings({ theme: next }).catch((e: unknown) => onError(e));
   };
   const setAdvancedResources = (show: boolean): void => {
     updateSettings({ showAdvancedResources: show }).catch((e: unknown) =>
-      onError(e instanceof Error ? e.message : String(e))
+      onError(e)
     );
   };
   const selectAreaSection = (area: SelectableArea, section: AreaSection['id']): void => {
@@ -180,11 +185,41 @@ export default function App(): React.JSX.Element {
           )}
         </Suspense>
       </div>
-      <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex flex-col gap-2">
+        <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex max-h-[70vh] flex-col gap-2 overflow-y-auto">
         {toasts.map((toast) => (
-          <div key={toast.id} className={`pointer-events-auto flex max-w-sm items-start gap-2 rounded px-4 py-3 text-sm text-white shadow-lg ${toast.kind === 'success' ? 'bg-steam-green' : 'bg-steam-error'}`} role="status">
+            <div key={toast.id} className={`pointer-events-auto flex max-w-md items-start gap-2 rounded px-4 py-3 text-sm text-white shadow-lg ${toast.kind === 'success' ? 'bg-steam-green' : 'bg-steam-error'}`} role={toast.kind === 'error' ? 'alert' : 'status'}>
             {toast.kind === 'success' ? <CheckCircle2 size={16} className="mt-0.5 shrink-0" /> : <AlertCircle size={16} className="mt-0.5 shrink-0" />}
-            <span className="flex-1">{toast.message}</span>
+              <div className="min-w-0 flex-1">
+                {toast.presentation != null ? (
+                  <div className="space-y-2">
+                    <p className="font-semibold">{toast.presentation.title}</p>
+                    <p>{toast.presentation.whatHappened}</p>
+                    <p>{toast.presentation.nextStep}</p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {toast.presentation.action != null && (
+                        <button
+                          type="button"
+                          className="rounded underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                          onClick={() => {
+                            setView(toast.presentation?.action?.target ?? 'projects');
+                            setToasts((items) => items.filter((item) => item.id !== toast.id));
+                          }}
+                        >
+                          {toast.presentation.action.label}
+                        </button>
+                      )}
+                      {toast.presentation.technicalDetails !== '' && (
+                        <details className="text-xs">
+                          <summary className="cursor-pointer underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">Ver detalhes técnicos</summary>
+                          <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-black/20 p-2 font-mono text-[11px]">{toast.presentation.technicalDetails}</pre>
+                        </details>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <span>{toast.message}</span>
+                )}
+              </div>
             <button type="button" onClick={() => setToasts((items) => items.filter((item) => item.id !== toast.id))} aria-label="Fechar aviso"><X size={14} /></button>
           </div>
         ))}

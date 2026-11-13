@@ -3,7 +3,7 @@ import { CheckCircle2, CircleAlert, Search, Loader2, FolderPlus } from 'lucide-r
 import type { RepoAnalysis } from '@shared/types';
 import { api } from '../lib/api';
 
-interface Props { onError: (message: string) => void; onSuccess?: (message: string) => void }
+interface Props { onError: (error: unknown) => void; onSuccess?: (message: string) => void }
 
 const fmtInt = (value: number): string => value.toLocaleString('pt-BR');
 const fmtData = (iso: string | undefined): string =>
@@ -23,7 +23,7 @@ export default function RepoAnalysisPage({ onError, onSuccess }: Props): React.J
     try {
       setAnalysis(await api.repoAnalyze(url.trim()));
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setBusy(false);
     }
@@ -35,7 +35,7 @@ export default function RepoAnalysisPage({ onError, onSuccess }: Props): React.J
       setAdded(true);
       onSuccess?.(`${repo.owner}/${repo.name} adicionado ao catálogo do Repos.`);
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
 

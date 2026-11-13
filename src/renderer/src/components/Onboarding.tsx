@@ -7,7 +7,7 @@ import ScanDialog from './ScanDialog';
 
 interface Props {
   onDone: () => void;
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
 }
 
 export default function Onboarding({ onDone, onError }: Props): React.JSX.Element {
@@ -25,7 +25,7 @@ export default function Onboarding({ onDone, onError }: Props): React.JSX.Elemen
         setSuggestions(list);
         setSelected(new Set(list.filter((s) => s.exists).map((s) => s.path)));
       } catch (e) {
-        onError(e instanceof Error ? e.message : String(e));
+        onError(e);
       } finally {
         setLoading(false);
       }
@@ -48,7 +48,7 @@ export default function Onboarding({ onDone, onError }: Props): React.JSX.Elemen
       setSuggestions((prev) => [...prev, { path: folder, exists: true }]);
       setSelected((prev) => new Set(prev).add(folder));
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
 
@@ -57,7 +57,7 @@ export default function Onboarding({ onDone, onError }: Props): React.JSX.Elemen
     try {
       await updateSettings({ scanFolders: folders });
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
     setScanFolders(folders);
     setScanning(true);

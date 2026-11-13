@@ -122,10 +122,13 @@ describe('fetchDashboardAccount / loadDashboardAccount', () => {
 
   it('mapeia erros para { ok: false, error } em pt-BR', async () => {
     const unauthorized = await loadDashboardAccount(fakeFetcher({ '/user': new Error('GitHub API: HTTP 401'), [USER_REPOS_URL]: [], '/rate_limit': RATE }), 'tok');
-    expect(unauthorized).toEqual({ ok: false, error: 'Token do GitHub inválido ou expirado. Conecte a conta novamente.' });
+    expect(unauthorized).toMatchObject({
+      ok: false,
+      error: { title: 'A conexão com o GitHub precisa ser renovada', technicalDetails: 'GitHub API: HTTP 401' }
+    });
 
     const generic = await loadDashboardAccount(fakeFetcher({ '/user': USER, [USER_REPOS_URL]: new Error('timeout'), '/rate_limit': RATE }), 'tok');
-    expect(generic).toEqual({ ok: false, error: 'Não foi possível carregar os dados do GitHub: timeout' });
+    expect(generic).toMatchObject({ ok: false, error: { title: 'Não foi possível conectar', technicalDetails: 'timeout' } });
 
     const success = await loadDashboardAccount(fakeFetcher({ '/rate_limit': RATE }), undefined);
     expect(success.ok).toBe(true);

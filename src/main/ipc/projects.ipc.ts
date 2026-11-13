@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron';
+import { translateError } from '../services/error-translator';
 import type { GitBranchList } from '../../shared/git-branches';
 import {
   BranchCheckoutInputSchema,
@@ -19,7 +20,7 @@ function ok<T>(data: T): IpcResult<T> {
 }
 
 function fail(error: unknown): IpcResult<never> {
-  return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  return { ok: false, error: translateError(error) };
 }
 
 /** Lista repositórios da conta e operações de branch em clones locais. */

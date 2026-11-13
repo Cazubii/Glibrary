@@ -310,7 +310,20 @@ export interface LibraryFile {
   settings: Settings;
 }
 
-export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: string };
+export type IpcErrorAction = {
+  label: string;
+  target: 'tools' | 'projects';
+};
+
+export interface IpcError {
+  title: string;
+  whatHappened: string;
+  nextStep: string;
+  technicalDetails: string;
+  action?: IpcErrorAction;
+}
+
+export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: string | IpcError };
 
 export type ProcessKind = 'install' | 'start' | 'extra';
 

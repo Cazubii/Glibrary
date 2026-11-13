@@ -9,7 +9,7 @@ type Kind = 'agent' | 'skill';
 type Window = 7 | 30 | 90;
 
 interface Props {
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
   onSuccess?: (message: string) => void;
 }
 
@@ -65,7 +65,7 @@ export default function ConsumoPage({ onError, onSuccess }: Props): React.JSX.El
       setData({ skills: response.skills, agents: response.agents, usage: response.usage });
       setAgentRuns(runs);
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setBusy(false);
     }
@@ -142,7 +142,7 @@ export default function ConsumoPage({ onError, onSuccess }: Props): React.JSX.El
       await load();
       onSuccess?.(`Uso registrado: ${item.name}`);
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
 

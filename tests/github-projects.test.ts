@@ -106,17 +106,24 @@ describe('serviço de projetos do GitHub', () => {
     const unauthorized = await loadAccountRepos(fakeFetcher(new Error('GitHub API: HTTP 401')), {
       token: 'token', page: 1, perPage: 50, sort: 'updated', visibility: 'all', fork: true
     });
-    expect(unauthorized).toEqual({
+    expect(unauthorized).toMatchObject({
       ok: false,
-      error: 'Token do GitHub inválido ou expirado. Conecte a conta novamente.'
+      error: {
+        title: 'A conexão com o GitHub precisa ser renovada',
+        nextStep: 'Abra Projetos e conecte sua conta novamente.',
+        technicalDetails: 'GitHub API: HTTP 401'
+      }
     });
 
     const invalid = await loadAccountRepos(fakeFetcher({ items: [] }), {
       token: 'token', page: 1, perPage: 50, sort: 'updated', visibility: 'all', fork: true
     });
-    expect(invalid).toEqual({
+    expect(invalid).toMatchObject({
       ok: false,
-      error: 'Não foi possível carregar os repositórios do GitHub: Resposta inesperada da API do GitHub (/user/repos)'
+      error: {
+        title: 'Não foi possível concluir esta ação',
+        technicalDetails: 'Resposta inesperada da API do GitHub (/user/repos)'
+      }
     });
   });
 });

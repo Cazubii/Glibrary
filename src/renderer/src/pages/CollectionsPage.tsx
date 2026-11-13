@@ -18,7 +18,7 @@ interface Draft {
 
 const emptyDraft: Draft = { name: '', description: '', tags: '', skillIds: [], agentIds: [], baseIds: [] };
 
-interface Props { onError: (message: string) => void; onSuccess: (message: string) => void }
+interface Props { onError: (error: unknown) => void; onSuccess: (message: string) => void }
 
 export default function CollectionsPage({ onError, onSuccess }: Props): React.JSX.Element {
   const [assets, setAssets] = useState<Assets>(empty);
@@ -31,7 +31,7 @@ export default function CollectionsPage({ onError, onSuccess }: Props): React.JS
       const data = await api.assetsGet();
       setAssets(data);
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   }, [onError]);
   useEffect(() => {
@@ -79,7 +79,7 @@ export default function CollectionsPage({ onError, onSuccess }: Props): React.JS
       setDraft(null);
       await refresh();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
 
@@ -92,7 +92,7 @@ export default function CollectionsPage({ onError, onSuccess }: Props): React.JS
       onSuccess('Coleção aplicada ao projeto.');
       await refresh();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
 
@@ -199,7 +199,7 @@ export default function CollectionsPage({ onError, onSuccess }: Props): React.JS
                     void api
                       .kitRemove(kit.id)
                       .then(refresh)
-                      .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
+                      .catch((e: unknown) => onError(e))
                   }
                   className="rounded p-1 text-steam-text/40 hover:text-red-400"
                   aria-label={`Excluir ${kit.name}`}

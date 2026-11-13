@@ -14,7 +14,7 @@ import RepoDetailPage from './RepoDetailPage';
 type Section = 'skills' | 'agents';
 
 interface Props {
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
   onSuccess: (message: string) => void;
   onOpenProjects: () => void;
 }
@@ -36,7 +36,7 @@ export default function DashboardPage({ onError, onSuccess, onOpenProjects }: Pr
           .slice(0, 4);
         setRecentProjects(recent);
       })
-      .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
+      .catch((e: unknown) => onError(e));
     return () => { cancelled = true; };
   }, [onError]);
   const refresh = useCallback(() => { void load(true); }, [load]);
@@ -146,7 +146,7 @@ function LibraryUsageSection({ onError, onSuccess }: Pick<Props, 'onError' | 'on
       .then((data) => {
         if (!cancelled) setAssets({ skills: data.skills, agents: data.agents, bases: data.bases, projects: data.projects, usage: data.usage });
       })
-      .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
+      .catch((e: unknown) => onError(e));
     return () => { cancelled = true; };
   }, [onError]);
 
@@ -205,7 +205,7 @@ function LibraryUsageSection({ onError, onSuccess }: Pick<Props, 'onError' | 'on
               const path = await api.dashboardExport(markdown);
               if (path) onSuccess(`Dashboard exportado: ${path}`);
             } catch (e) {
-              onError(e instanceof Error ? e.message : String(e));
+              onError(e);
             }
           }}
           className="ml-auto flex items-center gap-1.5 rounded border border-steam-elevated bg-steam-panel px-3 py-1.5 text-xs hover:bg-steam-elevated/40"
