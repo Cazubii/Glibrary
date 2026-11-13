@@ -7,7 +7,16 @@ import { AgentRunManager } from './services/agent-run-manager';
 import { registerAgentRunsIpc } from './ipc/agent-runs.ipc';
 import { ToolManager } from './services/tool-manager';
 import { registerNativeToolsIpc } from './ipc/native-tools.ipc';
-import { registerAssetsIpc, refreshTopReposAndBroadcast } from './ipc/assets.ipc';
+import { registerDashboardIpc } from './ipc/dashboard.ipc';
+import { registerProjectsIpc } from './ipc/projects.ipc';
+import { TerminalManager } from './services/terminal-manager';
+import { registerAssetsIpc } from './ipc/assets.ipc';
+import { registerRepoIpc } from './ipc/repos.ipc';
+import { registerTerminalIpc } from './ipc/terminal.ipc';
+import { registerToolsIpc } from './ipc/tools.ipc';
+import { ToolsChecker } from './services/tools-checker';
+import { DevWorkspaceManager } from './services/dev-workspace';
+import { registerDevWorkspaceIpc } from './ipc/dev-workspace.ipc';
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -44,19 +53,25 @@ void app.whenReady().then(async () => {
   );
   registerAgentRunsIpc(store, runManager);
   registerNativeToolsIpc(toolManager);
+  registerDashboardIpc(store);
+  registerProjectsIpc(store, new GitService());
   registerAssetsIpc(store, new GitService());
+  registerRepoIpc(store, new GitService(), join(app.getPath('userData'), 'covers'));
+  const terminalManager = new TerminalManager();
+  registerTerminalIpc(terminalManager);
+  registerDevWorkspaceIpc(
+    store,
+    new DevWorkspaceManager(store, join(app.getPath('userData'), 'workspaces')),
+    terminalManager
+  );
+  registerToolsIpc(new ToolsChecker());
   createWindow();
-  // Atualiza os top repos do GitHub em segundo plano; erros ficam silenciosos
-  // (offline/limite da API não impedem o uso — a lista anterior continua na aba).
-  setTimeout(() => {
-    void refreshTopReposAndBroadcast(store).catch(() => undefined);
-    // A lista de 7 dias só é buscada no startup quando o cache está vazio.
-    if (store.getTopRepos(7).fetchedAt === '') {
-      void refreshTopReposAndBroadcast(store, 7).catch(() => undefined);
-    }
-  }, 1500);
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
-  app.on('before-quit', () => { void runManager.stopAll(); void toolManager.stopAll(); });
+  app.on('before-quit', () => {
+    terminalManager.killAll();
+    void runManager.stopAll();
+    void toolManager.stopAll();
+  });
 });
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

@@ -15,6 +15,7 @@ const STOP_GRACE_MS = 5000;
 export type ToolEmitFn = (channel: string, payload: unknown) => void;
 
 export interface ToolSpawnOptions {
+  args?: string[];
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   shell?: boolean;
@@ -23,6 +24,11 @@ export interface ToolSpawnOptions {
 
 export type ToolSpawnFn = (command: string, options: ToolSpawnOptions) => ChildProcess;
 export type ToolKillFn = (pid: number, signal: string) => void;
+
+function spawnToolCommand(command: string, options: ToolSpawnOptions): ChildProcess {
+  const { args = [], ...spawnOptions } = options;
+  return spawn(command, args, spawnOptions);
+}
 
 export interface ToolRunHooks {
   onOut?: (data: Buffer) => void;
@@ -59,6 +65,57 @@ export function buildToolInstallCommand(prompt: string): string {
   return `opencode run "${prompt.replace(/"/g, '\\"')}"`;
 }
 
+export function buildHabblaudInstallScript(gitUrl: string, toolsRoot: string, targetDir: string): string {
+  return `
+const { spawnSync } = require('node:child_process');
+const { existsSync, readdirSync } = require('node:fs');
+const { join } = require('node:path');
+const gitUrl = ${JSON.stringify(gitUrl)};
+const toolsRoot = ${JSON.stringify(toolsRoot)};
+const targetDir = ${JSON.stringify(targetDir)};
+const [major, minor] = process.versions.node.split('.').map(Number);
+
+if (major < 22 || (major === 22 && minor < 12)) {
+  console.error('O Habblaud exige Node.js 22.12 ou superior; encontrada: ' + process.versions.node);
+  process.exit(1);
+}
+
+const hasGitMetadata = existsSync(join(targetDir, '.git'));
+const hasPackage = existsSync(join(targetDir, 'package.json'));
+if (!hasGitMetadata && !hasPackage) {
+  if (existsSync(targetDir) && readdirSync(targetDir).length > 0) {
+    console.error('A pasta de instalação já existe e não parece ser um clone do Habblaud: ' + targetDir);
+    process.exit(1);
+  }
+  console.log('Clonando Habblaud…');
+  const clone = spawnSync('git', ['clone', gitUrl, targetDir], {
+    cwd: toolsRoot,
+    stdio: 'inherit',
+    windowsHide: true
+  });
+  if (clone.error) {
+    console.error('Não foi possível executar o Git: ' + clone.error.message);
+    process.exit(1);
+  }
+  if (clone.status !== 0) process.exit(clone.status ?? 1);
+}
+
+console.log('Instalando as dependências do Habblaud…');
+const npm = process.platform === 'win32' ? process.env.ComSpec || 'cmd.exe' : 'npm';
+const npmArgs = process.platform === 'win32' ? ['/d', '/s', '/c', 'npm install'] : ['install'];
+const install = spawnSync(npm, npmArgs, {
+  cwd: targetDir,
+  stdio: 'inherit',
+  windowsHide: true
+});
+if (install.error) {
+  console.error('Não foi possível executar npm install: ' + install.error.message);
+  process.exit(1);
+}
+process.exit(install.status ?? 1);
+`;
+}
+
 export class ToolManager {
   private readonly active = new Map<string, RunEntry>();
   private readonly starting = new Set<string>();
@@ -69,12 +126,23 @@ export class ToolManager {
     private readonly toolsRoot: string,
     private readonly logsRoot: string,
     private readonly emit: ToolEmitFn,
-    private readonly spawnFn: ToolSpawnFn = spawn,
+    private readonly spawnFn: ToolSpawnFn = spawnToolCommand,
     private readonly killFn: ToolKillFn = (pid, signal) => { treeKill(pid, signal); }
   ) {}
 
   list(): ToolEntry[] {
     return this.store.listTools();
+  }
+
+  async getInstalledDirectory(toolId: string): Promise<string> {
+    const tool = this.findTool(toolId);
+    if (tool.id === 'builtin-omniroute') {
+      throw new Error('OmniRoute foi instalado globalmente e não possui uma pasta local para abrir');
+    }
+    if (await this.detectOne(tool) !== 'installed') {
+      throw new Error('Instale a ferramenta antes de abri-la');
+    }
+    return join(this.toolsRoot, getToolSlug(tool.gitUrl));
   }
 
   add(url: string): Promise<ToolEntry> {
@@ -128,13 +196,26 @@ export class ToolManager {
     this.starting.add(toolId);
     try {
       await fs.mkdir(this.toolsRoot, { recursive: true });
-      if (!(await this.checkCommand('opencode --version', COMMAND_TIMEOUT_MS))) {
+      const directHabblaudInstall = tool.id === 'builtin-habblaud';
+      if (!directHabblaudInstall && !(await this.checkCommand('opencode --version', COMMAND_TIMEOUT_MS))) {
         throw new Error('OpenCode não encontrado no PATH');
+      }
+
+      if (directHabblaudInstall) {
+        if (!(await this.checkCommand('git --version', COMMAND_TIMEOUT_MS))) {
+          throw new Error('Git não encontrado no PATH; instale o Git antes de instalar o Habblaud');
+        }
+        if (!(await this.checkCommand('node --version', COMMAND_TIMEOUT_MS)) ||
+            !(await this.checkCommand('npm --version', COMMAND_TIMEOUT_MS))) {
+          throw new Error('Node.js e npm são necessários para instalar o Habblaud');
+        }
       }
 
       const targetDir = join(this.toolsRoot, getToolSlug(tool.gitUrl));
       const prompt = buildToolPrompt(tool, targetDir);
-      const command = buildToolInstallCommand(prompt);
+      const command = directHabblaudInstall
+        ? `git clone ${tool.gitUrl} "${targetDir}" && npm install`
+        : buildToolInstallCommand(prompt);
       const runId = randomUUID();
       const logFile = join(this.logsRoot, `${tool.id}-${runId}.log`);
       const startedAt = new Date().toISOString();
@@ -156,7 +237,13 @@ export class ToolManager {
       let resolveDone = (): void => undefined;
       const done = new Promise<void>((resolve) => { resolveDone = resolve; });
       const hooks: ToolRunHooks = {};
-      const proc = this.spawnFn(command, { cwd: this.toolsRoot, shell: true, windowsHide: true });
+      const proc = directHabblaudInstall
+        ? this.spawnFn('node', {
+          args: ['-e', buildHabblaudInstallScript(tool.gitUrl, this.toolsRoot, targetDir)],
+          cwd: this.toolsRoot,
+          windowsHide: true
+        })
+        : this.spawnFn(command, { cwd: this.toolsRoot, shell: true, windowsHide: true });
       const entry: RunEntry = {
         proc,
         run,
@@ -222,8 +309,15 @@ export class ToolManager {
     if (tool.id === 'builtin-omniroute') {
       return (await this.checkCommand('omniroute --version', COMMAND_TIMEOUT_MS)) ? 'installed' : 'not_installed';
     }
+    const toolDirectory = join(this.toolsRoot, getToolSlug(tool.gitUrl));
     try {
-      const packageFile = join(this.toolsRoot, getToolSlug(tool.gitUrl), 'package.json');
+      await fs.access(join(toolDirectory, '.git'));
+      return 'installed';
+    } catch {
+      // Repositórios sem package.json também são instalações válidas.
+    }
+    try {
+      const packageFile = join(toolDirectory, 'package.json');
       const info = await fs.stat(packageFile);
       return info.isFile() ? 'installed' : 'not_installed';
     } catch {

@@ -1,22 +1,34 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, FolderPlus, Plus, RefreshCw, Layers3, WandSparkles, Bot, BriefcaseBusiness, Flame, X } from 'lucide-react';
-import type { Agent, AssetCategory, BaseItem, ProjectRef, ScanIssue, Skill, TopRepo, TopRepos, TopWindow } from '@shared/types';
-import { TOP_WINDOWS } from '@shared/types';
+import { AlertCircle, FolderPlus, Plus, RefreshCw, Layers3, WandSparkles, Bot, BriefcaseBusiness, Flame, GitBranch, Terminal, X } from 'lucide-react';
+import type { Agent, AssetCategory, BaseItem, ProjectRef, ScanIssue, Skill, TopRepo, TopRepos, TopScope, TopWindow, UserTool } from '@shared/types';
+import { TOP_SCOPES, TOP_WINDOWS } from '@shared/types';
 import { countTags, matchesTags, sameTag } from '@shared/tags';
 import { normalizeGitUrl } from '@shared/git-utils';
 import { api } from '../lib/api';
 import { useLibraryStore } from '../store/library';
+import { useTerminalGroup, useTerminalsStore } from '../store/terminals';
 import TagChips from '../components/TagChips';
 import CategoryChips from '../components/CategoryChips';
 import TagManagerDialog from '../components/TagManagerDialog';
 import ConfirmDialog from '../components/ConfirmDialog';
 import OutdatedBanner from '../components/OutdatedBanner';
+import RepoGitPanel from '../components/RepoGitPanel';
+import RepoTerminal from '../components/RepoTerminal';
+import UserToolRunDialog, { type PendingToolRun } from '../components/UserToolRunDialog';
 import { AgentCard, BaseCard, ProjectCard, SkillCard, TopRepoCard } from '../components/AssetCards';
 
 type Section = 'skills' | 'agents' | 'bases' | 'projects' | 'top';
 type Assets = { skills: Skill[]; agents: Agent[]; bases: BaseItem[]; projects: ProjectRef[] };
-type TopCache = Record<TopWindow, TopRepos>;
-const emptyTop = (windowDays: TopWindow): TopRepos => ({ fetchedAt: '', repos: [], windowDays });
+/** Cache das buscas de Top, chaveado como "janela:escopo". */
+type TopCache = Record<string, TopRepos>;
+const topCacheKey = (windowDays: TopWindow, scope: TopScope): string => `${windowDays}:${scope}`;
+const emptyTop = (windowDays: TopWindow, scope: TopScope): TopRepos => ({ fetchedAt: '', repos: [], windowDays, scope });
+const SCOPE_LABELS: Record<TopScope, string> = {
+  all: 'Todos',
+  claude: 'Claude',
+  codex: 'Codex',
+  opencode: 'OpenCode'
+};
 const empty: Assets = { skills: [], agents: [], bases: [], projects: [] };
 const sections: Array<Exclude<Section, 'top'>> = ['skills', 'agents', 'bases', 'projects'];
 type RemoveKind = 'skill' | 'agent' | 'base';
@@ -33,9 +45,10 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
   const [section, setSection] = useState<Section>('skills');
   const [assets, setAssets] = useState<Assets>(empty);
   const [topWindow, setTopWindow] = useState<TopWindow>(30);
+  const [topScope, setTopScope] = useState<TopScope>('all');
   const [topCache, setTopCache] = useState<TopCache>(() => ({
-    7: emptyTop(7),
-    30: emptyTop(30)
+    [topCacheKey(7, 'all')]: emptyTop(7, 'all'),
+    [topCacheKey(30, 'all')]: emptyTop(30, 'all')
   }));
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
@@ -59,12 +72,19 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
   const [knownUrls, setKnownUrls] = useState<string[]>([]);
   const [pendingRemove, setPendingRemove] = useState<{ kind: RemoveKind; id: string; name: string } | null>(null);
   const [cloningId, setCloningId] = useState<string | null>(null);
+  const [gitProject, setGitProject] = useState<ProjectRef | null>(null);
+  const [terminalProject, setTerminalProject] = useState<ProjectRef | null>(null);
+  const [pendingToolRun, setPendingToolRun] = useState<PendingToolRun | null>(null);
   const [categories, setCategories] = useState<Record<Extract<Section, 'skills' | 'agents'>, AssetCategory[]>>({
     skills: [],
     agents: []
   });
   const settings = useLibraryStore((s) => s.settings);
   const updateSettings = useLibraryStore((s) => s.updateSettings);
+  const terminalGroup = useTerminalGroup(terminalProject?.localPath);
+  const openTerminalPanel = useTerminalsStore((state) => state.openPanel);
+  const hideTerminalPanel = useTerminalsStore((state) => state.hidePanel);
+  const enabledTools = useMemo(() => (settings?.userTools ?? []).filter((tool) => tool.enabled), [settings]);
   const refresh = useCallback(async () => {
     try {
       const data = await api.assetsGet();
@@ -80,15 +100,14 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
   );
   useEffect(() => { void refresh(); }, [refresh]);
   const loadTop = useCallback(async () => {
+    const key = topCacheKey(topWindow, topScope);
+    if (topCache[key]?.fetchedAt) return;
     try {
-      const [seven, thirty] = await Promise.all([api.topReposGet(7), api.topReposGet(30)]);
-      setTopCache({
-        7: { ...seven, windowDays: 7 },
-        30: { ...thirty, windowDays: 30 }
-      });
+      const top = await api.topReposGet(topWindow, topScope);
+      setTopCache((prev) => ({ ...prev, [key]: { ...top, windowDays: topWindow, scope: topScope } }));
     }
     catch (e) { onError(e instanceof Error ? e.message : String(e)); }
-  }, [onError]);
+  }, [onError, topCache, topWindow, topScope]);
   useEffect(() => { void loadTop(); }, [loadTop]);
   const refreshKnown = useCallback(async () => {
     try {
@@ -103,7 +122,8 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
       const next = unwrapTop(payload);
       if (!next) return;
       const win: TopWindow = (next.windowDays ?? 30) === 7 ? 7 : 30;
-      setTopCache((prev) => ({ ...prev, [win]: { ...next, windowDays: win } }));
+      const scope: TopScope = next.scope ?? 'all';
+      setTopCache((prev) => ({ ...prev, [topCacheKey(win, scope)]: { ...next, windowDays: win, scope } }));
     }),
     []
   );
@@ -111,8 +131,8 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
   const refreshTop = async (): Promise<void> => {
     setBusy(true);
     try {
-      const top = await api.topReposRefresh(topWindow);
-      setTopCache((prev) => ({ ...prev, [topWindow]: { ...top, windowDays: topWindow } }));
+      const top = await api.topReposRefresh(topWindow, topScope);
+      setTopCache((prev) => ({ ...prev, [topCacheKey(topWindow, topScope)]: { ...top, windowDays: topWindow, scope: topScope } }));
     }
     catch (e) { onError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
@@ -423,12 +443,13 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
       ),
     [assets.projects, selectedTags, query]
   );
+  const activeTop = topCache[topCacheKey(topWindow, topScope)] ?? emptyTop(topWindow, topScope);
   const filteredTop = useMemo(
     () =>
-      topCache[topWindow].repos.filter((r) =>
+      activeTop.repos.filter((r) =>
         matchQuery(`${r.owner}/${r.name} ${r.description ?? ''} ${r.language ?? ''} ${(r.topics ?? []).join(' ')}`)
       ),
-    [topCache[topWindow].repos, query]
+    [activeTop.repos, query]
   );
   const filtersActive = query.trim() !== '' || selectedTags.length > 0 || ((section === 'skills' || section === 'agents') && categories[section].length > 0);
   const countText = (filteredCount: number, total: number, noun: string): string =>
@@ -483,9 +504,17 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
         )}
       </label>
     </header>
-    <nav className="flex gap-2 border-b border-steam-elevated/30 px-6 py-3">{tab('skills', 'Skills', <WandSparkles size={16}/>, assets.skills.length)}{tab('agents', 'Agents', <Bot size={16}/>, assets.agents.length)}{tab('bases', 'Bases', <Layers3 size={16}/>, assets.bases.length)}{tab('projects', 'Projetos', <BriefcaseBusiness size={16}/>, assets.projects.length)}{tab('top', 'Top GitHub', <Flame size={16}/>, topCache[topWindow].repos.length)}</nav>
+    <nav className="flex gap-2 border-b border-steam-elevated/30 px-6 py-3">{tab('skills', 'Skills', <WandSparkles size={16}/>, assets.skills.length)}{tab('agents', 'Agents', <Bot size={16}/>, assets.agents.length)}{tab('bases', 'Bases', <Layers3 size={16}/>, assets.bases.length)}{tab('projects', 'Projetos', <BriefcaseBusiness size={16}/>, assets.projects.length)}{tab('top', 'Top GitHub', <Flame size={16}/>, activeTop.repos.length)}</nav>
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
-      <OutdatedBanner onError={onError} />
+      <OutdatedBanner
+        onError={onError}
+        onCheckOnStartChange={(enabled) => {
+          void updateSettings({ checkUpdatesOnStart: enabled }).catch((e: unknown) =>
+            onError(e instanceof Error ? e.message : String(e))
+          );
+        }}
+        checkOnStart={settings?.checkUpdatesOnStart ?? false}
+      />
       {scanIssues.length > 0 && (section === 'skills' || section === 'agents') && (
         <div className="mb-4 rounded border border-steam-warn/40 bg-steam-warn/10 px-4 py-3 text-sm">
           <p className="flex items-center gap-2 font-medium text-steam-warn">
@@ -637,6 +666,14 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
                 }}
                 onTagsChange={(tags) => void updateProjectTags(project, tags)}
                 onFavorite={(next) => void setProjectFavorite(project, next)}
+                {...(project.localPath != null ? { onOpenGit: () => setGitProject(project) } : {})}
+                {...(project.localPath != null ? {
+                  onOpenTerminal: () => {
+                    setTerminalProject(project);
+                    void openTerminalPanel(project.localPath as string);
+                  }
+                } : {})}
+                {...(project.localPath != null && enabledTools.length > 0 ? { tools: enabledTools, onRunTool: (tool: UserTool) => setPendingToolRun({ tool, project }) } : {})}
               />
             ))}
           </div>
@@ -654,9 +691,26 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
       {section === 'top' && <>
         <div className="mb-5 flex flex-wrap items-center gap-2">
           <p className="mr-auto text-sm text-steam-text/60">
-            Repositórios em alta no GitHub (criados nos últimos {topWindow} dias, ordenados por estrelas).
-            {topCache[topWindow].fetchedAt && <> Última busca em {new Date(topCache[topWindow].fetchedAt).toLocaleString('pt-BR')}.</>}
+            {topScope === 'all'
+              ? <>
+                  Repositórios em alta no GitHub (criados nos últimos {topWindow} dias, ordenados por estrelas).
+                </>
+              : <>Repositórios ligados a {SCOPE_LABELS[topScope]} em alta (ativos nos últimos {topWindow} dias, ordenados por estrelas).</>}
+            {activeTop.fetchedAt && <> Última busca em {new Date(activeTop.fetchedAt).toLocaleString('pt-BR')}.</>}
           </p>
+          <span aria-label="Escopo do ecossistema" role="radiogroup" className="flex items-center gap-1 rounded border border-steam-elevated p-1">
+            {TOP_SCOPES.map((scope) => (
+              <button
+                key={scope}
+                type="button"
+                onClick={() => setTopScope(scope)}
+                aria-pressed={topScope === scope}
+                className={`flex items-center gap-1 rounded px-2.5 py-1 text-xs ${topScope === scope ? 'bg-steam-accent font-semibold text-steam-bg' : 'text-steam-text/60 hover:text-steam-accent'}`}
+              >
+                {SCOPE_LABELS[scope]}
+              </button>
+            ))}
+          </span>
           <span aria-label="Janela da lista" role="radiogroup" className="flex items-center gap-1 rounded border border-steam-elevated p-1">
             {TOP_WINDOWS.map((days) => (
               <button
@@ -693,9 +747,9 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
             text={
               filtersActive
                 ? 'Nenhum repositório da aba Top GitHub corresponde à busca.'
-                : topCache[topWindow].fetchedAt
+                : activeTop.fetchedAt
                   ? 'Nenhum repositório encontrado para os critérios atuais.'
-                  : `A lista de ${topWindow} dias ainda não foi buscada. Clique em "Atualizar agora".`
+                  : `A lista (${SCOPE_LABELS[topScope]}, ${topWindow} dias) ainda não foi buscada. Clique em "Atualizar agora".`
             }
             action={query.trim() ? noResultsAction : undefined}
           />
@@ -731,6 +785,63 @@ export default function AssetLibraryPage({ onError, onSuccess }: Props): React.J
         />
       );
     })()}
+    {gitProject != null && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+        onClick={() => setGitProject(null)}
+        role="presentation"
+      >
+        <div
+          className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-y-auto rounded-lg bg-steam-panel p-6"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-label={`Git — ${gitProject.name}`}
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-lg font-bold">
+              <GitBranch size={18} className="text-steam-accent" /> Git — {gitProject.name}
+            </h2>
+            <button type="button" onClick={() => setGitProject(null)} aria-label="Fechar">
+              <X size={18} />
+            </button>
+          </div>
+          <RepoGitPanel
+            repoId={gitProject.id}
+            remoteUrl={gitProject.remoteUrl}
+            onError={onError}
+            onSuccess={(message) => respond(message)}
+          />
+        </div>
+      </div>
+    )}
+    {pendingToolRun != null && (
+      <UserToolRunDialog
+        pending={pendingToolRun}
+        onClose={() => setPendingToolRun(null)}
+        onError={onError}
+        {...(onSuccess != null ? { onSuccess } : {})}
+      />
+    )}
+    {terminalProject != null && terminalProject.localPath != null && (terminalGroup?.panelOpen ?? true) && (
+      <div className="fixed inset-x-0 bottom-0 z-40 flex h-[46vh] min-h-[280px] flex-col border-t border-steam-elevated bg-[#1b202b] shadow-2xl">
+        <div className="flex items-center justify-between bg-steam-panel px-3 py-1.5 text-xs text-steam-text/70">
+          <span className="flex min-w-0 items-center gap-2">
+            <Terminal size={13} className="shrink-0 text-steam-accent" />
+            <span className="truncate font-semibold">{terminalProject.name}</span>
+            <span className="truncate font-mono text-steam-text/50">{terminalProject.localPath}</span>
+          </span>
+        </div>
+        <div className="flex-1 overflow-hidden">
+          <RepoTerminal
+            cwd={terminalProject.localPath}
+            onClose={() => {
+              hideTerminalPanel(terminalProject.localPath as string);
+              setTerminalProject(null);
+            }}
+          />
+        </div>
+      </div>
+    )}
   </main>;
 }
 

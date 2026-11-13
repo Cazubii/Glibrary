@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import type { CommandSpec, ProcessKind, Repo } from '@shared/types';
 import { useLibraryStore, runConfirmKey } from '../store/library';
+import { useTerminalGroup, useTerminalsStore } from '../store/terminals';
 import { api } from '../lib/api';
 import GeneratedCover from '../components/GeneratedCover';
 import StatusBadge from '../components/StatusBadge';
@@ -26,16 +27,19 @@ import CommandEditor from '../components/CommandEditor';
 import ActionButton from '../components/ActionButton';
 import LogConsole from '../components/LogConsole';
 import ConfirmDialog from '../components/ConfirmDialog';
+import RepoTerminal from '../components/RepoTerminal';
+import RepoGitPanel from '../components/RepoGitPanel';
 
-type Tab = 'overview' | 'console' | 'commands' | 'notes';
+type Tab = 'overview' | 'git' | 'console' | 'commands' | 'notes';
 
 interface Props {
   repoId: string;
   onBack: () => void;
   onError: (message: string) => void;
+  onSuccessToast?: (message: string) => void;
 }
 
-export default function RepoDetailPage({ repoId, onBack, onError }: Props): React.JSX.Element {
+export default function RepoDetailPage({ repoId, onBack, onError, onSuccessToast }: Props): React.JSX.Element {
   const { repos, logs, confirmedRuns, cloneProgress, tools, updateRepo, toggleFavorite, appendLog, clearLogs, confirmRun } =
     useLibraryStore();
   const repo = useMemo(() => repos.find((r) => r.id === repoId), [repos, repoId]);
@@ -56,6 +60,10 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
   const [pendingRun, setPendingRun] = useState<{ kind: ProcessKind; command: string } | null>(null);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removeText, setRemoveText] = useState('');
+  const terminalGroup = useTerminalGroup(repo?.localPath);
+  const termOpen = terminalGroup?.panelOpen ?? false;
+  const openTerminalPanel = useTerminalsStore((state) => state.openPanel);
+  const hideTerminalPanel = useTerminalsStore((state) => state.hidePanel);
 
   const repoLogs = logs[repoId] ?? [];
 
@@ -344,10 +352,39 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
 
       <div className="flex border-b border-steam-elevated/50 px-4">
         {tabButton('overview', 'Visão geral')}
+        {tabButton('git', 'Git')}
         {tabButton('console', 'Console')}
         {tabButton('commands', 'Comandos')}
         {tabButton('notes', 'Notas')}
+        {repo.localPath != null && (
+          <button
+            type="button"
+            onClick={() => {
+              if (repo.localPath == null) return;
+              if (termOpen) hideTerminalPanel(repo.localPath);
+              else void openTerminalPanel(repo.localPath);
+            }}
+            className={`ml-auto flex items-center gap-1.5 self-center rounded px-3 py-1.5 text-xs ${
+              termOpen
+                ? 'bg-steam-accent/30 text-steam-accent'
+                : 'bg-steam-elevated text-steam-text/80 hover:bg-steam-accent/20'
+            }`}
+          >
+            <Terminal size={14} /> Terminal embutido
+          </button>
+        )}
       </div>
+
+      {termOpen && repo.localPath != null && (
+        <div className="flex h-[42vh] min-h-[260px] flex-col border-t border-steam-elevated">
+          <div className="flex items-center justify-between bg-steam-panel px-3 py-1.5 text-xs text-steam-text/70">
+            <span className="font-mono truncate">{repo.localPath}</span>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <RepoTerminal cwd={repo.localPath} onClose={() => hideTerminalPanel(repo.localPath!)} />
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-6">
         {tab === 'overview' && (
@@ -450,6 +487,20 @@ export default function RepoDetailPage({ repoId, onBack, onError }: Props): Reac
             </div>
           </div>
         )}
+
+        {tab === 'git' &&
+          (repo.localPath != null ? (
+            <RepoGitPanel
+              repoId={repo.id}
+              remoteUrl={repo.remoteUrl}
+              onError={onError}
+              {...(onSuccessToast != null ? { onSuccess: onSuccessToast } : {})}
+            />
+          ) : (
+            <p className="text-steam-text/60">
+              Clone este repositório (ou indique a pasta local) para usar a aba Git.
+            </p>
+          ))}
 
         {tab === 'console' && (
           <div className="h-full min-h-[320px]">

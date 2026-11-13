@@ -1,0 +1,122 @@
+import { describe, expect, it, vi } from 'vitest';
+import {
+  listAccountRepos,
+  loadAccountRepos,
+  type JsonFetcher
+} from '../src/main/services/github-projects';
+
+const REPOS = [
+  {
+    id: 11,
+    name: 'glibrary',
+    full_name: 'igor/glibrary',
+    description: 'Biblioteca de projetos',
+    private: false,
+    fork: false,
+    language: 'TypeScript',
+    stargazers_count: 8,
+    updated_at: '2026-11-10T12:00:00Z',
+    html_url: 'https://github.com/igor/glibrary',
+    default_branch: 'main'
+  },
+  {
+    id: 12,
+    name: 'forked-tool',
+    full_name: 'igor/forked-tool',
+    description: null,
+    private: true,
+    fork: true,
+    language: null,
+    stargazers_count: 0,
+    updated_at: '2026-11-09T12:00:00Z',
+    html_url: 'https://github.com/igor/forked-tool',
+    default_branch: 'trunk'
+  },
+  { id: 0, name: '' }
+];
+
+function fakeFetcher(response: unknown): JsonFetcher & ReturnType<typeof vi.fn> {
+  return vi.fn(async () => {
+    if (response instanceof Error) throw response;
+    return response;
+  });
+}
+
+describe('serviço de projetos do GitHub', () => {
+  it('mapeia repositórios públicos, privados, forks e descrições nulas', async () => {
+    const page = await listAccountRepos(fakeFetcher(REPOS), {
+      token: 'token', page: 1, perPage: 50, sort: 'updated', visibility: 'all', fork: true
+    });
+
+    expect(page.repos).toEqual([
+      {
+        id: 11,
+        name: 'glibrary',
+        fullName: 'igor/glibrary',
+        description: 'Biblioteca de projetos',
+        visibility: 'public',
+        isFork: false,
+        language: 'TypeScript',
+        stars: 8,
+        updatedAt: '2026-11-10T12:00:00Z',
+        htmlUrl: 'https://github.com/igor/glibrary',
+        defaultBranch: 'main'
+      },
+      {
+        id: 12,
+        name: 'forked-tool',
+        fullName: 'igor/forked-tool',
+        visibility: 'private',
+        isFork: true,
+        stars: 0,
+        updatedAt: '2026-11-09T12:00:00Z',
+        htmlUrl: 'https://github.com/igor/forked-tool',
+        defaultBranch: 'trunk'
+      }
+    ]);
+  });
+
+  it('repassa paginação, visibilidade e ordenação para /user/repos', async () => {
+    const fetcher = fakeFetcher([]);
+    await listAccountRepos(fetcher, {
+      token: 'segredo', page: 3, perPage: 25, sort: 'updated', visibility: 'private', fork: true
+    });
+
+    const [url, token] = fetcher.mock.calls[0] as [string, string | undefined];
+    const parsed = new URL(url);
+    expect(parsed.pathname).toBe('/user/repos');
+    expect(parsed.searchParams.get('page')).toBe('3');
+    expect(parsed.searchParams.get('per_page')).toBe('25');
+    expect(parsed.searchParams.get('sort')).toBe('updated');
+    expect(parsed.searchParams.get('direction')).toBe('desc');
+    expect(parsed.searchParams.get('visibility')).toBe('private');
+    expect(parsed.searchParams.get('affiliation')).toBe('owner,collaborator,organization_member');
+    expect(token).toBe('segredo');
+  });
+
+  it('filtra forks sem perder o indicador de páginas seguintes', async () => {
+    const page = await listAccountRepos(fakeFetcher(REPOS.slice(0, 2)), {
+      token: 'token', page: 2, perPage: 2, sort: 'updated', visibility: 'all', fork: false
+    });
+    expect(page.repos.map((repo) => repo.name)).toEqual(['glibrary']);
+    expect(page).toMatchObject({ page: 2, perPage: 2, hasMore: true });
+  });
+
+  it('converte falha HTTP e resposta inválida em { ok: false, error }', async () => {
+    const unauthorized = await loadAccountRepos(fakeFetcher(new Error('GitHub API: HTTP 401')), {
+      token: 'token', page: 1, perPage: 50, sort: 'updated', visibility: 'all', fork: true
+    });
+    expect(unauthorized).toEqual({
+      ok: false,
+      error: 'Token do GitHub inválido ou expirado. Conecte a conta novamente.'
+    });
+
+    const invalid = await loadAccountRepos(fakeFetcher({ items: [] }), {
+      token: 'token', page: 1, perPage: 50, sort: 'updated', visibility: 'all', fork: true
+    });
+    expect(invalid).toEqual({
+      ok: false,
+      error: 'Não foi possível carregar os repositórios do GitHub: Resposta inesperada da API do GitHub (/user/repos)'
+    });
+  });
+});

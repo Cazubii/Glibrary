@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { TopRepoCard } from '../components/AssetCards';
 
 const LANGUAGES = ['', 'TypeScript', 'JavaScript', 'Python', 'Go', 'Rust', 'Java', 'C#', 'C++', 'PHP', 'Ruby', 'Kotlin', 'Swift'];
+const GH_REPO_URL = /github\.com\/[^\s?#]+\/([^\s/?#]+?)(?:\.git)?\/?/i;
 
 interface Props { onError: (message: string) => void; onSuccess?: (message: string) => void }
 
@@ -15,6 +16,7 @@ export default function GithubSearchPage({ onError }: Props): React.JSX.Element 
   const [results, setResults] = useState<TopRepo[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [searchedFor, setSearchedFor] = useState('');
+  const [urlNote, setUrlNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [addingRepo, setAddingRepo] = useState<Set<string>>(new Set());
   const [importBusy, setImportBusy] = useState<'skill' | 'agents' | null>(null);
@@ -42,7 +44,11 @@ export default function GithubSearchPage({ onError }: Props): React.JSX.Element 
     if (query.trim() === '' || busy) return;
     setBusy(true);
     try {
-      const response = await api.githubSearch(query.trim(), language || undefined, 25);
+      // URL do GitHub no campo de tema? Busca pelo nome do repo (URL bruta como texto devolve ruído).
+      const urlMatch = query.trim().match(GH_REPO_URL);
+      const effectiveQuery = urlMatch != null ? `${urlMatch[1] ?? ''} in:name`.trim() : query.trim();
+      setUrlNote(urlMatch != null ? `Detectei uma URL e busquei pelo nome "${urlMatch[1]}" (in:name).` : '');
+      const response = await api.githubSearch(effectiveQuery, language || undefined, 25);
       setResults(response.repos);
       setTotalCount(response.totalCount);
       setSearchedFor(query.trim());
@@ -139,6 +145,7 @@ export default function GithubSearchPage({ onError }: Props): React.JSX.Element 
         )}
         {searchedFor !== '' && results.length > 0 && (
           <>
+            <p className="mb-2 text-xs text-steam-accent/80">{urlNote}</p>
             <p className="mb-4 text-sm text-steam-text/60">
               {results.length} de {totalCount.toLocaleString('pt-BR')} resultados para "{searchedFor}"{language !== '' ? ` · linguagem: ${language}` : ''} · cards com "+" indisponível já estão na sua biblioteca.
             </p>

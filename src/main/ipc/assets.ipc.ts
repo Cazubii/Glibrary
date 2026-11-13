@@ -1,20 +1,22 @@
 import { ipcMain, shell, dialog, BrowserWindow } from 'electron';
 import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
+import { exec as execCb } from 'child_process';
+import { promisify } from 'util';
 import { mkdir, stat, writeFile } from 'fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'path';
 import { z } from 'zod';
-import type { Agent, BaseItem, IpcResult, Kit, ProjectRef, Skill, SkillsScanResult, AgentsScanResult, TopRepos, UsageEvent } from '../../shared/types';
+import type { Agent, BaseItem, IpcResult, Kit, ProjectRef, Skill, SkillsScanResult, AgentsScanResult, TopRepos, TopScope, UsageEvent, RepoAnalysis } from '../../shared/types';
 import { IpcChannels } from '../../shared/ipc-channels';
 import {
   AgentUpdateInputSchema,
   BaseUpdateInputSchema,
   KitApplyInputSchema,
   ProjectUpdateInputSchema,
-  SettingsPatchSchema,
   SkillUpdateInputSchema,
   TagNameInputSchema,
   TagRenameInputSchema,
+  ToolRunInputSchema,
   TopWindowInputSchema
 } from '../../shared/schemas';
 import { isSafeDirectoryName } from '../../shared/validators';
@@ -26,8 +28,12 @@ import { decodeToken, fetchJson, fetchText } from '../services/github-api';
 import { fetchTopRepos, searchGithubRepos } from '../services/top-repos';
 import type { GithubSearchResponse } from '../services/top-repos';
 import { searchAgentRepos } from '../services/agent-search';
+import { analyzeGithubRepo } from '../services/repo-analysis';
 import type { AgentSearchResponse } from '../services/agent-search';
 import { importAgentsFromGithub, importSkillFromGithub } from '../services/import-github';
+import { runDetached, trimOutput } from '../services/tool-run';
+
+const exec = promisify(execCb);
 
 const BaseInput = z.object({
   name: z.string().trim().min(1).refine(isSafeDirectoryName, 'Nome de base inválido'),
@@ -63,14 +69,8 @@ function fail(error: unknown): IpcResult<never> {
 }
 
 export function registerAssetsIpc(store: LibraryStore, git: GitService): void {
-  ipcMain.handle(IpcChannels.libraryGet, async () => ok(store.get()));
-  ipcMain.handle(IpcChannels.settingsGet, async () => ok(store.getSettings()));
-  ipcMain.handle(IpcChannels.settingsSet, async (_event, raw: unknown) => {
-    try { return ok(await store.updateSettings(SettingsPatchSchema.parse(raw))); } catch (e) { return fail(e); }
-  });
-  ipcMain.handle(IpcChannels.dialogPickFolder, async (): Promise<IpcResult<string | null>> => {
-    try { const win = BrowserWindow.getFocusedWindow(); const options = { properties: ['openDirectory' as const] }; const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options); return ok(result.canceled ? null : result.filePaths[0] ?? null); } catch (e) { return fail(e); }
-  });
+  // libraryGet/settingsGet/settingsSet/dialogPickFolder são registrados por
+  // registerRepoIpc (src/main/ipc/repos.ipc.ts) — handler único, fonte canônica.
   ipcMain.handle(IpcChannels.assetsGet, async (): Promise<IpcResult<Pick<ReturnType<LibraryStore['get']>, 'skills' | 'agents' | 'bases' | 'projects' | 'kits' | 'usage'>>> => {
     try { const { skills, agents, bases, projects, kits, usage } = store.get(); return ok({ skills, agents, bases, projects, kits, usage }); } catch (e) { return fail(e); }
   });
@@ -95,19 +95,42 @@ export function registerAssetsIpc(store: LibraryStore, git: GitService): void {
     }
   });
 
+/** Se nenhuma pasta de destino existir, pergunta ao usuário e salva em settings. Lança erro se cancelado. */
+async function ensureImportFolder(store: LibraryStore, kind: 'skill' | 'agent'): Promise<string[]> {
+  const settings = store.getSettings();
+  const folders = kind === 'skill' ? settings.skillFolders : settings.agentFolders;
+  if (folders.length > 0) return folders;
+  const choice = await dialog.showOpenDialog({
+    title: kind === 'skill' ? 'Escolha a pasta de Skills para importações' : 'Escolha a pasta de Agents para importações',
+    buttonLabel: 'Usar esta pasta',
+    properties: ['openDirectory', 'createDirectory']
+  });
+  const picked = choice.filePaths[0];
+  if (!picked) throw new Error('Importação cancelada: nenhuma pasta de destino foi escolhida');
+  if (kind === 'skill') {
+    const skillFolders = folders.includes(picked) ? folders : [...folders, picked];
+    await store.updateSettings({ skillFolders });
+    return skillFolders;
+  }
+  const agentFolders = folders.includes(picked) ? folders : [...folders, picked];
+  await store.updateSettings({ agentFolders });
+  return agentFolders;
+}
+
   ipcMain.handle(IpcChannels.skillImport, async (_event, raw: unknown): Promise<IpcResult<Skill>> => {
     try {
       const { url } = UrlInput.parse(raw);
+      const skillFolders = await ensureImportFolder(store, 'skill');
       const settings = store.getSettings();
       const imported = await importSkillFromGithub({
         remoteUrl: url,
-        skillFolders: settings.skillFolders,
+        skillFolders,
         existingSkills: store.listSkills(),
         fetchJson,
         fetchText,
         token: decodeToken(settings.githubToken)
       });
-      const rescan = await discoverSkills(settings.skillFolders, store.listSkills());
+      const rescan = await discoverSkills(skillFolders, store.listSkills());
       await store.replaceAssets({ skills: rescan.skills });
       const importedSkill = rescan.skills.find((item) => join(item.path, 'SKILL.md').toLowerCase() === imported.skillFile.toLowerCase());
       if (!importedSkill) throw new Error('Skill importada não apareceu no rescan');
@@ -118,10 +141,11 @@ export function registerAssetsIpc(store: LibraryStore, git: GitService): void {
   ipcMain.handle(IpcChannels.agentImport, async (_event, raw: unknown): Promise<IpcResult<Agent[]>> => {
     try {
       const { url } = UrlInput.parse(raw);
+      const agentFolders = await ensureImportFolder(store, 'agent');
       const settings = store.getSettings();
       const imported = await importAgentsFromGithub({
         remoteUrl: url,
-        agentFolders: settings.agentFolders,
+        agentFolders,
         existingAgents: store.listAgents(),
         fetchJson,
         fetchText,
@@ -272,6 +296,51 @@ export function registerAssetsIpc(store: LibraryStore, git: GitService): void {
   });
 
   ipcMain.handle(
+    IpcChannels.usageRecord,
+    async (_event, raw: unknown): Promise<IpcResult<UsageEvent>> => {
+      try {
+        const input = z.object({ kind: z.enum(['skill', 'agent']), id: z.string().min(1) }).parse(raw);
+        return ok(await store.recordUsage(input.kind, input.id));
+      } catch (e) { return fail(e); }
+    }
+  );
+
+  ipcMain.handle(
+    IpcChannels.userToolRun,
+    async (_event, raw: unknown): Promise<IpcResult<{ started: boolean; code?: number; output?: string }>> => {
+      try {
+        const { toolId, projectId } = ToolRunInputSchema.parse(raw);
+        const tool = store.getSettings().userTools?.find((t) => t.id === toolId);
+        if (tool == null) throw new Error('Ferramenta não encontrada');
+        const project = store.listProjects().find((p) => p.id === projectId);
+        if (project?.localPath == null || !existsSync(project.localPath)) {
+          throw new Error('Projeto sem pasta local válida');
+        }
+        if (tool.keepAlive === true) {
+          runDetached(tool.command, project.localPath);
+          return ok({ started: true });
+        }
+        try {
+          const { stdout, stderr } = await exec(tool.command, {
+            cwd: project.localPath,
+            timeout: 180_000,
+            maxBuffer: 8 * 1024 * 1024,
+            windowsHide: true
+          });
+          return ok({ started: false, code: 0, output: trimOutput(`${stdout}\n${stderr}`) });
+        } catch (err) {
+          const e = err as { stdout?: string; stderr?: string; message: string; code?: number };
+          return ok({
+            started: false,
+            code: typeof e.code === 'number' ? e.code : 1,
+            output: trimOutput(`${e.stdout ?? ''}\n${e.stderr ?? ''}\n${e.message}`)
+          });
+        }
+      } catch (e) { return fail(e); }
+    }
+  );
+
+  ipcMain.handle(
     IpcChannels.dashboardExport,
     async (_event, raw: unknown): Promise<IpcResult<string | null>> => {
       try {
@@ -358,7 +427,7 @@ export function registerAssetsIpc(store: LibraryStore, git: GitService): void {
   ipcMain.handle(IpcChannels.topReposGet, async (_event, raw: unknown): Promise<IpcResult<TopRepos>> => {
     try {
       const input = TopWindowInputSchema.default({}).parse(raw ?? {});
-      return ok(store.getTopRepos(input.windowDays ?? 30));
+      return ok(store.getTopRepos(input.windowDays ?? 30, input.scope ?? 'all'));
     } catch (e) {
       return fail(e);
     }
@@ -367,7 +436,7 @@ export function registerAssetsIpc(store: LibraryStore, git: GitService): void {
   ipcMain.handle(IpcChannels.topReposRefresh, async (_event, raw: unknown): Promise<IpcResult<TopRepos>> => {
     try {
       const input = TopWindowInputSchema.default({}).parse(raw ?? {});
-      return ok(await refreshTopReposAndBroadcast(store, input.windowDays ?? 30));
+      return ok(await refreshTopReposAndBroadcast(store, input.windowDays ?? 30, input.scope ?? 'all'));
     } catch (e) {
       return fail(e);
     }
@@ -398,16 +467,30 @@ export function registerAssetsIpc(store: LibraryStore, git: GitService): void {
       return fail(e);
     }
   });
+  ipcMain.handle(IpcChannels.githubRepoAnalyze, async (_event, raw: unknown): Promise<IpcResult<RepoAnalysis>> => {
+    try {
+      const { url } = z.object({ url: z.string().min(1) }).parse(raw);
+      if (!isValidGitUrl(url)) throw new Error('URL Git inválida');
+      const settings = store.getSettings();
+      const analysis = await analyzeGithubRepo(fetchJson, {
+        remoteUrl: url,
+        token: decodeToken(settings.githubToken)
+      });
+      return ok(analysis);
+    } catch (e) {
+      return fail(e);
+    }
+  });
 }
 
-/** Busca a lista de repos em alta na janela pedida (7 ou 30 dias), persiste e avisa o renderer. */
-export async function refreshTopReposAndBroadcast(store: LibraryStore, windowDays = 30): Promise<TopRepos> {
+/** Busca a lista de repos em alta na janela e escopo pedidos, persiste e avisa o renderer. */
+export async function refreshTopReposAndBroadcast(store: LibraryStore, windowDays = 30, scope: TopScope = 'all'): Promise<TopRepos> {
   const token = decodeToken(store.getSettings().githubToken);
-  const fetched = await fetchTopRepos(fetchJson, { token, limit: 25, windowDays });
-  await store.setTopRepos({ ...fetched, windowDays });
-  const payload = ok(store.getTopRepos(windowDays));
+  const fetched = await fetchTopRepos(fetchJson, { token, limit: 25, windowDays, scope });
+  await store.setTopRepos({ ...fetched, windowDays, scope });
+  const payload = ok(store.getTopRepos(windowDays, scope));
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send(IpcChannels.topReposChanged, payload);
   }
-  return store.getTopRepos(windowDays);
+  return store.getTopRepos(windowDays, scope);
 }

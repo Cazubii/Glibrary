@@ -235,11 +235,10 @@ projeto; a herança de tags segue `settings.inheritTags` (default true) e pode s
 aplicação. `tags` do projeto passam a ganhar as tags dos itens ao associar manualmente no card
 de projeto (mesma setting). Projetos ganham o campo `agentIds` que o dashboard já usava.
 
-### Verificação de desatualização no startup: fetch sob demanda, com limite
-O banner da Biblioteca no startup chama `repo:fetchStatus` para no máximo 12 repos clonados
-(instalação) e mostra "Puxar todos" quando há commits atrás; desativável em
-`settings.checkUpdatesOnStart`. Sem fetch global no bootstrap para não travar o startup com
-12 chamadas de rede executadas em série, todas com falha tolerada por repo.
+### Verificação remota de repositórios: manual por padrão
+A Biblioteca não executa `git fetch` ao abrir. O usuário pode verificar até 12 projetos pelo
+botão e ativar a checagem automática em `settings.checkUpdatesOnStart`. A lista de commits atrás
+mantém a ação explícita "Puxar todos"; nenhum pull é automático.
 
 ### Top GitHub já na biblioteca e duplicação evitada por URL normalizada
 A página compara `topRepo.remoteUrl` (e URLs de repos/bases) via `normalizeGitUrl`; cards de
@@ -260,6 +259,124 @@ com as ações existentes: adicionar ao catálogo, importar skill/agents e compa
 `normalizeGitUrl` para marcar o que já está na biblioteca. Sem token o GitHub permite
 10 buscas/min; token (safeStorage) sobe para 30/min.
 
+## 2026-11-08 — Top GitHub por ecossistema de agente
+
+### Filtros de escopo na aba Top: Todos, Claude, Codex, OpenCode
+A aba Top ganhou escopos por ecossistema (`TopScope`: `all`, `claude`, `codex`, `opencode`).
+Cada escopo busca em `search/repositories` por topics fixos em `SCOPE_TOPICS` (ex.:
+claude → `topic:claude-code`; codex → `topic:openai-codex` + `topic:codex-cli`; opencode →
+`topic:opencode`). Qualifiers `topic:` repetidos são AND no GitHub (verificado na API), então
+os escopos usam uma busca por topic `buildScopeUrls` e `fetchTopRepos` mescla os resultados
+(dedupe por URL normalizada, ordenação por estrelas, `slice(limit)`) antes de persistir.
+
+### Escopo por `pushed` na janela em vez de `created`
+Os ecossistemas concentram repos antigos e ativos; filtrar por `created:` esconderia os
+relevantes. Por isso os escopos usam `pushed:>=<hoje-Nd>` (atividade na janela) com
+`sort=stars`, enquanto `all` mantém a semântica de "criado nos últimos N dias".
+
+### Caches de escopo em `topReposScopes` (chave `scope:windowDays`)
+Cada combinação escopo+janela persiste em `topReposScopes` na `library.json` v2 (campo novo
+com default `{}` — migração automática sem bump de versão). `topRepos`/`topRepos7`
+continuam reservados ao escopo `all`. O `getTopRepos`/`setTopRepos` passam a considerar
+`scope`; IPC `topRepos:get`/`topRepos:refresh` e o broadcast `topRepos:changed` carregam o
+escopo, e o renderer cacheia por `janela:escopo` (busca sob demanda ao trocar de chip).
+
+## 2026-11-08 — Análise de repositório por URL
+
+### Análise heurística de metadados públicos, não revisão de código
+Nova página "Análise" (nav do header): o usuário cola a URL do GitHub e o sistema converte
+4 chamadas públicas da API (`/repos/{o}/{r}`, `/readme`, `/contributors?per_page=100`,
+`/releases?per_page=100`) em uma ficha básica em pt-BR (estrelas, forks, issues, linguagem,
+licença, datas, topics, README, contribuidores, releases/12 meses) com listas de pontos
+positivos/negativos. `buildRepoAnalysis` é puro e testável com payloads falsos; falhas de
+readme/contributors/releases são toleradas (fallback null), falha na chamada base propaga.
+Regras divulgadas ao usuário como heurísticas (rodapé da página), sem prometer análise
+semântica de código.
+
+### Auto-categorização de Agents na importação
+Categorias fixas por enum ganharam inferência por palavras-chave (`inferAssetCategory`,
+pt/en, match por fronteira de palavra, prioridade específico→genérico) aplicada em
+`discoverAgents` quando o agente novo não declara `category:` no frontmatter; a categoria
+inferida é persistida e preservada nos rescan. Frontmatter declarado (mesmo desconhecido,
+caindo em `outros`) vence a inferência.
+## 2026-11-10 — Login GitHub via PAT e operações de escrita (commit/push) em projetos
+
+**Contexto:** usuário quer se autenticar com a conta GitHub e commitar/pushar direto
+da interface, em vez de depender do terminal/credential manager da máquina.
+
+**Decisão:**
+- Autenticação por Personal Access Token colado (device flow OAuth exigiria um
+  client_id registrado; PAT funciona hoje). Token validado contra /user — a
+  identidade aparece no header — e salvo via settingsSet com safeStorage (o
+  mesmo caminho já existente antes dessa feature).
+- Push nunca grava o token em config nem em URL do remote: quando o remote é
+  github.com usamos um header HTTP Basic por operação (http.extraHeader,
+  convenção x-access-token). Erros do git passam por sanitizeGitOutput antes de
+  chegar ao renderer.
+- Handlers repo:gitStatus/commit/push resolvem a pasta local por id de Repo OR
+  por id de ProjectRef (projetos herdam o id na migração v1; repos novos podem
+  divergir). Autoria do commit sai do git do usuário; sem user.name/email o
+  erro orienta git config --global.
+- Local na interface: botão Git no card de Projeto (AssetLibraryPage, via
+  RepoGitPanel) e menu de conta no header (GithubAccountMenu). RepoDetailPage
+  também ganhou a aba git, mantendo paridade.
+
+**Alternativas consideradas:** OAuth device flow (exige registro de OAuth App e
+client_id no build); URL com token embutida no push (risco de vazar em logs).
+
+## 2026-11-10 — Medidor de consumo de agents/skills e área de Ferramentas com on/off
+
+**Contexto:** usuário quer (a) medir o consumo dos agents de IA que circundam a
+biblioteca e (b) uma área de ferramentas configuráveis, ativáveis por chave
+on/off, expostas como uso rápido no projeto.
+
+**Decisão:**
+- Medidor = eventos de uso (não tokens): reusa `UsageEvent` (resto do app já
+  grava na abertura de skill/agent), canal novo `usage:record` para marcação
+  manual (+1). A agregação é pure/shared (`usage-meter.ts`, testável):
+  janelas 7/30/90d, série diária com dias zerados, projeção mensal e rank
+  cruzando com nome atual do asset. Página nova "Consumo" no menu. Limitar
+  tokens/custos é recurso futuro — eventos são o dado que o app consegue
+  medir com precisão.
+- Ferramentas do usuário: `settings.userTools` (UserToolSchema: name, command,
+  description?, enabled, keepAlive) com padrão `[]` por migração v2 (defaults
+  já cobrem bibliotecas antigas). Chave on/off controla expor/ocultar como
+  botões de uso rápido no ProjectCard. Execução passa sempre por diálogo
+  ConfirmDialog com o comando e a pasta alvo (mandamento do AGENTS.md: nada
+  roda sem revisão).
+- Execução: `keepAlive` (dev server) roda desacoplado (spawn detached);
+  padrão executa com captura de saída e timeout de 3 min, saída truncada pela
+  cauda (trimOutput). Shell da plataforma centralizado em `tool-run.ts`
+  (testável) — cmd /c no Windows, sh -c no resto.
+- Nav: página "Ferramentas" agora é de verdade no menu (antes era órfã): mine
+  (CRUD + on/off) em cima, tabela de detecção do sistema embaixo.
+
+**Alternativas consideradas:** medir tokens manualmente (planilha embutida) —
+ficou para depois; executar via PTY terminal embutido (mais interativo, mas
+adiciona fluxo visual por run; a captura de saída cobre casos de teste/lint).
+
+## 2026-11-10 — Bootstrap acopla registerRepoIpc (correção de handler sempre ausente)
+
+**Contexto:** ao rodar `pnpm dev`, o registerer dava "No handler registered for
+'github:authMe'": `registerRepoIpc` (src/main/ipc/repos.ipc.ts) existia e era
+exportado, mas `src/main/index.ts` nunca o chamava. Todo o bloco de repositórios
+e GitHub (repoAdd*, clone, authCheck/authMe, gitStatus/commit/push, covers,
+libraryExport/Import) ficava morto em runtime. Além disso havia 4 canais
+registrados em duplicidade potencial entre assets.ipc e repos.ipc
+(libraryGet, settingsGet, settingsSet, dialogPickFolder), o que lançaria
+"second handler" assim que o acoplamento existisse.
+
+**Decisão:** `main/index.ts` chama `registerRepoIpc(store, git, coversDir)` no
+bootstrap (coversDir = userData/covers). assets.ipc deixa de registrar os 4
+canais duplicados — repos.ipc é a fonte canônica; e o `settingsSet` dele codifica
+o PAT com safeStorage (o handler antigo gravava token em texto puro: melhor de
+graça). AGENTS.md já documentava o estado real ("bootstrap não registra handlers
+antigos de execução"), então process.ipc continua sem acoplamento.
+
+**Alternativas consideradas:** delegar os handlers duplicados de repos.ipc para
+assets.ipc (só inverteria o problema); chamar os dois sem deduplicar (lança
+erro de segundo handler no startup).
+
 ## Painel de Agentes (2026-11-11)
 
 Decisão: painel dedicado à página "Agentes" para criar perfis de agentes de IA
@@ -272,3 +389,18 @@ Decisão: painel dedicado à página "Agentes" para criar perfis de agentes de I
 - Prompt inicial vai como argumento citado do comando, sem stdin; comandos só rodam
   com ação explícita do usuário.
 - Dois modos de visualização (Painel/Grid) persistidos em `settings.agentsViewMode`.
+
+## Dashboard GitHub (2026-11-11)
+
+Decisão: "Dashboard" passa a ser a primeira aba e a página inicial, mostrando a conta
+GitHub conectada, gráficos e os repositórios registrados, acima do uso da biblioteca.
+
+- Um único canal `dashboard:account` agrega `/user`, `/user/repos` (100 mais recentes,
+  só do dono) e `/rate_limit`; sem token devolve apenas a cota anônima. Falha na cota
+  não derruba o restante.
+- Parsers e agregações são puros (`main/services/github-dashboard.ts`,
+  `shared/github-dashboard.ts`) com `fetchJson` injetado, testáveis sem Electron.
+- Cache no store zustand com stale-while-revalidate (5 min); "Atualizar" força a busca.
+- Projetos sincronizados derivam do `useLibraryStore` (mesmos dados do detalhe do
+  repositório), sem canal extra, para não divergir após favoritar.
+- Gráficos em SVG/CSS puro, reaproveitando `charts.tsx`; nenhuma dependência nova.

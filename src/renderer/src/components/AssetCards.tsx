@@ -4,14 +4,17 @@ import {
   BriefcaseBusiness,
   ExternalLink,
   FolderOpen,
+  GitBranch,
   Layers3,
+  Play,
   Plus,
   Star,
   Tag,
+  Terminal,
   Trash2,
   WandSparkles
 } from 'lucide-react';
-import type { Agent, AssetCategory, BaseItem, ProjectRef, Skill, TopRepo } from '@shared/types';
+import type { Agent, AssetCategory, BaseItem, ProjectRef, Skill, TopRepo, UserTool } from '@shared/types';
 import { ASSET_CATEGORIES, ASSET_CATEGORY_LABELS } from '@shared/categories';
 import { sameTag } from '@shared/tags';
 import TagPopover from './TagPopover';
@@ -407,7 +410,11 @@ export function ProjectCard({
   inheritTags,
   onSave,
   onTagsChange,
-  onFavorite
+  onFavorite,
+  onOpenGit,
+  onOpenTerminal,
+  tools = [],
+  onRunTool
 }: {
   project: ProjectRef;
   assets: { skills: Skill[]; agents: Agent[]; bases: BaseItem[] };
@@ -416,6 +423,12 @@ export function ProjectCard({
   onSave: (patch: { skillIds: string[]; agentIds: string[]; baseIds: string[]; notes?: string; tags?: string[] }) => Promise<void>;
   onTagsChange: (tags: string[]) => void;
   onFavorite: (next: boolean) => void;
+  onOpenGit?: () => void;
+  /** Terminal embutido na pasta do projeto */
+  onOpenTerminal?: () => void;
+  /** ferramentas ligadas (on/off) para uso rápido neste projeto */
+  tools?: UserTool[];
+  onRunTool?: (tool: UserTool) => void;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState(project.notes ?? '');
@@ -460,8 +473,44 @@ export function ProjectCard({
           <p className="mt-2 text-xs text-steam-text/60">
             {project.skillIds.length} skills · {project.agentIds.length} agents · {project.baseIds.length} bases
           </p>
+          {tools.length > 0 && onRunTool != null && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {tools.map((tool) => (
+                <button
+                  key={tool.id}
+                  type="button"
+                  onClick={() => onRunTool(tool)}
+                  className="flex items-center gap-1 rounded border border-steam-elevated px-2 py-1 text-xs hover:border-steam-accent hover:bg-steam-accent/10"
+                  title={`${tool.command} — revisar e executar`}
+                >
+                  <Play size={11} className={tool.keepAlive === true ? 'text-steam-warn' : 'text-steam-green'} />
+                  {tool.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <StarButton active={project.favorite} onClick={onFavorite} />
+        {onOpenGit != null && (
+          <button
+            type="button"
+            onClick={onOpenGit}
+            className="flex items-center gap-1.5 rounded bg-steam-elevated px-3 py-1.5 text-xs hover:bg-steam-accent/20"
+            title="Status, commit e push deste projeto"
+          >
+            <GitBranch size={13} /> Git
+          </button>
+        )}
+        {onOpenTerminal != null && (
+          <button
+            type="button"
+            onClick={onOpenTerminal}
+            className="flex items-center gap-1.5 rounded bg-steam-elevated px-3 py-1.5 text-xs hover:bg-steam-accent/20"
+            title="Abrir terminal na pasta do projeto"
+          >
+            <Terminal size={13} /> Terminal
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}

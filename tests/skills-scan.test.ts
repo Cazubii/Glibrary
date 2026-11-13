@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { discoverAgents, discoverSkills, parseSkillMetadata } from '../src/main/services/skills-scan';
+import { inferAssetCategory } from '../src/shared/categories';
 import type { Skill } from '../src/shared/types';
 
 let dir: string;
@@ -193,5 +194,52 @@ describe('discoverAgents', () => {
       { id: 'ag-1', name: 'Revisor', category: 'testes', path: root, file, source: root, tags: ['qa'], favorite: true, addedAt: '2026-01-01T00:00:00.000Z' }
     ]);
     expect(agents[0]).toMatchObject({ id: 'ag-1', category: 'testes', tags: ['qa'], favorite: true });
+  });
+
+  it('infere a categoria por palavras-chave quando o agente não declara category', async () => {
+    const root = join(dir, 'agents');
+    await fs.mkdir(root, { recursive: true });
+    await fs.writeFile(join(root, 'db-migrations.md'), '---\nname: Migrador\ndescription: Cria migrations e SQL postgres\n---\n', 'utf-8');
+    await fs.writeFile(join(root, 'release-manager.md'), '---\nname: Release\ndescription: Deploy com docker e github actions\n---\n', 'utf-8');
+    await fs.writeFile(join(root, 'ui-review.md'), '---\nname: UI Review\ndescription: Revisa layout e estilo de telas\n---\n', 'utf-8');
+    await fs.writeFile(join(root, 'gen.md'), '---\nname: Geral\ndescription: Faz um pouco de tudo\n---\n', 'utf-8');
+    const { agents } = await discoverAgents([root], []);
+    const byName = (name: string): string => agents.find((a) => a.name === name)?.category ?? '';
+    expect(byName('Migrador')).toBe('banco-de-dados');
+    expect(byName('Release')).toBe('devops');
+    expect(byName('UI Review')).toBe('design');
+    expect(byName('Geral')).toBe('outros');
+  });
+
+  it('frontmatter com categoria declarada vence a inferência', async () => {
+    const root = join(dir, 'agents');
+    await fs.mkdir(root, { recursive: true });
+    await fs.writeFile(join(root, 'qa.md'), '---\nname: QA\ncategory: frontend\ndescription: Testes e2e com playwright\n---\n', 'utf-8');
+    await fs.writeFile(join(root, 'estr.md'), '---\nname: Estranha\ncategory: qualquer-coisa\n---\n', 'utf-8');
+    const { agents } = await discoverAgents([root], []);
+    const byName = (name: string): string => agents.find((a) => a.name === name)?.category ?? '';
+    expect(byName('QA')).toBe('frontend');
+    expect(byName('Estranha')).toBe('outros');
+  });
+});
+
+describe('inferAssetCategory', () => {
+  it('devolve null para texto vazio ou sem palavras-chave', () => {
+    expect(inferAssetCategory(undefined)).toBeNull();
+    expect(inferAssetCategory('')).toBeNull();
+    expect(inferAssetCategory('faz um pouco de tudo')).toBeNull();
+  });
+
+  it('pontua variações pt/en e resolve empate pela ordem especifica→genérica', () => {
+    expect(inferAssetCategory('Cria testes e2e com playwright')).toBe('testes');
+    expect(inferAssetCategory('Backend com API REST')).toBe('backend');
+    expect(inferAssetCategory('Figma + UI kit')).toBe('design');
+    expect(inferAssetCategory('Database SQL')).toBe('banco-de-dados');
+    expect(inferAssetCategory('Escreve documentação e readme')).toBe('documentacao');
+  });
+
+  it('não casar substrings frágeis por acaso (ui/ci/id)', () => {
+    expect(inferAssetCategory('build a guild quickly')).toBeNull();
+    expect(inferAssetCategory('decision guided')).toBeNull();
   });
 });

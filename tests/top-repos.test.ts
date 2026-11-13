@@ -3,7 +3,7 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { LibraryStore } from '../src/main/services/library-store';
-import { buildTopReposUrl, fetchTopRepos, parseTopReposResponse } from '../src/main/services/top-repos';
+import { buildTopReposUrl, buildScopeUrls, fetchTopRepos, parseTopReposResponse } from '../src/main/services/top-repos';
 
 const SAMPLE = {
   items: [
@@ -76,6 +76,52 @@ describe('fetchTopRepos', () => {
   });
 });
 
+describe('escopos de ecossistema', () => {
+  it('scope all mantém a query de repos criados na janela', () => {
+    const url = buildTopReposUrl(25, 30, 'all');
+    expect(url).toContain('created:%3E%3D');
+  });
+
+  it('scope claude usa topic concentrado com janela de pushed e sort por estrelas', () => {
+    const url = buildTopReposUrl(25, 7, 'claude');
+    const q = decodeURIComponent(url).split('q=')[1] ?? '';
+    expect(q).toContain('topic:claude-code');
+    expect(q).toContain('pushed:>=');
+    expect(url).toContain('sort=stars');
+  });
+
+  it('buildScopeUrls devolve uma busca por topic (codex: openai-codex + codex-cli)', () => {
+    const urls = buildScopeUrls(25, 7, 'codex');
+    expect(urls).toHaveLength(2);
+    const qs = urls.map((url) => decodeURIComponent(url).split('q=')[1] ?? '');
+    expect(qs[0]).toContain('topic:openai-codex');
+    expect(qs[1]).toContain('topic:codex-cli');
+    for (const q of qs) expect(q).toContain('pushed:>=');
+  });
+
+  it('fetchTopRepos mescla os topics do escopo, deduplica e ordena por estrelas', async () => {
+    const stub: (url: string, token?: string) => Promise<unknown> = (url) => {
+      const topic = decodeURIComponent(url).includes('openai-codex') ? 'openai-codex' : 'codex-cli';
+      if (topic === 'openai-codex') {
+        return Promise.resolve({
+          items: [
+            { owner: { login: 'acme' }, name: 'dupe', html_url: 'https://github.com/acme/dupe', stargazers_count: 100 },
+            { owner: { login: 'zebra' }, name: 'big', html_url: 'https://github.com/zebra/big', stargazers_count: 500 }
+          ]
+        });
+      }
+      return Promise.resolve({
+        items: [
+          { owner: { login: 'other' }, name: 'dupe', html_url: 'https://github.com/acme/dupe', stargazers_count: 100 },
+          { owner: { login: 'low' }, name: 'small', html_url: 'https://github.com/low/small', stargazers_count: 1 }
+        ]
+      });
+    };
+    const result = await fetchTopRepos(stub, { limit: 25, windowDays: 7, scope: 'codex' });
+    expect(result.repos.map((r) => `${r.owner}/${r.name}`)).toEqual(['zebra/big', 'acme/dupe', 'low/small']);
+  });
+});
+
 describe('LibraryStore topRepos', () => {
   let dir: string;
   let counter = 0;
@@ -116,5 +162,30 @@ describe('LibraryStore topRepos', () => {
     await store2.load();
     expect(store2.getTopRepos(7).fetchedAt).toBe('2026-11-04T10:00:00.000Z');
     expect(store2.getTopRepos(7).repos[0]).toMatchObject({ owner: 'acme', stars: 1234 });
+  });
+
+  it('caches separados por escopo (claude/codex/opencode) não misturam com o cache geral', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    expect(store.getTopRepos(7, 'claude').repos).toHaveLength(0);
+
+    await store.setTopRepos({
+      fetchedAt: '2026-11-04T10:00:00.000Z',
+      repos: parseTopReposResponse(SAMPLE),
+      windowDays: 7,
+      scope: 'claude'
+    });
+    expect(store.getTopRepos(7, 'claude').repos).toHaveLength(2);
+    expect(store.getTopRepos(30, 'claude').repos).toHaveLength(0);
+    expect(store.getTopRepos(7).repos).toHaveLength(0);
+    expect(store.getTopRepos(7, 'codex').repos).toHaveLength(0);
+    expect(store.getTopRepos(7, 'opencode').repos).toHaveLength(0);
+
+    const store2 = new LibraryStore(dir, join(dir, 'repos'));
+    await store2.load();
+    const scoped = store2.getTopRepos(7, 'claude');
+    expect(scoped.fetchedAt).toBe('2026-11-04T10:00:00.000Z');
+    expect(scoped.scope).toBe('claude');
+    expect(scoped.repos[0]).toMatchObject({ owner: 'acme', stars: 1234 });
   });
 });

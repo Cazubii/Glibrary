@@ -6,7 +6,7 @@ interface Props {
   repos: Repo[];
   profile: AgentProfile | null; // null = criação
   onClose: () => void;
-  onSubmit: (input: { name: string; repoId: string; command: string; args: string[] }) => Promise<void>;
+  onSubmit: (input: { name: string; repoId: string; command: string; args: string[]; monitorProvider: NonNullable<AgentProfile['monitorProvider']> }) => Promise<void>;
 }
 
 export default function AgentProfileDialog({ repos, profile, onClose, onSubmit }: Props): React.JSX.Element {
@@ -14,6 +14,7 @@ export default function AgentProfileDialog({ repos, profile, onClose, onSubmit }
   const [repoId, setRepoId] = useState(profile?.repoId ?? repos[0]?.id ?? '');
   const [command, setCommand] = useState(profile?.command ?? 'claude');
   const [argsText, setArgsText] = useState(profile?.args.join(' ') ?? '');
+  const [monitorProvider, setMonitorProvider] = useState<NonNullable<AgentProfile['monitorProvider']>>(profile?.monitorProvider ?? 'auto');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -29,7 +30,8 @@ export default function AgentProfileDialog({ repos, profile, onClose, onSubmit }
         name: name.trim(),
         repoId,
         command: command.trim(),
-        args: argsText.trim() === '' ? [] : argsText.trim().split(/\s+/)
+        args: argsText.trim() === '' ? [] : argsText.trim().split(/\s+/),
+        monitorProvider
       });
       onClose();
     } catch (e) {
@@ -64,6 +66,16 @@ export default function AgentProfileDialog({ repos, profile, onClose, onSubmit }
           <label className="flex flex-col gap-1">
             <span className="text-steam-text/70">Argumentos fixos (opcional)</span>
             <input value={argsText} onChange={(e) => setArgsText(e.target.value)} className="rounded bg-steam-bg px-2 py-1.5 outline-none" placeholder="--model sonnet"/>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-steam-text/70">Monitoramento</span>
+            <select value={monitorProvider} onChange={(e) => setMonitorProvider(e.target.value as NonNullable<AgentProfile['monitorProvider']>)} className="rounded bg-steam-bg px-2 py-1.5 outline-none">
+              <option value="auto">Detectar pelo comando</option>
+              <option value="claude-code">Claude Code</option>
+              <option value="opencode">OpenCode</option>
+              <option value="generic">Genérico (sem tokens)</option>
+            </select>
+            <span className="text-[11px] text-steam-text/40">Claude Code e OpenCode enviam atividade e uso desta execução para o Glibrary local.</span>
           </label>
           {error != null && <p className="text-xs text-steam-error">{error}</p>}
           <div className="mt-1 flex justify-end gap-2">

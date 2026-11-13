@@ -3,7 +3,7 @@ import { existsSync } from 'fs';
 import { readdir, readFile, stat } from 'fs/promises';
 import { basename, join, resolve } from 'path';
 import type { Agent, ScanIssue, Skill, SkillsScanResult, AgentsScanResult } from '../../shared/types';
-import { toAssetCategory, isKnownAssetCategoryRaw } from '../../shared/categories';
+import { toAssetCategory, isKnownAssetCategoryRaw, inferAssetCategory, DEFAULT_ASSET_CATEGORY } from '../../shared/categories';
 
 export interface AssetFrontmatter {
   name: string;
@@ -138,11 +138,14 @@ export async function discoverAgents(roots: string[], existing: Agent[]): Promis
       const previous = byPath.get(key);
       const meta = parseAssetFrontmatter(content, basename(file, '.md'));
       issues.push(...contentIssues(content, 'agent', file, meta));
+      // Categoria: registro existente > frontmatter > inferência por palavras-chave > default.
+      const rawCategory = meta.category !== undefined ? toAssetCategory(meta.category) : undefined;
+      const category = previous?.category ?? rawCategory ?? inferAssetCategory(`${basename(file, '.md')} ${meta.name} ${meta.description ?? ''}`) ?? DEFAULT_ASSET_CATEGORY;
       discovered.set(key, {
         id: previous?.id ?? randomUUID(),
         name: meta.name,
         ...(meta.description ? { description: meta.description } : {}),
-        category: previous?.category ?? toAssetCategory(meta.category),
+        category,
         path: resolve(file, '..'),
         file,
         source: resolvedRoot,
