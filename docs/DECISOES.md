@@ -415,3 +415,11 @@ GitHub conectada, gráficos e os repositórios registrados, acima do uso da bibl
 - Projetos sincronizados derivam do `useLibraryStore` (mesmos dados do detalhe do
   repositório), sem canal extra, para não divergir após favoritar.
 - Gráficos em SVG/CSS puro, reaproveitando `charts.tsx`; nenhuma dependência nova.
+
+## 2026-11-13 — F4 Linguagem simples e ajuda no contexto
+
+### Termos técnicos aparecem depois do nome simples e têm dica de contexto
+O glossário compartilhado mantém nome cotidiano, termo técnico e explicação curta. O componente `Termo` mostra o nome cotidiano com um ícone de informação; ações Git prioritárias também exibem o termo técnico entre parênteses. A dica abre por foco e clique, é vinculada com `aria-describedby` e fecha com Escape.
+
+### Explicações não escolhem o padrão do modo simples
+A preferência inicial por modo simples continua pendente do mantenedor. As dicas da F4 aparecem nas telas alteradas independentemente dessa preferência para que o significado não dependa de uma configuração oculta.
