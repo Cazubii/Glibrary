@@ -215,6 +215,24 @@ describe('LibraryStore', () => {
     expect(settings.checkUpdatesOnStart).toBe(false);
   });
 
+  it('persists optional agent spending limits and reloads old libraries without them', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    const updated = await store.updateSettings({ agentRunBudgetUsd: 3.5, agentDailyBudgetUsd: 12 });
+    expect(updated).toMatchObject({ agentRunBudgetUsd: 3.5, agentDailyBudgetUsd: 12 });
+
+    const reloaded = await new LibraryStore(dir, join(dir, 'repos')).load();
+    expect(reloaded.settings).toMatchObject({ agentRunBudgetUsd: 3.5, agentDailyBudgetUsd: 12 });
+
+    const oldShape = { ...reloaded, settings: { ...reloaded.settings } };
+    delete (oldShape.settings as Record<string, unknown>).agentRunBudgetUsd;
+    delete (oldShape.settings as Record<string, unknown>).agentDailyBudgetUsd;
+    await fs.writeFile(join(dir, 'library.json'), JSON.stringify(oldShape), 'utf-8');
+    const withoutLimits = await new LibraryStore(dir, join(dir, 'repos')).load();
+    expect(withoutLimits.settings.agentRunBudgetUsd).toBeUndefined();
+    expect(withoutLimits.settings.agentDailyBudgetUsd).toBeUndefined();
+  });
+
   it('emptyLibrary tem settings padrão', () => {
     const lib = emptyLibrary('/home/user/Glibrary');
     expect(lib.settings.reposRoot).toBe('/home/user/Glibrary');

@@ -11,6 +11,7 @@ import type {
   Repo
 } from '../../shared/types';
 import { isSafeDirectoryName } from '../../shared/validators';
+import { assertProtectedBranchPush } from './git-protection';
 import { getGithubAccessToken } from './github-oauth';
 import { GitService, githubAuthHeader, isGithubRemote, sanitizeGitOutput } from './git-service';
 import type { LibraryStore } from './library-store';
@@ -343,8 +344,10 @@ export class DevWorkspaceManager {
     return { ...result, status: await this.status(session.workspacePath) };
   }
 
-  async push(repoId: string): Promise<{ branch: string; status: DevWorkspaceStatus }> {
+  async push(repoId: string, confirmProtectedBranch = false): Promise<{ branch: string; status: DevWorkspaceStatus }> {
     const session = this.requireSession(repoId);
+    const branch = await this.executor.currentBranch(session.workspacePath);
+    assertProtectedBranchPush(branch, !this.store.getSettings().showAdvancedResources, confirmProtectedBranch);
     const result = await this.executor.push(session.workspacePath);
     return { ...result, status: await this.status(session.workspacePath) };
   }

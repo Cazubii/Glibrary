@@ -185,10 +185,13 @@ export default function DevWorkspacePage({ project, repo: initialRepo, onBack, o
 
   const push = async (): Promise<void> => {
     if (repoId == null) return;
+    const branchName = status?.branch ?? workspace?.branch;
+    const confirmProtectedBranch = branchName === 'main' || branchName === 'master';
+    if (confirmProtectedBranch && !window.confirm(`Você está prestes a enviar alterações para a linha principal (${branchName}). Isso publicará o trabalho no GitHub. Deseja continuar?`)) return;
     setBusy('push');
     setOpenError(null);
     try {
-      const result = await api.devWorkspacePush(repoId);
+      const result = await api.devWorkspacePush(repoId, confirmProtectedBranch);
       setStatus(result.status);
       onSuccess(`Alterações enviadas para o GitHub na linha ${result.branch}.`);
     } catch (error) {

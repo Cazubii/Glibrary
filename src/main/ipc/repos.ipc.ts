@@ -5,7 +5,7 @@ import { copyFileSync, existsSync, statSync } from 'fs';
 import { readFile, rm, writeFile } from 'fs/promises';
 import { spawn } from 'child_process';
 import { basename, join, resolve } from 'path';
-import type { DetectionResult, GitStatusDetail, GithubOAuthDeviceSession, GithubOAuthPollResult, GithubUser, IpcResult, Repo, Settings } from '../../shared/types';
+import type { DetectionResult, GitChangePreview, GitStatusDetail, GithubOAuthDeviceSession, GithubOAuthPollResult, GithubUser, IpcResult, Repo, Settings } from '../../shared/types';
 import {
   AddLocalInputSchema,
   AddByUrlInputSchema,
@@ -13,6 +13,7 @@ import {
   GithubOAuthSessionInputSchema,
   CommitInputSchema,
   RepoIdInputSchema,
+  RepoPushInputSchema,
   RepoUpdateInputSchema,
   RepoRemoveInputSchema,
   SettingsPatchSchema,
@@ -21,6 +22,7 @@ import { IpcChannels } from '../../shared/ipc-channels';
 import type { LibraryStore } from '../services/library-store';
 import { migrateLibrary } from '../services/library-store';
 import type { GitService } from '../services/git-service';
+import { assertProtectedBranchPush } from '../services/git-protection';
 import { detectProject } from '../services/detector';
 import { applyDetection } from '../services/detector/apply';
 import { fetchRepoMeta, fetchGithubUser, encodeToken } from '../services/github-api';
@@ -665,11 +667,23 @@ export function registerRepoIpc(
   );
 
   ipcMain.handle(
+    IpcChannels.repoGitPreview,
+    async (_event, raw: unknown): Promise<IpcResult<GitChangePreview>> => {
+      try {
+        const { id } = RepoIdInputSchema.parse(raw);
+        return ok(await git.previewChanges(gitTarget(id)));
+      } catch (error) {
+        return fail(error);
+      }
+    }
+  );
+
+  ipcMain.handle(
     IpcChannels.repoCommit,
     async (_event, raw: unknown): Promise<IpcResult<{ commit: string }>> => {
       try {
-        const { id, message } = CommitInputSchema.parse(raw);
-        return ok(await git.commitAll(gitTarget(id), message));
+        const { id, message, revision } = CommitInputSchema.parse(raw);
+        return ok(await git.commitReviewed(gitTarget(id), message, revision));
       } catch (e) {
         return fail(e);
       }
@@ -677,10 +691,36 @@ export function registerRepoIpc(
   );
 
   ipcMain.handle(
+    IpcChannels.repoGitUndo,
+    async (_event, raw: unknown): Promise<IpcResult<{ branch: string; commit: string }>> => {
+      try {
+        const { id } = RepoIdInputSchema.parse(raw);
+        return ok(await git.undoLastUnsentCommit(gitTarget(id)));
+      } catch (error) {
+        return fail(error);
+      }
+    }
+  );
+
+  ipcMain.handle(
+    IpcChannels.repoGitRevert,
+    async (_event, raw: unknown): Promise<IpcResult<{ branch: string; commit: string }>> => {
+      try {
+        const { id } = RepoIdInputSchema.parse(raw);
+        return ok(await git.revertLastSentCommit(gitTarget(id)));
+      } catch (error) {
+        return fail(error);
+      }
+    }
+  );
+
+  ipcMain.handle(
     IpcChannels.repoPush,
     async (_event, raw: unknown): Promise<IpcResult<{ branch: string }>> => {
       try {
-        const { id } = RepoIdInputSchema.parse(raw);
+        const { id, confirmProtectedBranch } = RepoPushInputSchema.parse(raw);
+        const branch = await git.getCurrentBranch(gitTarget(id));
+        assertProtectedBranchPush(branch, !store.getSettings().showAdvancedResources, confirmProtectedBranch);
         return ok(await git.push(gitTarget(id), await githubToken()));
       } catch (e) {
         return fail(e);

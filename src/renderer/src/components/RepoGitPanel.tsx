@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { GitBranch, GitCommitHorizontal, RefreshCw, Upload } from 'lucide-react';
-import type { GitFile, GitStatusDetail } from '@shared/types';
+import { GitBranch, GitCommitHorizontal, RefreshCw, RotateCcw, Undo2, Upload } from 'lucide-react';
+import type { GitChangePreview, GitFile, GitStatusDetail } from '@shared/types';
 import { api, GlibraryApiError } from '../lib/api';
 import Termo from './Termo';
+import GitReviewDialog from './GitReviewDialog';
 
 interface Props {
   repoId: string;
@@ -28,7 +29,8 @@ export default function RepoGitPanel({ repoId, remoteUrl, onError, onSuccess }: 
   const [status, setStatus] = useState<GitStatusDetail | null>(null);
   const [notGit, setNotGit] = useState(false);
   const [message, setMessage] = useState('');
-  const [busy, setBusy] = useState<'status' | 'commit' | 'push' | null>('status');
+  const [busy, setBusy] = useState<'status' | 'preview' | 'commit' | 'push' | 'undo' | 'revert' | null>('status');
+  const [preview, setPreview] = useState<GitChangePreview | null>(null);
 
   const refresh = useCallback(async (): Promise<void> => {
     setBusy('status');
@@ -51,12 +53,24 @@ export default function RepoGitPanel({ repoId, remoteUrl, onError, onSuccess }: 
     void refresh();
   }, [refresh]);
 
-  const commit = async (): Promise<void> => {
+  const openReview = async (): Promise<void> => {
+    setBusy('preview');
+    try {
+      setPreview(await api.repoGitPreview(repoId));
+    } catch (error) {
+      onError(error);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const commit = async (revision: string): Promise<void> => {
     if (message.trim() === '') return;
     setBusy('commit');
     try {
-      const { commit: hash } = await api.repoCommit(repoId, message.trim());
+      const { commit: hash } = await api.repoCommit(repoId, message.trim(), revision);
       setMessage('');
+      setPreview(null);
       onSuccess?.(`Nova versão salva (commit ${hash.slice(0, 7)}).`);
       await refresh();
     } catch (e) {
@@ -67,13 +81,44 @@ export default function RepoGitPanel({ repoId, remoteUrl, onError, onSuccess }: 
   };
 
   const push = async (): Promise<void> => {
+    const branchName = status?.branch;
+    const confirmProtectedBranch = branchName === 'main' || branchName === 'master';
+    if (confirmProtectedBranch && !window.confirm(`Você está prestes a enviar alterações para a linha principal (${branchName}). Isso publicará o trabalho no GitHub. Deseja continuar?`)) return;
     setBusy('push');
     try {
-      const { branch } = await api.repoPush(repoId);
+      const { branch } = await api.repoPush(repoId, confirmProtectedBranch);
       onSuccess?.(`Enviado ao GitHub na linha ${branch}.`);
       await refresh();
     } catch (e) {
       onError(e);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const undo = async (): Promise<void> => {
+    if (!window.confirm('A última versão local será retirada do histórico, mas os arquivos continuarão aqui como alterações para revisar. Continuar?')) return;
+    setBusy('undo');
+    try {
+      const result = await api.repoGitUndo(repoId);
+      onSuccess?.(`A versão local foi desfeita. Os arquivos continuam na linha ${result.branch}.`);
+      await refresh();
+    } catch (error) {
+      onError(error);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const revert = async (): Promise<void> => {
+    if (!window.confirm('Uma nova versão local será criada para desfazer a última versão enviada. Ela só chegará ao GitHub quando você enviar. Continuar?')) return;
+    setBusy('revert');
+    try {
+      const result = await api.repoGitRevert(repoId);
+      onSuccess?.(`Versão de reversão criada em ${result.branch}. Revise e envie quando estiver pronto.`);
+      await refresh();
+    } catch (error) {
+      onError(error);
     } finally {
       setBusy(null);
     }
@@ -88,10 +133,11 @@ export default function RepoGitPanel({ repoId, remoteUrl, onError, onSuccess }: 
   }
 
   const files = status?.files ?? [];
-  const canCommit = status != null && files.length > 0 && message.trim() !== '' && busy == null;
+  const canReview = status != null && files.length > 0 && busy == null;
   const canPush = status != null && remoteUrl != null && busy == null;
 
   return (
+    <>
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2 rounded-lg bg-steam-panel p-3 text-sm">
         <GitBranch size={14} className="text-steam-accent" />
@@ -141,25 +187,26 @@ export default function RepoGitPanel({ repoId, remoteUrl, onError, onSuccess }: 
         </div>
       )}
 
-      <div className="flex flex-col gap-2">
-        <textarea
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="Mensagem desta versão (ex.: corrige validação do formulário)"
-          rows={2}
-          disabled={files.length === 0}
-          className="resize-none rounded border border-steam-elevated bg-steam-panel p-2 text-sm outline-none focus:border-steam-accent disabled:opacity-50"
-        />
-        <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            disabled={!canCommit}
-            onClick={() => void commit()}
+            disabled={!canReview}
+            onClick={() => void openReview()}
             className="flex items-center gap-1.5 rounded bg-steam-accent px-3 py-2 text-sm font-semibold text-steam-bg disabled:opacity-40"
           >
             <GitCommitHorizontal size={15} />
-            {busy === 'commit' ? 'Salvando versão…' : <Termo id="commit" showTechnical />}
+            {busy === 'preview' ? 'Preparando revisão…' : <>Revisar e salvar <Termo id="commit" showTechnical /></>}
           </button>
+          {status != null && status.ahead > 0 && (
+            <button type="button" disabled={busy != null} onClick={() => void undo()} className="inline-flex items-center gap-1.5 rounded border border-steam-elevated px-3 py-2 text-sm text-steam-text/80 hover:bg-steam-elevated disabled:opacity-40">
+              <Undo2 size={14} /> {busy === 'undo' ? 'Desfazendo…' : 'Desfazer última versão local'}
+            </button>
+          )}
+          {status != null && status.ahead === 0 && status.behind === 0 && files.length === 0 && remoteUrl != null && (
+            <button type="button" disabled={busy != null} onClick={() => void revert()} className="inline-flex items-center gap-1.5 rounded border border-steam-elevated px-3 py-2 text-sm text-steam-warn hover:bg-steam-warn/10 disabled:opacity-40">
+              <RotateCcw size={14} /> {busy === 'revert' ? 'Criando reversão…' : 'Reverter última versão enviada'}
+            </button>
+          )}
           <button
             type="button"
             disabled={!canPush}
@@ -169,11 +216,21 @@ export default function RepoGitPanel({ repoId, remoteUrl, onError, onSuccess }: 
             <Upload size={15} />
             {busy === 'push' ? 'Enviando ao GitHub…' : <><Termo id="push" showTechnical />{(status?.ahead ?? 0) > 0 ? ` (↑ ${status?.ahead})` : ''}</>}
           </button>
-        </div>
         {files.length === 0 && status != null && status.behind > 0 && (
-          <p className="text-xs text-steam-text/50">Use <Termo id="pull" showTechnical /> na barra para trazer as novidades para cá.</p>
+          <p className="basis-full text-xs text-steam-text/50">Use <Termo id="pull" showTechnical /> na barra para trazer as novidades para cá.</p>
         )}
       </div>
     </div>
+    {preview != null && (
+      <GitReviewDialog
+        preview={preview}
+        message={message}
+        busy={busy === 'commit'}
+        onMessageChange={setMessage}
+        onClose={() => setPreview(null)}
+        onCommit={(revision) => { void commit(revision); }}
+      />
+    )}
+    </>
   );
 }
