@@ -12,7 +12,7 @@ import DevWorkspacePage from './DevWorkspacePage';
 import RepoDetailPage from './RepoDetailPage';
 
 interface Props {
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
   onSuccess: (message: string) => void;
 }
 
@@ -117,9 +117,9 @@ export default function ProjectsPage({ onError, onSuccess }: Props): React.JSX.E
       await loadLibrary();
       onSuccess(`Clone de ${project.name} iniciado em sua pasta de repositórios.`);
     } catch (cloneError) {
-      const message = cloneError instanceof Error ? cloneError.message : 'Não foi possível clonar este repositório.';
+      const message = cloneError instanceof Error ? cloneError.message : 'Não foi possível baixar este projeto.';
       if (repoId != null) failClone(project.fullName, message);
-      onError(message);
+      onError(cloneError);
     }
   }, [failClone, loadLibrary, onError, onSuccess, startClone]);
 

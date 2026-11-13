@@ -4,6 +4,17 @@ import { isValidGitUrl } from './git-utils';
 import { ASSET_CATEGORIES } from './categories';
 import type { AssetCategory } from './categories';
 
+export const IpcErrorSchema = z.object({
+  title: z.string().min(1),
+  whatHappened: z.string().min(1),
+  nextStep: z.string().min(1),
+  technicalDetails: z.string(),
+  action: z.object({
+    label: z.string().min(1),
+    target: z.enum(['tools', 'projects'])
+  }).strict().optional()
+}).strict();
+
 export const AssetCategorySchema = z.enum(
   [...ASSET_CATEGORIES] as [AssetCategory, ...AssetCategory[]]
 );

@@ -35,7 +35,7 @@ type Tab = 'overview' | 'git' | 'console' | 'commands' | 'notes';
 interface Props {
   repoId: string;
   onBack: () => void;
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
   onSuccessToast?: (message: string) => void;
 }
 
@@ -76,7 +76,7 @@ export default function RepoDetailPage({ repoId, onBack, onError, onSuccessToast
       try {
         await updateRepo(repoId, p);
       } catch (e) {
-        onError(e instanceof Error ? e.message : String(e));
+        onError(e);
       }
     },
     [repoId, updateRepo, onError],
@@ -120,7 +120,7 @@ export default function RepoDetailPage({ repoId, onBack, onError, onSuccessToast
           : {})
       });
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setDetecting(false);
     }
@@ -149,7 +149,7 @@ export default function RepoDetailPage({ repoId, onBack, onError, onSuccessToast
     try {
       await api.repoClone(repo.id);
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setBusy(false);
     }
@@ -163,7 +163,7 @@ export default function RepoDetailPage({ repoId, onBack, onError, onSuccessToast
         status: kind === 'install' ? 'installing' : 'running'
       });
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setBusy(false);
     }
@@ -174,7 +174,7 @@ export default function RepoDetailPage({ repoId, onBack, onError, onSuccessToast
     try {
       await api.processStop(repo.id);
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setBusy(false);
     }
@@ -186,7 +186,7 @@ export default function RepoDetailPage({ repoId, onBack, onError, onSuccessToast
       await api.repoPull(repo.id);
       await patch({ behindBy: 0, lastPulledAt: new Date().toISOString() });
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setBusy(false);
     }
@@ -198,7 +198,7 @@ export default function RepoDetailPage({ repoId, onBack, onError, onSuccessToast
       if (folder == null) return;
       await updateRepo(repo.id, { localPath: folder, status: 'cloned' });
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
 
@@ -206,7 +206,7 @@ export default function RepoDetailPage({ repoId, onBack, onError, onSuccessToast
     try {
       await fn();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
 

@@ -5,7 +5,7 @@ import { api } from '../lib/api';
 interface Props {
   onClose: () => void;
   onAdded: () => void;
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
 }
 
 type Tab = 'url' | 'folder';

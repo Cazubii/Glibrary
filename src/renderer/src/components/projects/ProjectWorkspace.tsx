@@ -15,7 +15,7 @@ interface Props {
   clone?: ProjectCloneState;
   onBack: () => void;
   onCloneFirst: () => void;
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
   onSuccess: (message: string) => void;
 }
 

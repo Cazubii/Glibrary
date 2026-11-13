@@ -1,4 +1,5 @@
 import { ipcMain, dialog, BrowserWindow, shell } from 'electron';
+import { translateError } from '../services/error-translator';
 import { randomUUID } from 'crypto';
 import { copyFileSync, existsSync, statSync } from 'fs';
 import { readFile, rm, writeFile } from 'fs/promises';
@@ -35,7 +36,7 @@ function ok<T>(data: T): IpcResult<T> {
 }
 
 function fail(error: unknown): IpcResult<never> {
-  return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  return { ok: false, error: translateError(error) };
 }
 
 function broadcastStatus(id: string, status: Repo['status']): void {

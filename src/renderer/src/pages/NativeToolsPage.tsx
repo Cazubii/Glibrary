@@ -1,7 +1,7 @@
 import NativeToolsPanel from '../components/NativeToolsPanel';
 
 interface Props {
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
 }
 
 export default function NativeToolsPage({ onError }: Props): React.JSX.Element {

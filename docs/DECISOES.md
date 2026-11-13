@@ -423,3 +423,16 @@ O glossário compartilhado mantém nome cotidiano, termo técnico e explicação
 
 ### Explicações não escolhem o padrão do modo simples
 A preferência inicial por modo simples continua pendente do mantenedor. As dicas da F4 aparecem nas telas alteradas independentemente dessa preferência para que o significado não dependa de uma configuração oculta.
+
+## 2026-11-13 — F5 Erros que ensinam
+
+### Erros IPC estruturados preservam o envelope existente
+As respostas de falha continuam usando `{ ok: false, error }`; `error` pode ser uma frase legada ou uma estrutura com título, resumo, próximo passo, detalhes técnicos e ação opcional. Isso permite orientar a interface sem quebrar consumidores que ainda enviam strings.
+
+### Detalhes técnicos ficam recolhidos e credenciais são mascaradas
+Erros comuns de Git, GitHub, sistema e ferramentas recebem mensagens em pt-BR. O tradutor verifica limites da API antes de permissão HTTP 403, pois ambos podem compartilhar o mesmo status; detalhes são sanitizados antes de chegar à interface.
+
+### Botões só aparecem quando existe destino claro no app
+Falhas de autenticação levam à área Projetos e ferramentas ausentes levam a Ferramentas. Conflitos, permissões, rede e outros casos mostram um próximo passo sem prometer uma ação automática.
+
+Registro de decisões tomadas durante a execução (diretriz 12 da spec).

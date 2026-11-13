@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { translateError } from './error-translator';
 import type { IpcResult } from '../../shared/types';
 import type { ListAccountReposInput, ProjectRepoPage, ProjectRepoSummary } from '../../shared/github-projects';
 
@@ -45,12 +46,6 @@ function mapGithubRepo(value: unknown): ProjectRepoSummary | null {
   return summary;
 }
 
-function projectsErrorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  if (message.includes('HTTP 401')) return 'Token do GitHub inválido ou expirado. Conecte a conta novamente.';
-  return `Não foi possível carregar os repositórios do GitHub: ${message}`;
-}
-
 /** Busca uma página de /user/repos e mapeia os campos usados pela interface. */
 export async function listAccountRepos(
   fetchJson: JsonFetcher,
@@ -89,6 +84,6 @@ export async function loadAccountRepos(
   try {
     return { ok: true, data: await listAccountRepos(fetchJson, input) };
   } catch (error) {
-    return { ok: false, error: projectsErrorMessage(error) };
+    return { ok: false, error: translateError(error) };
   }
 }

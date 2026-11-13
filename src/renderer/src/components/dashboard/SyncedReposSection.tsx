@@ -7,7 +7,7 @@ import DevSessionBadge from '../DevSessionBadge';
 
 interface Props {
   onOpen: (repoId: string) => void;
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
 }
 
 /** Seção 3 — repositórios registrados na biblioteca (library.json). */
@@ -43,7 +43,7 @@ export default function SyncedReposSection({ onOpen, onError }: Props): React.JS
             <li key={row.id} className="flex items-center gap-3 py-2.5">
               <button
                 type="button"
-                onClick={() => { toggleFavorite(row.id).catch((e: unknown) => onError(e instanceof Error ? e.message : String(e))); }}
+                onClick={() => { toggleFavorite(row.id).catch((e: unknown) => onError(e)); }}
                 aria-label={row.favorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
                 aria-pressed={row.favorite}
                 className={`shrink-0 rounded p-1 hover:bg-steam-elevated ${row.favorite ? 'text-steam-warn' : 'text-steam-text/30'}`}

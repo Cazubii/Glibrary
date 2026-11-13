@@ -1,4 +1,5 @@
 import { ipcMain, BrowserWindow } from 'electron';
+import { translateError } from '../services/error-translator';
 import { randomUUID } from 'crypto';
 import { existsSync, statSync } from 'fs';
 import { basename, join, resolve } from 'path';
@@ -18,7 +19,7 @@ function ok<T>(data: T): IpcResult<T> {
 }
 
 function fail(error: unknown): IpcResult<never> {
-  return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  return { ok: false, error: translateError(error) };
 }
 
 function broadcast(channel: string, payload: unknown): void {

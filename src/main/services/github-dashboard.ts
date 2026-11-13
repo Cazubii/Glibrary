@@ -1,4 +1,5 @@
 import type { IpcResult } from '../../shared/types';
+import { translateError } from './error-translator';
 import type {
   DashboardAccount,
   GithubOwnRepo,
@@ -129,11 +130,9 @@ export async function fetchDashboardAccount(
   return { connected: true, profile, rateLimit, repos, fetchedAt: now().toISOString() };
 }
 
-/** Converte falhas em `{ ok: false, error }` com mensagem pt-BR. */
-export function dashboardErrorMessage(error: unknown): string {
-  const msg = error instanceof Error ? error.message : String(error);
-  if (msg.includes('HTTP 401')) return 'Token do GitHub inválido ou expirado. Conecte a conta novamente.';
-  return `Não foi possível carregar os dados do GitHub: ${msg}`;
+/** Converte falhas em `{ ok: false, error }` com orientação e detalhes técnicos. */
+export function dashboardErrorMessage(error: unknown): ReturnType<typeof translateError> {
+  return translateError(error);
 }
 
 export async function loadDashboardAccount(

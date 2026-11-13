@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { GitBranch, GitCommitHorizontal, RefreshCw, Upload } from 'lucide-react';
 import type { GitFile, GitStatusDetail } from '@shared/types';
-import { api } from '../lib/api';
+import { api, GlibraryApiError } from '../lib/api';
 import Termo from './Termo';
 
 interface Props {
   repoId: string;
   remoteUrl?: string | null;
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
   onSuccess?: (message: string) => void;
 }
 
@@ -36,10 +36,11 @@ export default function RepoGitPanel({ repoId, remoteUrl, onError, onSuccess }: 
       setStatus(await api.repoGitStatus(repoId));
       setNotGit(false);
     } catch (e) {
-      if (e instanceof Error && e.message.toLowerCase().includes('git')) {
+      const technicalMessage = e instanceof GlibraryApiError ? e.presentation.technicalDetails : e instanceof Error ? e.message : String(e);
+      if (/not a git repository|does not appear to be a git repository|not a git directory/i.test(technicalMessage)) {
         setNotGit(true);
       } else {
-        onError(e instanceof Error ? e.message : String(e));
+        onError(e);
       }
     } finally {
       setBusy(null);
@@ -59,7 +60,7 @@ export default function RepoGitPanel({ repoId, remoteUrl, onError, onSuccess }: 
       onSuccess?.(`Nova versão salva (commit ${hash.slice(0, 7)}).`);
       await refresh();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setBusy(null);
     }
@@ -72,7 +73,7 @@ export default function RepoGitPanel({ repoId, remoteUrl, onError, onSuccess }: 
       onSuccess?.(`Enviado ao GitHub na linha ${branch}.`);
       await refresh();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setBusy(null);
     }

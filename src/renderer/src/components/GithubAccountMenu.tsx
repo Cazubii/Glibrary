@@ -4,7 +4,7 @@ import type { GithubUser } from '@shared/types';
 import { useLibraryStore } from '../store/library';
 import { api } from '../lib/api';
 
-type AuthError = (message: string) => void;
+type AuthError = (error: unknown) => void;
 
 /** Botão de conta GitHub no header: conecte via PAT (validado em /user). */
 export default function GithubAccountMenu({ onError }: { onError: AuthError }): React.JSX.Element {
@@ -47,7 +47,7 @@ export default function GithubAccountMenu({ onError }: { onError: AuthError }): 
       setDraft('');
       setOpen(false);
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setSaving(false);
     }
@@ -59,7 +59,7 @@ export default function GithubAccountMenu({ onError }: { onError: AuthError }): 
       setUser(null);
       setOpen(false);
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
 
