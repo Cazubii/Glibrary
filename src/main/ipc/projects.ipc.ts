@@ -11,7 +11,8 @@ import { ListAccountReposInputSchema } from '../../shared/github-projects';
 import type { IpcResult } from '../../shared/types';
 import { IpcChannels } from '../../shared/ipc-channels';
 import type { LibraryStore } from '../services/library-store';
-import { decodeToken, fetchJson } from '../services/github-api';
+import { fetchJson } from '../services/github-api';
+import { getGithubAccessToken } from '../services/github-oauth';
 import type { GitService } from '../services/git-service';
 import { loadAccountRepos } from '../services/github-projects';
 
@@ -39,7 +40,7 @@ export function registerProjectsIpc(store: LibraryStore, git: GitService): void 
     async (_event, raw: unknown): Promise<IpcResult<ProjectRepoPage>> => {
       const parsed = ListAccountReposInputSchema.safeParse(raw ?? {});
       if (!parsed.success) return fail(new Error('Parâmetros inválidos para listar repositórios.'));
-      const token = decodeToken(store.getSettings().githubToken);
+      const token = await getGithubAccessToken(store);
       return loadAccountRepos(fetchJson, { ...parsed.data, token });
     }
   );

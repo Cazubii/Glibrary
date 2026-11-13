@@ -5,7 +5,7 @@ function safeTechnicalDetails(error: unknown): string {
   return raw
     .replace(/x-access-token:[^@\s]+@/gi, 'x-access-token:***@')
     .replace(/:\/\/[^/@\s:]+:[^/@\s]+@/g, '://***@')
-    .replace(/\bgh[opsu]_[A-Za-z0-9]{20,}\b/g, '***')
+    .replace(/\bgh[opsur]_[A-Za-z0-9]{20,}\b/g, '***')
     .replace(/\bgithub_pat_[A-Za-z0-9_]{20,}\b/g, '***')
     .replace(/(authorization\s*:\s*(?:bearer|basic)\s+)[^\s]+/gi, '$1***');
 }
@@ -25,6 +25,23 @@ function translateMessage(message: string): Translation {
       title: 'O GitHub limitou novas consultas',
       whatHappened: 'A conta atingiu temporariamente o limite de consultas do GitHub.',
       nextStep: 'Aguarde alguns minutos e tente novamente.'
+    };
+  }
+
+  if (/sess[aã]o do github expirou|bad_refresh_token|token_expired/.test(text)) {
+    return {
+      title: 'A conexão com o GitHub precisa ser renovada',
+      whatHappened: 'O GitHub encerrou a autorização salva para esta conta.',
+      nextStep: 'Abra Projetos e conecte sua conta novamente.',
+      action: { label: 'Abrir Projetos', target: 'projects' }
+    };
+  }
+
+  if (/configura[cç][aã]o oauth|device flow.*n[aã]o est[aá] habilitado|login simplificado.*n[aã]o est[aá] habilitado/.test(text)) {
+    return {
+      title: 'A entrada rápida do GitHub ainda não está disponível',
+      whatHappened: 'O aplicativo precisa ser configurado pelo mantenedor do Glibrary.',
+      nextStep: 'Use “Opções avançadas” para conectar com um token de acesso pessoal.'
     };
   }
 

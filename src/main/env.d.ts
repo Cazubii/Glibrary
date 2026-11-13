@@ -1,0 +1,1 @@
+declare const __GLIBRARY_GITHUB_OAUTH_CLIENT_ID__: string;
