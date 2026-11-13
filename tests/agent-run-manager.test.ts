@@ -67,7 +67,8 @@ describe('AgentRunManager', () => {
       id: 'repo1', name: 'demo', localPath: dir, status: 'installed',
       tags: [], favorite: false, addedAt: new Date().toISOString()
     });
-    const profile = await store.addAgentProfile({ name: 'Claude', repoId: 'repo1', command: 'claude' });
+    // Provedor genérico: sem telemetria do Claude Code e com saída bruta no log.
+    const profile = await store.addAgentProfile({ name: 'Claude', repoId: 'repo1', command: 'claude', monitorProvider: 'generic' });
     const runStore = new AgentRunStore(join(dir, 'runs'));
     await runStore.load();
     const fake = fakeSpawnFactory();
