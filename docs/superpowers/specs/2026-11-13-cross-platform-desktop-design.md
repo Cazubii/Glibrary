@@ -1,12 +1,12 @@
 # Compatibilidade desktop Windows, Linux e macOS — desenho
 
 **Data:** 2026-11-13
-**Estado:** desenho aprovado no chat; aguardando revisão deste documento
+**Estado:** desenho aprovado no chat; prévia de comando esclarecida na revisão técnica
 **Escopo:** distribuição e execução do aplicativo desktop Glibrary em Windows, Linux e macOS.
 
 ## Objetivo
 
-Permitir instalar e usar a Glibrary nos três sistemas desktop mantendo os fluxos locais disponíveis: biblioteca, operações Git, terminais PTY embutidos, abertura de terminal externo e execução de Agents/Ferramentas. A adaptação deve respeitar as convenções de cada sistema sem alterar a confirmação explícita que antecede a execução de comandos.
+Permitir instalar e usar a Glibrary nos três sistemas desktop mantendo os fluxos locais disponíveis: biblioteca, operações Git, terminais PTY embutidos, abertura de terminal externo e execução de Agents/Ferramentas. A adaptação deve respeitar as convenções de cada sistema, manter a ação explícita que inicia comandos e mostrar à pessoa a invocação efetiva dos Agents antes de executá-los.
 
 ## Contexto atual
 
@@ -24,7 +24,7 @@ O Electron suporta Windows, Linux e macOS. iOS não faz parte das plataformas de
 - Centralizar seleção de shell e abertura de terminal externo em helpers de plataforma no processo principal, em vez de espalhar detecção por `process.platform`.
 - Resolver shells com detecção e fallback por sistema. Se nenhum shell apropriado estiver disponível, devolver erro legível em pt-BR com orientação, sem deixar a sessão falhar silenciosamente.
 - No Linux, procurar um terminal externo nesta ordem: `x-terminal-emulator`, `gnome-terminal`, `konsole`, `xfce4-terminal`, `xterm`. Encaminhar o diretório de trabalho com os argumentos aceitos pelo launcher encontrado. Se nenhum estiver disponível, mostrar uma mensagem acionável ao usuário.
-- Ferramentas configuradas pelo usuário continuam sendo comandos livres executados pelo shell nativo. Para Agents, manter executável e argumentos separados, passando o prompt como argumento; o campo de argumentos reconhece aspas e escapes com sintaxe igual nos três sistemas. Lidar com shims `.cmd`/`.bat` no Windows sem depender de quoting POSIX. A confirmação atual continua obrigatória e mostra o comando efetivo antes de executá-lo.
+- Ferramentas configuradas pelo usuário continuam sendo comandos livres executados pelo shell nativo. Para Agents, manter executável e argumentos separados, passando o prompt como argumento; o campo de argumentos reconhece aspas e escapes com sintaxe igual nos três sistemas. Lidar com shims `.cmd`/`.bat` no Windows sem depender de quoting POSIX. A janela de lançamento deve mostrar a invocação completa (executável, argumentos fixos e prompt) e exigir a ação explícita `Lançar`.
 - Continuar usando APIs de caminho do Node/Electron e diretórios conhecidos do Electron para dados da aplicação; não gravar estado de usuário dentro da pasta de instalação.
 - Documentar formatos gerados, requisitos e limitações por sistema no README e no guia do repositório.
 
@@ -72,7 +72,7 @@ O README deve listar os formatos e arquiteturas suportados, como executar a vers
 1. A pessoa instala o pacote gerado para seu sistema.
 2. Ao iniciar um terminal embutido, a aplicação resolve o shell disponível e cria o PTY com o diretório do projeto.
 3. Ao escolher abrir um terminal externo, o processo principal encontra o launcher do sistema e abre o projeto na pasta correta.
-4. Agents e Ferramentas continuam exibindo e pedindo confirmação do comando antes de executá-lo; a execução usa o shell compatível com o sistema.
+4. A janela do Agent mostra a invocação completa para revisão antes de `Lançar`; Ferramentas preservam a revisão e confirmação já existentes. A execução usa o mecanismo compatível com o sistema.
 5. Se um shell ou terminal gráfico não estiver disponível, a interface informa o componente ausente e a ação sugerida.
 
 ## Erros e estados
