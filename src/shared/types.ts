@@ -173,6 +173,17 @@ export interface DevWorkspaceCloseResult {
   removed: boolean;
 }
 
+export type OnboardingStatus = 'not-started' | 'dismissed' | 'completed';
+export type OnboardingChecklistId = 'tools' | 'github' | 'project' | 'agent' | 'publish';
+
+export interface OnboardingProgress {
+  status: OnboardingStatus;
+  currentStep: number;
+  completedChecklist: OnboardingChecklistId[];
+  checklistVisible: boolean;
+  projectsRoot?: string;
+}
+
 export interface Settings {
   reposRoot: string; // pasta padrão para clonar; padrão: ~/Glibrary
   scanFolders: string[];
@@ -189,6 +200,7 @@ export interface Settings {
   inheritTags: boolean; // projetos herdam tags dos skills/agents/bases associados
   userTools?: UserTool[]; // ferramentas do usuário; ligadas ficam nos projetos
   agentsViewMode?: AgentViewMode; // modo de visualização da página Agentes
+  onboarding: OnboardingProgress;
 }
 
 /** Ferramenta configurada pelo usuário (nome + comando) com chave on/off. */

@@ -7,6 +7,7 @@ import { GlibraryApiError } from './lib/api';
 import GithubAccountMenu from './components/GithubAccountMenu';
 import { AreaNavigation, AreaSectionNavigation } from './components/AreaNavigation';
 import SettingsMenu from './components/SettingsMenu';
+import Onboarding from './components/Onboarding';
 import AssetLibraryPage from './pages/AssetLibraryPage';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
@@ -162,10 +163,29 @@ export default function App(): React.JSX.Element {
       </header>
       <div className="flex min-h-0 flex-1">
         <Suspense fallback={<div className="m-auto text-sm text-steam-text/50">Carregando página…</div>}>
-          {view === 'tools' ? (
+          {view === 'home' && settings?.onboarding.status === 'not-started' ? (
+            <Onboarding
+              onDone={() => setView('home')}
+              onError={onError}
+              onOpenTools={() => setView('tools')}
+              onOpenLibrary={() => {
+                setSections((current) => ({ ...current, library: 'resources' }));
+                setView('library');
+              }}
+            />
+          ) : view === 'tools' ? (
             <ToolsPage onError={onError} />
           ) : view === 'home' ? (
-            <DashboardPage onError={onError} onSuccess={onSuccess} onOpenProjects={() => setView('projects')} />
+            <DashboardPage
+              onError={onError}
+              onSuccess={onSuccess}
+              onOpenProjects={() => setView('projects')}
+              onOpenTools={() => setView('tools')}
+              onOpenAgents={() => {
+                setSections((current) => ({ ...current, agents: 'agent-runs' }));
+                setView('agents');
+              }}
+            />
           ) : view === 'projects' ? (
             selectedSection?.id === 'github-projects'
               ? <ProjectsPage onError={onError} onSuccess={onSuccess} />
