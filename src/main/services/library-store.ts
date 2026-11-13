@@ -54,6 +54,7 @@ export function defaultSettings(reposRoot: string): Settings {
     editorCommand: 'code',
     terminalPreference: 'auto',
     theme: 'dark',
+    showAdvancedResources: true,
     viewMode: 'grid',
     checkUpdatesOnStart: false,
     inheritTags: true,
@@ -88,7 +89,7 @@ export function migrateLibrary(raw: unknown): LibraryFile {
     }
     return LibraryFileSchema.parse({
       version: 2, repos: [], skills: [], bases, projects,
-      settings: { ...old.settings, basesRoot: join(homedir(), 'BASES'), skillFolders: defaultSettings(old.settings.reposRoot).skillFolders }
+      settings: { ...defaultSettings(old.settings.reposRoot), ...old.settings, basesRoot: join(homedir(), 'BASES'), skillFolders: defaultSettings(old.settings.reposRoot).skillFolders }
     });
   }
   if (version === 2) {
