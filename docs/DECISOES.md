@@ -1,13 +1,5 @@
 # Decisões do projeto
 
-## 2026-11-13 — F0 Limpeza
-
-### Especificação v1 mantida como histórico
-`docs/arquivo/GLIBRARY_SPEC.md` registra a implementação original. README, AGENTS e este arquivo são a documentação viva da versão v2.
-
-### Onboarding legado preservado para a F2
-`src/renderer/src/components/Onboarding.tsx` continua no repositório para ser revisto e reaproveitado na primeira experiência guiada. A F2 deve adaptar o componente ao novo fluxo antes de decidir qualquer remoção.
-
 ## 2026-11-13 — F1 Navegação por intenção
 
 ### Cinco áreas principais agrupam as telas existentes
@@ -18,25 +10,6 @@ O shell do app passa a abrir em **Início** e apresentar **Projetos**, **Bibliot
 
 ### Início mostra os projetos locais recentes
 A lista deriva de `assets:get`, ordena pelo campo `addedAt` e limita a quatro itens. O botão abre a área Projetos. O checklist de cinco passos e o assistente persistente de primeira abertura ficam para F2.
-
-## 2026-11-13 — F4 Linguagem simples e ajuda no contexto
-
-### Termos técnicos aparecem depois do nome simples e têm dica de contexto
-O glossário compartilhado mantém nome cotidiano, termo técnico e explicação curta. O componente `Termo` mostra o nome cotidiano com um ícone de informação; ações Git prioritárias também exibem o termo técnico entre parênteses. A dica abre por foco e clique, é vinculada com `aria-describedby` e fecha com Escape.
-
-### Explicações não escolhem o padrão do modo simples
-A preferência inicial por modo simples continua pendente do mantenedor. As dicas da F4 aparecem nas telas alteradas independentemente dessa preferência para que o significado não dependa de uma configuração oculta.
-
-## 2026-11-13 — F5 Erros que ensinam
-
-### Erros IPC estruturados preservam o envelope existente
-As respostas de falha continuam usando `{ ok: false, error }`; `error` pode ser uma frase legada ou uma estrutura com título, resumo, próximo passo, detalhes técnicos e ação opcional. Isso permite orientar a interface sem quebrar consumidores que ainda enviam strings.
-
-### Detalhes técnicos ficam recolhidos e credenciais são mascaradas
-Erros comuns de Git, GitHub, sistema e ferramentas recebem mensagens em pt-BR. O tradutor verifica limites da API antes de permissão HTTP 403, pois ambos podem compartilhar o mesmo status; detalhes são sanitizados antes de chegar à interface.
-
-### Botões só aparecem quando existe destino claro no app
-Falhas de autenticação levam à área Projetos e ferramentas ausentes levam a Ferramentas. Conflitos, permissões, rede e outros casos mostram um próximo passo sem prometer uma ação automática.
 
 Registro de decisões tomadas durante a execução (diretriz 12 da spec).
 
@@ -442,6 +415,38 @@ GitHub conectada, gráficos e os repositórios registrados, acima do uso da bibl
 - Projetos sincronizados derivam do `useLibraryStore` (mesmos dados do detalhe do
   repositório), sem canal extra, para não divergir após favoritar.
 - Gráficos em SVG/CSS puro, reaproveitando `charts.tsx`; nenhuma dependência nova.
+
+## 2026-11-13 — F4 Linguagem simples e ajuda no contexto
+
+### Termos técnicos aparecem depois do nome simples e têm dica de contexto
+O glossário compartilhado mantém nome cotidiano, termo técnico e explicação curta. O componente `Termo` mostra o nome cotidiano com um ícone de informação; ações Git prioritárias também exibem o termo técnico entre parênteses. A dica abre por foco e clique, é vinculada com `aria-describedby` e fecha com Escape.
+
+### Explicações não escolhem o padrão do modo simples
+A preferência inicial por modo simples continua pendente do mantenedor. As dicas da F4 aparecem nas telas alteradas independentemente dessa preferência para que o significado não dependa de uma configuração oculta.
+
+## 2026-11-13 — F5 Erros que ensinam
+
+### Erros IPC estruturados preservam o envelope existente
+As respostas de falha continuam usando `{ ok: false, error }`; `error` pode ser uma frase legada ou uma estrutura com título, resumo, próximo passo, detalhes técnicos e ação opcional. Isso permite orientar a interface sem quebrar consumidores que ainda enviam strings.
+
+### Detalhes técnicos ficam recolhidos e credenciais são mascaradas
+Erros comuns de Git, GitHub, sistema e ferramentas recebem mensagens em pt-BR. O tradutor verifica limites da API antes de permissão HTTP 403, pois ambos podem compartilhar o mesmo status; detalhes são sanitizados antes de chegar à interface.
+
+### Botões só aparecem quando existe destino claro no app
+Falhas de autenticação levam à área Projetos e ferramentas ausentes levam a Ferramentas. Conflitos, permissões, rede e outros casos mostram um próximo passo sem prometer uma ação automática.
+
+Registro de decisões tomadas durante a execução (diretriz 12 da spec).
+
+## 2026-11-13 — F2 Primeira experiência guiada
+
+### Assistente persistente com retomada e saída explícita
+O progresso fica em `settings.onboarding` no `library.json`: estado do assistente, passo atual, pasta de projetos, checklist e sua visibilidade. Bibliotecas novas começam em `not-started`; bibliotecas v1/v2 antigas com conteúdo são migradas para `dismissed`, sem interromper a pessoa. Bibliotecas antigas vazias recebem o assistente. A migração v2 é gravada pelo fluxo atômico existente e mantém a cópia de backup.
+
+### Verificação cobre CLIs suportados sem eleger o padrão
+Git, Node.js e os CLIs Claude Code, OpenCode, Codex, Gemini e Aider são detectados pela lista fixa de comandos. A detecção não escolhe nem recomenda um CLI; a decisão continua pendente do mantenedor.
+
+### Checklist só aparece depois que a pessoa conclui ou dispensa o assistente
+As cinco etapas ficam em Início e são marcadas pela própria pessoa; o painel some quando todas estiverem concluídas. A conta GitHub segue opcional e usa a tela PAT existente. Device Flow aguarda a F3 e o client ID OAuth do mantenedor.
 
 ## 2026-11-13 — Login GitHub por Device Flow
 

@@ -1,24 +1,49 @@
 # Glibrary
 
-Biblioteca desktop para organizar **Skills de agentes**, **repositórios-base** e os **projetos que usam esses recursos**.
+[![CI](https://github.com/Cazubii/Glibrary/actions/workflows/ci.yml/badge.svg)](https://github.com/Cazubii/Glibrary/actions/workflows/ci.yml)
+[![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-blue.svg)](LICENSE)
+![Plataformas](https://img.shields.io/badge/plataformas-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+![Electron](https://img.shields.io/badge/Electron-React%20%2B%20TypeScript-47848F?logo=electron&logoColor=white)
+
+**A biblioteca dos seus agentes de IA.** Um app desktop, no estilo da biblioteca da Steam, que reúne num lugar só os **agentes**, as **Skills** e os **repositórios** que você usa, e os **projetos** que dependem deles.
+
+O objetivo é juntar a versatilidade de um ambiente de desenvolvimento com a gestão de agentes: abrir o terminal, editar o projeto, trabalhar com subagentes e com os repositórios direto no GitHub, de um jeito fácil o suficiente para quem está começando a desenvolver com IA.
+
+Glibrary é um projeto próprio de [BezierClick](https://bezierclick.com), aberto para a comunidade contribuir. Está no começo do desenvolvimento e nasceu para uso próprio do autor.
+
+## Por que existe
+
+Quem trabalha com agentes acaba com Skills espalhadas em várias pastas, dezenas de repositórios clonados e nenhuma visão de qual projeto usa o quê. O Glibrary cataloga tudo isso, mostra o que está sendo usado e deixa cada recurso a um clique de distância.
 
 ## O que já faz
+
+| Área | O que você encontra |
+|---|---|
+| **Início** | Painel com próximos passos e projetos locais recentes. |
+| **Projetos** | Pastas deste computador, repositórios do GitHub, área de desenvolvimento, Git e terminal. |
+| **Biblioteca** | Skills, agentes, modelos de projeto (Bases) e Coleções. |
+| **Descobrir** | Busca de repositórios, Top GitHub dos últimos 7 dias e análise de projetos. |
+| **Agentes** | Execuções e consumo; detalhes avançados podem ser ocultados em Configurações. |
+| **Ferramentas** | Instalação e verificação de ferramentas no menu Configurações. |
+
+O app abre em **Início**, mantém o tema escuro e claro e organiza as tarefas em cinco áreas principais. Coleções, Análise de repositório e Consumo detalhado ficam disponíveis em Configurações por **Mostrar recursos avançados**.
+
+Os termos de Git, agentes e consumo agora aparecem com nomes simples e explicações acessíveis por teclado. Falhas frequentes agora explicam o que ocorreu e como seguir, com detalhes técnicos recolhidos. A primeira abertura agora orienta a configuração e a escolha do primeiro projeto. O login pelo navegador usa o Device Flow do GitHub App quando o client ID público estiver configurado; o token pessoal continua nas opções avançadas.
+
+## Para onde vai
+
+- Revisão das mudanças, linha de trabalho protegida, desfazer e limites de gasto.
+- Receitas completas para criar, entender e publicar projetos.
+- Instaladores para Windows, macOS e Linux, com atualização automática.
+
+O login pelo navegador depende do client ID público do GitHub App do mantenedor e de habilitar Device Flow; até lá, o PAT avançado continua disponível. A preferência inicial pelo modo simples, a CLI recomendada e a assinatura dos instaladores também aguardam decisão.
+## Detalhes técnicos
 
 - Descobre Skills em arquivos `SKILL.md` nas origens configuradas. Por padrão, procura em `~/.claude/skills`, `~/.opencode/skills` e `~/.agents/skills`.
 - Registra Bases por URL Git ou pasta local e clona repositórios para `~/BASES`.
 - Mantém projetos como contexto, com associações às Skills e Bases utilizadas e notas por projeto.
 - Migra automaticamente `library.json` v1 para v2 no primeiro carregamento: repositórios com pasta local passam a projetos de contexto e itens apenas com URL remota passam a Bases.
 - Persiste dados em JSON com escrita atômica e backup automático.
-- Organiza o trabalho em cinco áreas: **Início** (painel e projetos recentes), **Projetos** (pastas locais, GitHub, Git e terminal), **Biblioteca** (Skills, agentes e Bases), **Descobrir** (busca GitHub e Top 7 dias) e **Agentes** (execuções).
-- Mantém Coleções, Análise de repositório e Consumo detalhado acessíveis pelo controle **Mostrar recursos avançados** em Configurações.
-- Abre em **Início** e mantém Ferramentas e tema na engrenagem de Configurações.
-- Explica termos de Git, IA e consumo no momento em que aparecem, com dicas acessíveis por teclado.
-- Traduz falhas comuns do Git, GitHub e ferramentas para instruções de recuperação, com detalhes técnicos recolhidos.
-- Guia a primeira abertura e mantém um checklist de primeiros passos. O login GitHub pode usar Device Flow sem copiar token; o PAT segue disponível nas opções avançadas.
-
-## Para onde vai
-
-As próximas frentes vão proteger alterações antes de publicar, oferecer receitas de ponta a ponta e distribuir instaladores com atualização. O Device Flow depende do client ID público do GitHub App do mantenedor e de habilitar esse fluxo na configuração do app; até lá, o PAT avançado continua disponível. A assinatura dos instaladores também aguarda decisão. A preferência inicial pelo modo simples e a CLI de agente recomendada seguem pendentes.
 
 ## Desenvolvimento
 
@@ -55,7 +80,7 @@ src/renderer/    interface React
 tests/           testes da implementação v1 e serviços compartilhados
 ```
 
-[`docs/arquivo/GLIBRARY_SPEC.md`](docs/arquivo/GLIBRARY_SPEC.md) documenta a implementação original v1. A direção v2 e suas decisões atuais estão registradas em `AGENTS.md` e `docs/DECISOES.md`.
+`GLIBRARY_SPEC.md` documenta a implementação original v1. A direção v2 e suas decisões atuais estão registradas em `AGENTS.md` e `docs/DECISOES.md`.
 
 ## Contribuir
 
