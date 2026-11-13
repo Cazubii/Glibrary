@@ -8,6 +8,17 @@
 ### Onboarding legado preservado para a F2
 `src/renderer/src/components/Onboarding.tsx` continua no repositório para ser revisto e reaproveitado na primeira experiência guiada. A F2 deve adaptar o componente ao novo fluxo antes de decidir qualquer remoção.
 
+## 2026-11-13 — F1 Navegação por intenção
+
+### Cinco áreas principais agrupam as telas existentes
+O shell do app passa a abrir em **Início** e apresentar **Projetos**, **Biblioteca**, **Descobrir** e **Agentes**. Projetos locais e do GitHub ficam em subáreas; Skills, agentes e Bases ficam em Biblioteca; busca, Top GitHub e análise ficam em Descobrir; execuções e consumo ficam em Agentes. Ferramentas, tema e preferências ficam em Configurações.
+
+### Visibilidade de recursos avançados é uma preferência persistida
+`settings.showAdvancedResources` controla Coleções, Análise e Consumo detalhado. Até o mantenedor escolher se o modo simples deve ser o padrão, bibliotecas novas e existentes usam `true` para manter todas as funções visíveis; essa compatibilidade não fecha a decisão de produto. A migração v2 mescla o valor padrão e preserva os demais dados.
+
+### Início mostra os projetos locais recentes
+A lista deriva de `assets:get`, ordena pelo campo `addedAt` e limita a quatro itens. O botão abre a área Projetos. O checklist de cinco passos e o assistente persistente de primeira abertura ficam para F2.
+
 Registro de decisões tomadas durante a execução (diretriz 12 da spec).
 
 ## 2026-10-30 — Fase 0
