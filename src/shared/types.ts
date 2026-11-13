@@ -573,4 +573,3 @@ export interface GitStatusDetail {
   behind: number;
   files: GitFile[];
 }
-

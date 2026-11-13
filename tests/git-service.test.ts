@@ -247,4 +247,3 @@ describe('GitService', () => {
     expect(await fs.readFile(outsidePath, 'utf8')).toBe(outsideContent);
   }, 15_000);
 });
-

@@ -38,4 +38,3 @@ describe('git protection rules', () => {
     });
   });
 });
-

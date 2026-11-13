@@ -592,4 +592,3 @@ export const ToolRunInputSchema = z.object({
   toolId: z.string().min(1),
   projectId: z.string().min(1)
 })
-

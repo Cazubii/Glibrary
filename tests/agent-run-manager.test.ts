@@ -288,4 +288,3 @@ describe('AgentRunManager', () => {
     expect(readFileSync(join(projectPath, 'new-from-agent.txt'), 'utf8')).toBe('agent output\n');
   });
 });
-

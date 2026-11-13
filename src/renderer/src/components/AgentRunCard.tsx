@@ -157,4 +157,3 @@ export default function AgentRunCard({ run, lines, running, onStop, onOpenLog, c
     </div>
   );
 }
-

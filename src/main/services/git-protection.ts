@@ -51,4 +51,3 @@ export function evaluateAgentBudget(input: AgentBudgetInput): AgentBudgetEvaluat
     (input.dailyLimitUsd != null && input.dailyCostUsd >= input.dailyLimitUsd * 0.8);
   return { warning, exceeded };
 }
-

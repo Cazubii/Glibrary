@@ -69,4 +69,3 @@ export default function AgentChangesDialog({ run, onClose }: Props): React.JSX.E
     </div>
   );
 }
-

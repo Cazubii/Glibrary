@@ -111,4 +111,3 @@
 - Os limites por execução e por dia são persistidos e impostos no main; o aviso aparece a 80%; sem telemetria de custo não se inicia CLI genérica com teto ativo.
 - Bibliotecas existentes continuam lendo sem migração destrutiva e o IPC mantém `{ ok, data | error }`.
 - Typecheck, lint, testes, build e CI dos três sistemas passam.
-

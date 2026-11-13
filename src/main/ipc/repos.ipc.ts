@@ -772,4 +772,3 @@ export function registerRepoIpc(
     },
   );
 }
-

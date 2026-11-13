@@ -476,4 +476,3 @@ O Glibrary captura quais arquivos já estavam sujos antes da execução e não o
 
 ### Limites de custo usam somente telemetria disponível
 Os tetos opcionais por execução e por dia ficam em `settings.agentRunBudgetUsd` e `settings.agentDailyBudgetUsd`, sem mudar `library.json` v2. O dia é local e o custo vem da telemetria de Claude Code ou OpenCode; um comando genérico não inicia enquanto houver teto configurado. O aviso aparece a 80%, e o processo principal para a execução ao receber um valor que alcança o teto. No limite diário, para todas as execuções monitoradas ativas. Como a medição depende do provedor, o valor reportado pela CLI é a referência usada pelo aplicativo.
-

@@ -575,4 +575,3 @@ export class GitService {
     }
   }
 }
-

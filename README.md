@@ -90,4 +90,3 @@ Contribuições são bem-vindas. Leia [`CONTRIBUTING.md`](CONTRIBUTING.md), conf
 ## Licença
 
 Distribuído sob a licença MIT. Consulte [`LICENSE`](LICENSE).
-

@@ -491,4 +491,3 @@ export const api = {
       listener(payload as { id: string; line: LogLine });
     })
 };
-
