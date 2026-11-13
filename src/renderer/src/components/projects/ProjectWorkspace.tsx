@@ -7,6 +7,7 @@ import { api } from '../../lib/api';
 import type { ProjectCloneState } from '../../store/projects';
 import { useTerminalGroup, useTerminalsStore } from '../../store/terminals';
 import RepoTerminal from '../RepoTerminal';
+import Termo from '../Termo';
 
 interface Props {
   project: ProjectRepoSummary;
@@ -47,7 +48,7 @@ export default function ProjectWorkspace({
     try {
       setBranches(await api.branchesList(repoId));
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Não foi possível carregar as branches.');
+      setLoadError(error instanceof Error ? error.message : 'Não foi possível carregar as linhas de trabalho.');
     } finally {
       setLoading(false);
     }
@@ -67,7 +68,7 @@ export default function ProjectWorkspace({
     setBranchBusy(true);
     try {
       const result = await api.branchCheckout(repoId, branch);
-      onSuccess(`Branch ${result.branch} selecionada.`);
+      onSuccess(`Linha de trabalho "${result.branch}" selecionada.`);
       await refreshBranches();
     } catch (error) {
       onError(error instanceof Error ? error.message : 'Não foi possível trocar de branch.');
@@ -83,7 +84,7 @@ export default function ProjectWorkspace({
     try {
       const result = await api.branchCreate(repoId, branchName.trim(), project.defaultBranch);
       setBranchName('');
-      onSuccess(`Branch ${result.branch} criada a partir de ${project.defaultBranch}.`);
+      onSuccess(`Linha de trabalho "${result.branch}" criada a partir de ${project.defaultBranch}.`);
       await refreshBranches();
     } catch (error) {
       onError(error instanceof Error ? error.message : 'Não foi possível criar a branch.');
@@ -128,11 +129,11 @@ export default function ProjectWorkspace({
         <section className="max-w-3xl border-b border-steam-elevated/60 pb-5" aria-labelledby="clone-first-title">
           <h2 id="clone-first-title" className="text-base font-semibold">Este repositório ainda não está no PC</h2>
           <p className="mt-1 text-sm text-steam-text/75">
-            Clone o projeto para listar branches, trocar de branch e abrir um terminal nesta pasta.
+            Baixe o projeto para este computador para abrir o terminal e escolher uma linha de trabalho.
           </p>
           {cloning ? (
             <div className="mt-4 max-w-lg" role="status" aria-live="polite">
-              <p className="mb-2 text-xs text-steam-text/80">{clone?.stage ?? 'Clonando repositório…'}</p>
+              <p className="mb-2 text-xs text-steam-text/80">{clone?.stage ?? 'Baixando o projeto…'}</p>
               <div className="h-1.5 overflow-hidden rounded-full bg-steam-elevated" role="progressbar" aria-label={`Clonando ${project.name}`} aria-valuemin={0} aria-valuemax={100} {...(clone?.percent != null ? { 'aria-valuenow': clone.percent } : {})}>
                 <div
                   className={`h-full rounded-full bg-steam-accent transition-[width] duration-200 motion-reduce:transition-none ${clone?.percent == null ? 'w-1/3 animate-pulse motion-reduce:animate-none' : ''}`}
@@ -148,7 +149,7 @@ export default function ProjectWorkspace({
                 onClick={onCloneFirst}
                 className="mt-4 inline-flex min-h-9 items-center gap-2 rounded bg-steam-accent px-3 text-xs font-semibold text-steam-bg transition-colors duration-150 hover:bg-steam-accent/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steam-accent focus-visible:ring-offset-2 focus-visible:ring-offset-steam-bg"
               >
-                <GitBranch size={14} aria-hidden="true" /> Clonar primeiro
+                <GitBranch size={14} aria-hidden="true" /> <Termo id="clone" showTechnical />
               </button>
             </>
           )}
@@ -158,7 +159,7 @@ export default function ProjectWorkspace({
           <section className="max-w-4xl" aria-labelledby="new-branch-title">
             <form onSubmit={(event) => void createBranch(event)} className="flex flex-col gap-2 sm:flex-row sm:items-end">
               <div className="min-w-0 flex-1">
-                <label htmlFor="new-branch-name" id="new-branch-title" className="block text-sm font-medium">Criar branch a partir de {project.defaultBranch ?? 'branch padrão'}</label>
+                <label htmlFor="new-branch-name" id="new-branch-title" className="block text-sm font-medium">Criar linha de trabalho (branch) a partir de {project.defaultBranch ?? 'linha principal'}</label>
                 <input
                   id="new-branch-name"
                   value={branchName}
@@ -175,7 +176,7 @@ export default function ProjectWorkspace({
                 className="inline-flex min-h-10 items-center justify-center gap-2 rounded bg-steam-accent px-4 text-xs font-semibold text-steam-bg transition-colors duration-150 hover:bg-steam-accent/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steam-accent focus-visible:ring-offset-2 focus-visible:ring-offset-steam-bg disabled:cursor-not-allowed disabled:opacity-50"
                 title={project.defaultBranch == null ? 'A branch padrão não foi informada pelo GitHub.' : undefined}
               >
-                <Plus size={14} aria-hidden="true" /> Criar branch
+                <Plus size={14} aria-hidden="true" /> Criar linha de trabalho
               </button>
             </form>
             {project.defaultBranch == null && (
@@ -186,9 +187,9 @@ export default function ProjectWorkspace({
           <section className="max-w-5xl border-t border-steam-elevated/60 pt-4" aria-labelledby="branches-title">
             <div className="flex flex-wrap items-center gap-3">
               <div className="min-w-0 flex-1">
-                <h2 id="branches-title" className="text-base font-semibold">Branches</h2>
+                <h2 id="branches-title" className="text-base font-semibold">Linhas de trabalho</h2>
                 <p className="mt-1 text-xs text-steam-text/70">
-                  {branches?.current != null ? `Branch atual: ${branches.current}` : 'Branches locais e refs publicadas em origin.'}
+                  {branches?.current != null ? `Linha atual: ${branches.current}` : 'Linhas deste projeto salvas neste computador e no GitHub.'}
                 </p>
               </div>
               <button
@@ -198,7 +199,7 @@ export default function ProjectWorkspace({
                 className="inline-flex min-h-9 items-center gap-1.5 rounded border border-steam-elevated px-3 text-xs text-steam-text/85 transition-colors duration-150 hover:bg-steam-panel focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steam-accent disabled:opacity-50"
               >
                 <RefreshCw size={13} className={loading ? 'animate-spin motion-reduce:animate-none' : ''} aria-hidden="true" />
-                Atualizar branches
+                Atualizar linhas
               </button>
             </div>
 
@@ -210,12 +211,12 @@ export default function ProjectWorkspace({
             )}
 
             {loading && branches == null ? (
-              <ul className="mt-4 divide-y divide-steam-elevated/50" aria-busy="true" aria-label="Carregando branches">
+              <ul className="mt-4 divide-y divide-steam-elevated/50" aria-busy="true" aria-label="Carregando linhas de trabalho">
                 {[0, 1, 2].map((item) => <li key={item} className="flex items-center justify-between py-3"><span className="h-4 w-40 animate-pulse rounded bg-steam-elevated motion-reduce:animate-none" /><span className="h-7 w-20 animate-pulse rounded bg-steam-elevated motion-reduce:animate-none" /></li>)}
               </ul>
             ) : branches != null ? (
               <div className="mt-4 grid gap-6 lg:grid-cols-2">
-                <BranchGroup title="Locais" empty="Nenhuma branch local." count={branches.local.length}>
+                <BranchGroup title="Neste computador" empty="Nenhuma linha de trabalho local." count={branches.local.length}>
                   {branches.local.map((branch) => (
                     <li key={branch.name} className="flex min-h-11 items-center gap-3 py-2">
                       <GitBranch size={14} className={branch.current ? 'text-steam-accent' : 'text-steam-text/60'} aria-hidden="true" />
@@ -229,14 +230,14 @@ export default function ProjectWorkspace({
                           disabled={branchBusy}
                           className="min-h-8 rounded border border-steam-elevated px-2.5 text-[11px] text-steam-text/85 transition-colors duration-150 hover:bg-steam-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steam-accent disabled:opacity-50"
                         >
-                          Checkout
+                          Selecionar
                         </button>
                       )}
                     </li>
                   ))}
                 </BranchGroup>
 
-                <BranchGroup title="Remotas" empty="Nenhuma branch remota encontrada." count={branches.remote.length}>
+                <BranchGroup title="No GitHub" empty="Nenhuma linha de trabalho no GitHub." count={branches.remote.length}>
                   {branches.remote.map((branch) => {
                     const localExists = localNames.has(branch.name);
                     return (
@@ -252,7 +253,7 @@ export default function ProjectWorkspace({
                             disabled={branchBusy}
                             className="min-h-8 rounded border border-steam-elevated px-2.5 text-[11px] text-steam-text/85 transition-colors duration-150 hover:bg-steam-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steam-accent disabled:opacity-50"
                           >
-                            Checkout
+                            Selecionar
                           </button>
                         )}
                       </li>

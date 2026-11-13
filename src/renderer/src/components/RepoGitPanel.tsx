@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { GitBranch, GitCommitHorizontal, RefreshCw, Upload } from 'lucide-react';
 import type { GitFile, GitStatusDetail } from '@shared/types';
 import { api } from '../lib/api';
+import Termo from './Termo';
 
 interface Props {
   repoId: string;
@@ -22,7 +23,7 @@ const STATE_LABEL: Record<GitFile['state'], string> = {
   untracked: 'U'
 };
 
-/** Aba Git: status (branch, sincronização, arquivos), commit e push. */
+/** Mostra o estado das versões locais e as ações para salvá-las e enviá-las. */
 export default function RepoGitPanel({ repoId, remoteUrl, onError, onSuccess }: Props): React.JSX.Element {
   const [status, setStatus] = useState<GitStatusDetail | null>(null);
   const [notGit, setNotGit] = useState(false);
@@ -55,7 +56,7 @@ export default function RepoGitPanel({ repoId, remoteUrl, onError, onSuccess }: 
     try {
       const { commit: hash } = await api.repoCommit(repoId, message.trim());
       setMessage('');
-      onSuccess?.(`Commit ${hash.slice(0, 7)} criado`);
+      onSuccess?.(`Nova versão salva (commit ${hash.slice(0, 7)}).`);
       await refresh();
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
@@ -68,7 +69,7 @@ export default function RepoGitPanel({ repoId, remoteUrl, onError, onSuccess }: 
     setBusy('push');
     try {
       const { branch } = await api.repoPush(repoId);
-      onSuccess?.(`Push concluído (origin/${branch})`);
+      onSuccess?.(`Enviado ao GitHub na linha ${branch}.`);
       await refresh();
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
@@ -80,8 +81,7 @@ export default function RepoGitPanel({ repoId, remoteUrl, onError, onSuccess }: 
   if (notGit) {
     return (
       <div className="rounded-lg bg-steam-panel p-4 text-sm text-steam-text/70">
-        Esta pasta não parece ser um repositório git válido. Use "Abrir terminal" para começar com{' '}
-        <code>git init</code> ou aponte a pasta correta do projeto.
+        Esta pasta ainda não controla versões. Use "Abrir terminal" para começar a controlar versões deste projeto, ou aponte a pasta correta.
       </div>
     );
   }
@@ -94,19 +94,19 @@ export default function RepoGitPanel({ repoId, remoteUrl, onError, onSuccess }: 
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2 rounded-lg bg-steam-panel p-3 text-sm">
         <GitBranch size={14} className="text-steam-accent" />
-        <span className="font-semibold">{status?.branch ?? '—'}</span>
+        <span className="font-semibold"><Termo id="branch" showTechnical />: {status?.branch ?? '—'}</span>
         {(status?.ahead ?? 0) > 0 && (
           <span className="rounded bg-steam-accent/20 px-2 py-0.5 text-xs text-steam-accent">
-            ↑ {status?.ahead} para enviar
+            ↑ {status?.ahead} {status?.ahead === 1 ? 'versão aguardando envio' : 'versões aguardando envio'}
           </span>
         )}
         {(status?.behind ?? 0) > 0 && (
           <span className="rounded bg-steam-warn/20 px-2 py-0.5 text-xs text-steam-warn">
-            ↓ {status?.behind} atrás do remote
+            ↓ {status?.behind === 1 ? 'Há 1 novidade' : `Há ${status?.behind} novidades`} no GitHub
           </span>
         )}
         {remoteUrl == null && (
-          <span className="text-xs text-steam-warn" title="Sem remote origin">sem remote</span>
+          <span className="text-xs text-steam-warn" title="Este projeto ainda não está conectado ao GitHub">Ainda não está no GitHub</span>
         )}
         <span className="ml-auto text-xs text-steam-text/50">
           {files.length === 0 ? 'Sem mudanças locais' : `${files.length} arquivo(s) alterados`}
@@ -144,7 +144,7 @@ export default function RepoGitPanel({ repoId, remoteUrl, onError, onSuccess }: 
         <textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          placeholder="Mensagem de commit (ex.: corrige validação do formulário)"
+          placeholder="Mensagem desta versão (ex.: corrige validação do formulário)"
           rows={2}
           disabled={files.length === 0}
           className="resize-none rounded border border-steam-elevated bg-steam-panel p-2 text-sm outline-none focus:border-steam-accent disabled:opacity-50"
@@ -157,7 +157,7 @@ export default function RepoGitPanel({ repoId, remoteUrl, onError, onSuccess }: 
             className="flex items-center gap-1.5 rounded bg-steam-accent px-3 py-2 text-sm font-semibold text-steam-bg disabled:opacity-40"
           >
             <GitCommitHorizontal size={15} />
-            {busy === 'commit' ? 'Commitando…' : 'Commit'}
+            {busy === 'commit' ? 'Salvando versão…' : <Termo id="commit" showTechnical />}
           </button>
           <button
             type="button"
@@ -166,11 +166,11 @@ export default function RepoGitPanel({ repoId, remoteUrl, onError, onSuccess }: 
             className="flex items-center gap-1.5 rounded bg-steam-elevated px-3 py-2 text-sm hover:bg-steam-accent/20 disabled:opacity-40"
           >
             <Upload size={15} />
-            {busy === 'push' ? 'Enviando…' : `Push${(status?.ahead ?? 0) > 0 ? ` (↑ ${status?.ahead})` : ''}`}
+            {busy === 'push' ? 'Enviando ao GitHub…' : <><Termo id="push" showTechnical />{(status?.ahead ?? 0) > 0 ? ` (↑ ${status?.ahead})` : ''}</>}
           </button>
         </div>
         {files.length === 0 && status != null && status.behind > 0 && (
-          <p className="text-xs text-steam-text/50">Use o botão "Atualizar (N commits atrás)" da barra pra puxar.</p>
+          <p className="text-xs text-steam-text/50">Use <Termo id="pull" showTechnical /> na barra para trazer as novidades para cá.</p>
         )}
       </div>
     </div>
