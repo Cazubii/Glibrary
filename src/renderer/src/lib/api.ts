@@ -1,5 +1,6 @@
 import type {
   DetectionResult,
+  AppUpdateState,
   IpcError,
   GitChangePreview,
   GitStatusDetail,
@@ -43,7 +44,7 @@ import type {
   TerminalListResult,
   TerminalSessionSummary
 } from '../../../shared/types';
-import { IpcErrorSchema } from '../../../shared/schemas';
+import { AppUpdateStateSchema, IpcErrorSchema } from '../../../shared/schemas';
 import type { ToolStatus as SystemToolStatus } from '../../../shared/tools';
 import { IpcChannels } from '../../../shared/ipc-channels';
 import type { DashboardAccount } from '../../../shared/github-dashboard';
@@ -75,6 +76,17 @@ function detectNativeTools(id?: string): Promise<ToolStatus | Record<string, Too
 }
 
 export const api = {
+  appUpdateGetState: async (): Promise<AppUpdateState> =>
+    AppUpdateStateSchema.parse(await unwrap<AppUpdateState>(window.api.invoke(IpcChannels.appUpdateGetState))),
+  appUpdateCheck: async (): Promise<AppUpdateState> =>
+    AppUpdateStateSchema.parse(await unwrap<AppUpdateState>(window.api.invoke(IpcChannels.appUpdateCheck))),
+  appUpdateInstall: (): Promise<null> =>
+    unwrap<null>(window.api.invoke(IpcChannels.appUpdateInstall)),
+  onAppUpdateChanged: (listener: (state: AppUpdateState) => void) =>
+    window.api.on(IpcChannels.appUpdateChanged, (payload: unknown) => {
+      const parsed = AppUpdateStateSchema.safeParse(payload);
+      if (parsed.success) listener(parsed.data);
+    }),
   assetsGet: (): Promise<{
     skills: Skill[];
     agents: Agent[];
@@ -502,4 +514,3 @@ export const api = {
       listener(payload as { id: string; line: LogLine });
     })
 };
-

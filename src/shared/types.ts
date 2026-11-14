@@ -208,6 +208,24 @@ export interface Settings {
   onboarding: OnboardingProgress;
 }
 
+export type AppUpdateStatus =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'up-to-date'
+  | 'error'
+  | 'unavailable';
+
+export interface AppUpdateState {
+  status: AppUpdateStatus;
+  currentVersion: string;
+  availableVersion?: string;
+  percent?: number;
+  message?: string;
+}
+
 /** Ferramenta configurada pelo usuário (nome + comando) com chave on/off. */
 export interface UserTool {
   id: string;
@@ -586,4 +604,3 @@ export interface RepoPublishResult {
   htmlUrl: string;
   branch: string;
 }
-

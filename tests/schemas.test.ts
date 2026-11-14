@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  AppUpdateStateSchema,
   SkillUpdateInputSchema,
   BaseUpdateInputSchema,
   ProjectUpdateInputSchema,
@@ -9,6 +10,17 @@ import {
   TagRenameInputSchema,
   TagNameInputSchema
 } from '../src/shared/schemas';
+
+describe('AppUpdateStateSchema', () => {
+  it('valida o estado e o progresso da atualização antes de exibi-los', () => {
+    expect(AppUpdateStateSchema.parse({ status: 'downloading', currentVersion: '0.1.0', percent: 44 })).toEqual({
+      status: 'downloading',
+      currentVersion: '0.1.0',
+      percent: 44
+    });
+    expect(() => AppUpdateStateSchema.parse({ status: 'downloading', currentVersion: '0.1.0', percent: 120 })).toThrow();
+  });
+});
 
 describe('SkillUpdateInputSchema', () => {
   it('aceita patch com tags e favorite', () => {
@@ -109,4 +121,3 @@ describe('schemas de publicação do projeto', () => {
     expect(() => RepoPushInputSchema.parse({ id: 'repo-1', confirmProtectedBranch: 'sim' })).toThrow();
   });
 });
-

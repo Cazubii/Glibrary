@@ -15,6 +15,14 @@ export const IpcErrorSchema = z.object({
   }).strict().optional()
 }).strict();
 
+export const AppUpdateStateSchema = z.object({
+  status: z.enum(['idle', 'checking', 'available', 'downloading', 'downloaded', 'up-to-date', 'error', 'unavailable']),
+  currentVersion: z.string(),
+  availableVersion: z.string().optional(),
+  percent: z.number().finite().min(0).max(100).optional(),
+  message: z.string().optional()
+}).strict();
+
 export const AssetCategorySchema = z.enum(
   [...ASSET_CATEGORIES] as [AssetCategory, ...AssetCategory[]]
 );
@@ -608,4 +616,3 @@ export const ToolRunInputSchema = z.object({
   toolId: z.string().min(1),
   projectId: z.string().min(1)
 })
-
