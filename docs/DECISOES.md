@@ -495,3 +495,17 @@ A pessoa revisa e salva as mudanças locais antes de criar o repositório remoto
 `POST /user/repos` requer `Repository creation: write` para o user access token do GitHub App; um PAT clássico precisa de `public_repo` para público ou `repo` para privado. A configuração atual do App não inclui a permissão de criação. O executor não alterou o App; o mantenedor precisa conceder essa permissão e solicitar nova autorização, ou a pessoa pode usar o PAT avançado. A recomendação de CLI permanece pendente; cada receita exige que a pessoa escolha uma CLI já instalada.
 
 Referências oficiais: [Criar repositório para a conta autenticada](https://docs.github.com/en/rest/repos/repos#create-a-repository-for-the-authenticated-user), [escolher permissões de GitHub App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app).
+
+## 2026-11-14 — F8 Releases multiplataforma
+
+### Tags versionadas publicam os instaladores nos Releases do GitHub
+O workflow `release.yml` aceita tags `v*`, exige que o sufixo corresponda à versão do `package.json` e publica em matriz Windows NSIS, macOS DMG + ZIP e Linux AppImage. O provider é explicitamente `Cazubii/Glibrary`; o token de publicação vem do `GITHUB_TOKEN` do GitHub Actions. Nenhuma release real foi criada nesta frente.
+
+### A assinatura de código continua decisão do mantenedor
+As builds podem ser instaladas sem assinatura, mas Windows e macOS podem exibir avisos do sistema. A documentação oficial do electron-builder exige assinatura macOS para auto-update. Não criamos certificados nem secrets; o mantenedor deve decidir se arca com assinatura e notarização antes de distribuir amplamente.
+
+### Auto-update não é considerado pronto sem updater e validação instalada
+O electron-builder 26.18 suporta os alvos de atualização NSIS, DMG/ZIP e AppImage. Esta sessão não tem pnpm/corepack nem acesso ao registry npm pelo shell, e o repositório não contém `electron-updater`; portanto o código de checagem, download e instalação não foi incluído ou validado. A etapa fica pendente até ser possível atualizar `package.json` e `pnpm-lock.yaml` pelo pnpm e testar a matriz. O workflow de release já publica os manifestos que o electron-builder gera.
+
+Referências oficiais: [Auto Update no electron-builder v26](https://www.electron.build/v26/docs/features/auto-update/), [GitHub Actions no electron-builder v26](https://www.electron.build/v26/docs/features/github-actions/), [configuração de publicação no electron-builder v26](https://www.electron.build/v26/docs/publish/).
+

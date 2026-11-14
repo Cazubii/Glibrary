@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/Cazubii/Glibrary/actions/workflows/ci.yml/badge.svg)](https://github.com/Cazubii/Glibrary/actions/workflows/ci.yml)
 [![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-blue.svg)](LICENSE)
+[![Baixar Glibrary](https://img.shields.io/badge/Baixar-Glibrary-1a9fff?logo=github)](https://github.com/Cazubii/Glibrary/releases/latest)
 ![Plataformas](https://img.shields.io/badge/plataformas-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Electron](https://img.shields.io/badge/Electron-React%20%2B%20TypeScript-47848F?logo=electron&logoColor=white)
 
@@ -25,6 +26,7 @@ Quem trabalha com agentes acaba com Skills espalhadas em várias pastas, dezenas
 | **Descobrir** | Busca de repositórios, Top GitHub dos últimos 7 dias e análise de projetos. |
 | **Agentes** | Execuções e consumo; detalhes avançados podem ser ocultados em Configurações. |
 | **Ferramentas** | Instalação e verificação de ferramentas no menu Configurações. |
+| **Distribuição** | Uma tag versionada gera instaladores para Windows, macOS e Linux nas Releases. |
 
 O app abre em **Início**, mantém o tema escuro e claro e organiza as tarefas em cinco áreas principais. Coleções, Análise de repositório e Consumo detalhado ficam disponíveis em Configurações por **Mostrar recursos avançados**.
 
@@ -32,15 +34,24 @@ Os termos de Git, agentes e consumo agora aparecem com nomes simples e explicaç
 
 Antes de salvar uma versão, a pessoa pode revisar os arquivos e o diff. No modo simples, o Glibrary cria uma linha de trabalho para agentes, pede confirmação antes de enviar direto para `main`/`master` e oferece desfazer versões locais ou reverter versões já enviadas. Depois de cada execução, é possível revisar, manter ou descartar as mudanças do agente; arquivos editados depois são preservados. Limites opcionais por execução e por dia interrompem agentes monitorados ao atingir o valor e avisam aos 80%.
 
-
 Início também reúne três receitas guiadas: criar um site com um modelo incluído ou uma Base, analisar um repositório e perguntar a um agente, e revisar/publicar um projeto no GitHub. O site inicial funciona sem instalar dependências; a publicação é privada por padrão, mostra o diff e pede confirmação antes de enviar. Para criar um repositório pelo login do GitHub App, ainda é necessária a permissão `Repository creation: write`; um token pessoal avançado com o escopo adequado continua disponível.
 
 ## Para onde vai
 
-- Receitas completas para criar, entender e publicar projetos.
-- Instaladores para Windows, macOS e Linux, com atualização automática.
+- Atualização automática pelo app, após instalar e validar `electron-updater` e definir a assinatura macOS.
+- Validação das receitas com pessoas iniciantes.
 
-O login pelo navegador depende do client ID público do GitHub App do mantenedor e de habilitar Device Flow; até lá, o PAT avançado continua disponível. A preferência inicial pelo modo simples, a CLI recomendada e a assinatura dos instaladores também aguardam decisão.
+Ao criar uma tag `v` igual à versão do `package.json`, o GitHub Actions monta Windows (NSIS),
+macOS (DMG) e Linux (AppImage) e publica os arquivos na [página de releases](https://github.com/Cazubii/Glibrary/releases).
+O ZIP adicional do macOS é reservado ao fluxo de atualização. Uma versão só ficará disponível
+depois que o mantenedor criar a tag correspondente.
+
+Os instaladores ainda não têm assinatura de código. Windows pode mostrar o aviso do Microsoft
+Defender SmartScreen e macOS pode avisar que o app foi baixado da internet e pedir autorização em
+Privacidade e Segurança. O auto-update continua pendente de incluir e validar `electron-updater`;
+no macOS, a documentação do electron-builder exige assinatura para atualização automática.
+
+O login pelo navegador depende do client ID público do GitHub App do mantenedor e de habilitar Device Flow; a publicação por esse login também depende da permissão mínima de criação de repositório. Até lá, o PAT avançado continua disponível. A preferência inicial pelo modo simples, a CLI recomendada e a assinatura dos instaladores também aguardam decisão.
 ## Detalhes técnicos
 
 - Descobre Skills em arquivos `SKILL.md` nas origens configuradas. Por padrão, procura em `~/.claude/skills`, `~/.opencode/skills` e `~/.agents/skills`.
@@ -93,3 +104,4 @@ Contribuições são bem-vindas. Leia [`CONTRIBUTING.md`](CONTRIBUTING.md), conf
 ## Licença
 
 Distribuído sob a licença MIT. Consulte [`LICENSE`](LICENSE).
+
