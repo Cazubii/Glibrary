@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f2f5f1" />
+    <meta name="description" content="Um pequeno espaço para suas grandes ideias." />
+    <title>Meu primeiro site</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script src="./script.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#inicio" aria-label="Meu espaço, início">meu<span>espaço</span></a>
+      <nav aria-label="Navegação principal">
+        <a href="#sobre">Sobre</a>
+        <a href="#ideias">Ideias</a>
+        <a class="nav-cta" href="#contato">Falar comigo <span aria-hidden="true">↗</span></a>
+      </nav>
+    </header>
+
+    <main id="inicio">
+      <section class="hero" aria-labelledby="hero-title">
+        <p class="eyebrow"><span class="sparkle" aria-hidden="true">✳</span> Um começo para o que vem depois</p>
+        <h1 id="hero-title">Suas ideias<br /><em>merecem espaço.</em></h1>
+        <p class="hero-copy">Um cantinho simples para apresentar o que você faz, o que imagina e o que quer construir.</p>
+        <a class="primary-button" href="#ideias">Conheça o espaço <span aria-hidden="true">↓</span></a>
+        <div class="hero-art" aria-hidden="true">
+          <div class="sun"></div>
+          <div class="hill hill-back"></div>
+          <div class="hill hill-front"></div>
+          <div class="art-note note-one">feito com<br />curiosidade <span>✦</span></div>
+          <div class="art-note note-two">um passo<br />de cada vez</div>
+        </div>
+      </section>
+
+      <section id="sobre" class="intro section-wrap">
+        <p class="section-kicker">01 / sobre</p>
+        <div>
+          <h2>Um lugar para tirar<br />as coisas do papel.</h2>
+          <p>Este site é seu. Mude as palavras, experimente outras cores e transforme cada parte em algo que tenha a sua cara.</p>
+        </div>
+      </section>
+
+      <section id="ideias" class="ideas section-wrap">
+        <div class="ideas-heading">
+          <div><p class="section-kicker">02 / ideias</p><h2>Coisas que estou<br /><em>cultivando.</em></h2></div>
+          <p class="ideas-note">Nem tudo precisa estar pronto para começar.</p>
+        </div>
+        <div class="idea-grid">
+          <article class="idea-card card-lilac"><span>01</span><h3>Aprender algo novo</h3><p>Pequenos passos também contam como progresso.</p><span class="card-mark" aria-hidden="true">✳</span></article>
+          <article class="idea-card card-peach"><span>02</span><h3>Fazer com cuidado</h3><p>Dar atenção ao processo muda o resultado.</p><span class="card-mark" aria-hidden="true">↗</span></article>
+          <article class="idea-card card-green"><span>03</span><h3>Compartilhar o caminho</h3><p>Uma ideia cresce quando encontra outras pessoas.</p><span class="card-mark" aria-hidden="true">✦</span></article>
+        </div>
+      </section>
+
+      <section id="contato" class="contact section-wrap">
+        <p class="section-kicker">03 / próximo passo</p>
+        <div class="contact-panel">
+          <div><p class="eyebrow">Toda boa história começa em algum lugar</p><h2>Vamos conversar?</h2><p>Troque este texto pelo seu convite, e-mail ou link favorito.</p></div>
+          <a class="contact-button" href="mailto:ola@example.com">Escreva para mim <span aria-hidden="true">↗</span></a>
+        </div>
+      </section>
+    </main>
+
+    <footer><a class="brand" href="#inicio">meu<span>espaço</span></a><p>Feito com curiosidade e um pouco de café.</p><a href="#inicio" aria-label="Voltar ao início">Voltar ao início ↑</a></footer>
+  </body>
+</html>
+

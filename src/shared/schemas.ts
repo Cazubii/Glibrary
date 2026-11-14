@@ -557,6 +557,22 @@ export const RepoPushInputSchema = z.object({
   confirmProtectedBranch: z.boolean().default(false)
 }).strict()
 
+export const RepoGitPrepareInputSchema = z.object({
+  id: z.string().min(1),
+  identity: z.object({
+    name: z.string().trim().min(1).max(100),
+    email: z.string().trim().email().max(254)
+  }).strict().optional()
+}).strict();
+
+export const RepoPublishInputSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9._-]+$/).refine((name) => name !== '.' && name !== '..'),
+  description: z.string().trim().max(350).optional(),
+  visibility: z.enum(['private', 'public']),
+  confirmProtectedBranch: z.boolean().default(false)
+}).strict();
+
 export const RepoRemoveInputSchema = z.object({
   id: z.string().min(1),
   deleteFolder: z.boolean()
@@ -592,3 +608,4 @@ export const ToolRunInputSchema = z.object({
   toolId: z.string().min(1),
   projectId: z.string().min(1)
 })
+

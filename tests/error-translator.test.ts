@@ -32,6 +32,11 @@ const samples = [
     title: 'A entrada rápida do GitHub ainda não está disponível'
   },
   {
+    label: 'GitHub App lacks repository creation permission',
+    message: 'O GitHub não autorizou criar o repositório. O GitHub App precisa da permissão “Repository creation: write”.',
+    title: 'A conta ainda não pode criar um repositório'
+  },
+  {
     label: 'merge conflict',
     message: 'error: Pulling is not possible because you have unmerged files.',
     title: 'Há mudanças que não podem ser combinadas automaticamente'
@@ -102,3 +107,4 @@ describe('translateError', () => {
     await expect(unwrap(Promise.resolve({ ok: false, error: 'legacy error' }))).rejects.toThrow('legacy error');
   });
 });
+

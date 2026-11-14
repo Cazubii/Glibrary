@@ -45,6 +45,15 @@ function translateMessage(message: string): Translation {
     };
   }
 
+  if (/repository creation:\s*write/.test(text)) {
+    return {
+      title: 'A conta ainda não pode criar um repositório',
+      whatHappened: 'A permissão atual do GitHub permite usar repositórios, mas não criar um novo.',
+      nextStep: 'Use um token pessoal nas opções avançadas ou peça ao mantenedor do Glibrary a permissão mínima “Repository creation: write” e conecte a conta novamente.',
+      action: { label: 'Abrir Projetos', target: 'projects' }
+    };
+  }
+
   if (/http 401|bad credentials|token.{0,30}(expired|invalid|revoked)|(?:expired|revoked).{0,30}token|authentication failed|authentication required/.test(text)) {
     return {
       title: 'A conexão com o GitHub precisa ser renovada',
@@ -114,3 +123,4 @@ export function translateError(error: unknown): IpcError {
     ...(translated.action != null ? { action: translated.action } : {})
   };
 }
+

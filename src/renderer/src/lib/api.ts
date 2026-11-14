@@ -21,6 +21,8 @@ import type {
   LogLine,
   ProcessKind,
   Repo,
+  RepoGitPrepareResult,
+  RepoPublishResult,
   RunHandle,
   ScanFolderSuggestion,
   ScanProgress,
@@ -170,6 +172,9 @@ export const api = {
       listener(payload as IpcResult<TopRepos>);
     }),
   projectAdd: (path: string): Promise<ProjectRef> => unwrap(window.api.invoke(IpcChannels.projectAdd, { path })),
+
+  projectCreateStarter: (): Promise<string> =>
+    unwrap<string>(window.api.invoke(IpcChannels.projectCreateStarter)),
   libraryGet: (): Promise<LibraryFile> =>
     unwrap<LibraryFile>(window.api.invoke(IpcChannels.libraryGet)),
 
@@ -369,6 +374,9 @@ export const api = {
   repoGitStatus: (id: string): Promise<GitStatusDetail> =>
     unwrap<GitStatusDetail>(window.api.invoke(IpcChannels.repoGitStatus, { id })),
 
+  repoGitPrepare: (id: string, identity?: { name: string; email: string }): Promise<RepoGitPrepareResult> =>
+    unwrap<RepoGitPrepareResult>(window.api.invoke(IpcChannels.repoGitPrepare, { id, ...(identity != null ? { identity } : {}) })),
+
   repoGitPreview: (id: string): Promise<GitChangePreview> =>
     unwrap<GitChangePreview>(window.api.invoke(IpcChannels.repoGitPreview, { id })),
 
@@ -383,6 +391,9 @@ export const api = {
 
   repoPush: (id: string, confirmProtectedBranch = false): Promise<{ branch: string }> =>
     unwrap<{ branch: string }>(window.api.invoke(IpcChannels.repoPush, { id, confirmProtectedBranch })),
+
+  repoPublish: (input: { id: string; name: string; description?: string; visibility: 'private' | 'public'; confirmProtectedBranch?: boolean }): Promise<RepoPublishResult> =>
+    unwrap<RepoPublishResult>(window.api.invoke(IpcChannels.repoPublish, input)),
 
   terminalList: (cwd: string): Promise<TerminalListResult> =>
     unwrap<TerminalListResult>(window.api.invoke(IpcChannels.terminalList, { cwd })),
@@ -491,3 +502,4 @@ export const api = {
       listener(payload as { id: string; line: LogLine });
     })
 };
+

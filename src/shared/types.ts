@@ -573,3 +573,17 @@ export interface GitStatusDetail {
   behind: number;
   files: GitFile[];
 }
+
+export interface RepoGitPrepareResult {
+  initialized: boolean;
+  identityReady: boolean;
+}
+
+export interface RepoPublishResult {
+  owner: string;
+  name: string;
+  visibility: 'private' | 'public';
+  htmlUrl: string;
+  branch: string;
+}
+

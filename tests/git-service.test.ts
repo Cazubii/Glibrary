@@ -29,6 +29,66 @@ afterAll(async () => {
 });
 
 describe('GitService', () => {
+  it('inicializa a própria pasta em main, registra identidade local e é idempotente', async () => {
+    const service = new GitService();
+    const project = join(root, 'publish-init-demo');
+    await fs.mkdir(project);
+
+    const first = await service.prepareForPublish(project);
+    expect(first.initialized).toBe(true);
+    expect((await simpleGit({ baseDir: project }).raw(['symbolic-ref', '--short', 'HEAD'])).trim()).toBe('main');
+
+    const git = simpleGit({ baseDir: project });
+    await git.addConfig('user.name', '');
+    await git.addConfig('user.email', '');
+    const prepared = await service.prepareForPublish(project, { name: 'Ada Lovelace', email: 'ada@example.test' });
+    expect(prepared).toEqual({ initialized: false, identityReady: true });
+    expect((await git.getConfig('user.name')).value).toBe('Ada Lovelace');
+    expect((await git.getConfig('user.email')).value).toBe('ada@example.test');
+    expect((await git.getConfig('user.name', 'local')).value).toBe('Ada Lovelace');
+
+    expect(await service.prepareForPublish(project)).toEqual({ initialized: false, identityReady: true });
+  }, 15_000);
+
+  it('recusa inicializar uma pasta que está dentro de outro repositório', async () => {
+    const service = new GitService();
+    const parent = join(root, 'publish-parent-demo');
+    const nested = join(parent, 'nested-project');
+    await fs.mkdir(nested, { recursive: true });
+    const git = simpleGit({ baseDir: parent });
+    await git.init(['--initial-branch=main']);
+
+    await expect(service.prepareForPublish(nested)).rejects.toThrow('dentro de outro repositório');
+    await expect(fs.stat(join(nested, '.git'))).rejects.toThrow();
+  });
+
+  it('protege a branch principal mesmo antes da primeira versão salva', async () => {
+    const service = new GitService();
+    const project = join(root, 'publish-unborn-demo');
+    await fs.mkdir(project);
+    await service.prepareForPublish(project);
+
+    expect(await service.getCurrentBranch(project)).toBe('main');
+    const branch = await service.ensureWorkingBranch(project, 'Cria a primeira página', new Date('2026-11-14T12:00:00.000Z'));
+    expect(branch).toBe('glibrary/2026-11-14-cria-a-primeira-pagina');
+    expect(await service.getCurrentBranch(project)).toBe(branch);
+  });
+
+  it('prepara uma primeira publicação somente depois de salvar e aceita origin HTTPS do GitHub', async () => {
+    const service = new GitService();
+    const project = join(root, 'publish-ready-demo');
+    await fs.mkdir(project);
+    await service.prepareForPublish(project, { name: 'Ada Lovelace', email: 'ada@example.test' });
+    await fs.writeFile(join(project, 'README.md'), '# Meu primeiro projeto\n');
+    await expect(service.assertReadyToPublish(project)).rejects.toThrow('Salve uma versão');
+    await service.commitAll(project, 'Minha primeira versão');
+
+    await expect(service.assertReadyToPublish(project)).resolves.toEqual({ branch: 'main' });
+    await expect(service.addOrigin(project, 'https://github.com/ada/meu-site.git')).resolves.toBeUndefined();
+    await expect(service.getRemoteUrl(project)).resolves.toBe('https://github.com/ada/meu-site.git');
+    await expect(service.addOrigin(project, 'https://github.com/ada/outro-site.git')).rejects.toThrow('já tem um endereço');
+  });
+
   it('clona com progresso e cria a pasta', async () => {
     const service = new GitService();
     const stages: string[] = [];
@@ -247,3 +307,4 @@ describe('GitService', () => {
     expect(await fs.readFile(outsidePath, 'utf8')).toBe(outsideContent);
   }, 15_000);
 });
+

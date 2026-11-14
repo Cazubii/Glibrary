@@ -1,4 +1,4 @@
-import { ipcMain, shell, dialog, BrowserWindow } from 'electron';
+import { app, ipcMain, shell, dialog, BrowserWindow } from 'electron';
 import { translateError } from '../services/error-translator';
 import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
@@ -34,6 +34,7 @@ import { analyzeGithubRepo } from '../services/repo-analysis';
 import type { AgentSearchResponse } from '../services/agent-search';
 import { importAgentsFromGithub, importSkillFromGithub } from '../services/import-github';
 import { runDetached, trimOutput } from '../services/tool-run';
+import { createStarterProject } from '../services/project-template';
 
 const exec = promisify(execCb);
 
@@ -250,6 +251,15 @@ async function ensureImportFolder(store: LibraryStore, kind: 'skill' | 'agent'):
       const project: ProjectRef = { id: randomUUID(), name: basename(localPath), localPath, tags: [], favorite: false, skillIds: [], agentIds: [], baseIds: [], addedAt: new Date().toISOString() };
       await store.replaceAssets({ projects: [...store.listProjects(), project] }); return ok(project);
     } catch (e) { return fail(e); }
+  });
+
+  ipcMain.handle(IpcChannels.projectCreateStarter, async (): Promise<IpcResult<string>> => {
+    try {
+      const source = join(app.getAppPath(), 'resources', 'templates', 'site-starter');
+      return ok(await createStarterProject(source, store.getSettings().basesRoot));
+    } catch (error) {
+      return fail(error);
+    }
   });
 
   ipcMain.handle(IpcChannels.skillOpen, async (_event, raw: unknown): Promise<IpcResult<null>> => {
@@ -490,3 +500,4 @@ export async function refreshTopReposAndBroadcast(store: LibraryStore, windowDay
   }
   return store.getTopRepos(windowDays, scope);
 }
+
