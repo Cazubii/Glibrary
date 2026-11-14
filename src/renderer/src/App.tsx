@@ -7,6 +7,7 @@ import { GlibraryApiError } from './lib/api';
 import GithubAccountMenu from './components/GithubAccountMenu';
 import { AreaNavigation, AreaSectionNavigation } from './components/AreaNavigation';
 import SettingsMenu from './components/SettingsMenu';
+import AppUpdateBanner from './components/AppUpdateBanner';
 import Onboarding from './components/Onboarding';
 import AssetLibraryPage from './pages/AssetLibraryPage';
 
@@ -166,6 +167,7 @@ export default function App(): React.JSX.Element {
           />
         )}
       </header>
+      <AppUpdateBanner />
       <div className="flex min-h-0 flex-1">
         <Suspense fallback={<div className="m-auto text-sm text-steam-text/50">Carregando página…</div>}>
           {view === 'home' && settings?.onboarding.status === 'not-started' ? (

@@ -6,11 +6,13 @@ import { loadEnv } from 'vite'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'GLIBRARY_')
   const githubClientId = env['GLIBRARY_GITHUB_OAUTH_CLIENT_ID'] ?? ''
+  const macAutoUpdateEnabled = env['GLIBRARY_MACOS_AUTO_UPDATE'] === 'true'
 
   return {
     main: {
       define: {
-        __GLIBRARY_GITHUB_OAUTH_CLIENT_ID__: JSON.stringify(githubClientId)
+        __GLIBRARY_GITHUB_OAUTH_CLIENT_ID__: JSON.stringify(githubClientId),
+        __GLIBRARY_MACOS_AUTO_UPDATE__: JSON.stringify(macAutoUpdateEnabled)
       },
       plugins: [externalizeDepsPlugin()],
       resolve: {

@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "anser": "^2.3.5",
+    "electron-updater": "6.8.12",
     "lucide-react": "^1.65.0",
     "node-pty": "^1.1.0",
     "react": "^19.3.1",

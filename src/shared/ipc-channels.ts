@@ -32,6 +32,10 @@ export const IpcChannels = {
   toolsCheck: 'tools:check',
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
+  appUpdateGetState: 'appUpdate:getState',
+  appUpdateCheck: 'appUpdate:check',
+  appUpdateInstall: 'appUpdate:install',
+  appUpdateChanged: 'appUpdate:changed',
   dialogPickFolder: 'dialog:pickFolder',
   assetsGet: 'assets:get',
   skillsScan: 'skills:scan',
@@ -127,4 +131,3 @@ export const IpcChannels = {
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
-
