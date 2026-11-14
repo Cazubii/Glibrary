@@ -498,14 +498,15 @@ Referências oficiais: [Criar repositório para a conta autenticada](https://doc
 
 ## 2026-11-14 — F8 Releases multiplataforma
 
-### Tags versionadas publicam os instaladores nos Releases do GitHub
-O workflow `release.yml` aceita tags `v*`, exige que o sufixo corresponda à versão do `package.json` e publica em matriz Windows NSIS, macOS DMG + ZIP e Linux AppImage. O provider é explicitamente `Cazubii/Glibrary`; o token de publicação vem do `GITHUB_TOKEN` do GitHub Actions. Nenhuma release real foi criada nesta frente.
+### A primeira distribuição foca Windows e Linux
+Por orientação do mantenedor em 2026-11-14, o workflow `release.yml` publica Windows NSIS e Linux AppImage quando a tag `v*` corresponde à versão do `package.json`. A matriz de CI continua incluindo macOS para detectar regressões, mas a geração de instaladores macOS foi adiada. A configuração DMG/ZIP fica preservada em `electron-builder.yml` para uma fase futura. O provider é explicitamente `Cazubii/Glibrary`; o token de publicação vem do `GITHUB_TOKEN` do GitHub Actions. Nenhuma release real foi criada nesta frente.
 
 ### A assinatura de código continua decisão do mantenedor
-As builds podem ser instaladas sem assinatura, mas Windows e macOS podem exibir avisos do sistema. A documentação oficial do electron-builder exige assinatura macOS para auto-update. Não criamos certificados nem secrets; o mantenedor deve decidir se arca com assinatura e notarização antes de distribuir amplamente.
+O instalador Windows ainda não tem assinatura e pode exibir avisos do SmartScreen. A assinatura/notarização do macOS será avaliada quando a distribuição dessa plataforma voltar ao escopo. Não criamos certificados nem secrets.
 
-### Auto-update não é considerado pronto sem updater e validação instalada
-O electron-builder 26.18 suporta os alvos de atualização NSIS, DMG/ZIP e AppImage. Esta sessão não tem pnpm/corepack nem acesso ao registry npm pelo shell, e o repositório não contém `electron-updater`; portanto o código de checagem, download e instalação não foi incluído ou validado. A etapa fica pendente até ser possível atualizar `package.json` e `pnpm-lock.yaml` pelo pnpm e testar a matriz. O workflow de release já publica os manifestos que o electron-builder gera.
+### O updater usa electron-updater com instalação explícita
+O `electron-updater` 6.8.12 é dependência de produção e consulta as Releases do GitHub configuradas no electron-builder. Em builds empacotadas de Windows e Linux, o app verifica e baixa a atualização, mostra o progresso e espera a pessoa escolher “Reiniciar e atualizar”; não instala durante o uso. O IPC expõe estado, verificação e instalação com envelopes `{ ok, data | error }`, e valida os estados com Zod. O auto-update macOS não faz parte do foco atual. O CI do PR #15 validou `pnpm install --frozen-lockfile`, typecheck, lint, testes e build em Windows, macOS e Linux.
+
+Referência técnica: [Auto Update no electron-builder v26](https://www.electron.build/v26/docs/features/auto-update/).
 
 Referências oficiais: [Auto Update no electron-builder v26](https://www.electron.build/v26/docs/features/auto-update/), [GitHub Actions no electron-builder v26](https://www.electron.build/v26/docs/features/github-actions/), [configuração de publicação no electron-builder v26](https://www.electron.build/v26/docs/publish/).
-
