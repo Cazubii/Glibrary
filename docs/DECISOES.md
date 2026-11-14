@@ -476,3 +476,22 @@ O Glibrary captura quais arquivos já estavam sujos antes da execução e não o
 
 ### Limites de custo usam somente telemetria disponível
 Os tetos opcionais por execução e por dia ficam em `settings.agentRunBudgetUsd` e `settings.agentDailyBudgetUsd`, sem mudar `library.json` v2. O dia é local e o custo vem da telemetria de Claude Code ou OpenCode; um comando genérico não inicia enquanto houver teto configurado. O aviso aparece a 80%, e o processo principal para a execução ao receber um valor que alcança o teto. No limite diário, para todas as execuções monitoradas ativas. Como a medição depende do provedor, o valor reportado pela CLI é a referência usada pelo aplicativo.
+
+## 2026-11-14 — F7 Receitas guiadas
+
+### Modelo de site incluído funciona sem dependências
+Além de Bases cadastradas pela pessoa, a primeira receita oferece um site estático incluído no pacote do aplicativo. O main copia os arquivos para `settings.basesRoot` em uma pasta nova (`meu-primeiro-site`, com sufixo se necessário), nunca sobrescreve um projeto existente e não executa código durante a cópia. A pessoa pode abrir `index.html` no navegador depois da execução do agente.
+
+### Projetos do catálogo e projetos de agentes são registros separados
+Uma Base clonada para a primeira receita é registrada como `ProjectRef` para associar uma Coleção e como `Repo` para usar perfis e execuções de agentes. A receita reutiliza registros existentes para o mesmo caminho, evitando duplicatas.
+
+### Cancelar uma receita preserva o trabalho já iniciado
+Cancelar interrompe os próximos passos e não remove arquivos, commits, clones ou repositórios remotos criados. Se um clone já começou, ele pode terminar em segundo plano e continua disponível em Projetos.
+
+### Publicação revisa primeiro, cria privado por padrão e guarda o token fora do remote
+A pessoa revisa e salva as mudanças locais antes de criar o repositório remoto. O remoto é privado por padrão; a opção pública mostra aviso e exige confirmação adicional. O GitHub devolve apenas uma URL HTTPS sem credencial, e o token permanece no header temporário do processo Git, sem entrar em `.git/config` ou no retorno IPC. Se a criação remota for concluída e o push falhar, o Glibrary mantém a URL salva para permitir nova tentativa sem recriar o repositório.
+
+### Criação de repositório exige permissão mínima do GitHub App
+`POST /user/repos` requer `Repository creation: write` para o user access token do GitHub App; um PAT clássico precisa de `public_repo` para público ou `repo` para privado. A configuração atual do App não inclui a permissão de criação. O executor não alterou o App; o mantenedor precisa conceder essa permissão e solicitar nova autorização, ou a pessoa pode usar o PAT avançado. A recomendação de CLI permanece pendente; cada receita exige que a pessoa escolha uma CLI já instalada.
+
+Referências oficiais: [Criar repositório para a conta autenticada](https://docs.github.com/en/rest/repos/repos#create-a-repository-for-the-authenticated-user), [escolher permissões de GitHub App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app).

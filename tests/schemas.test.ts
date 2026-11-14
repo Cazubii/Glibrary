@@ -3,6 +3,9 @@ import {
   SkillUpdateInputSchema,
   BaseUpdateInputSchema,
   ProjectUpdateInputSchema,
+  RepoGitPrepareInputSchema,
+  RepoPublishInputSchema,
+  RepoPushInputSchema,
   TagRenameInputSchema,
   TagNameInputSchema
 } from '../src/shared/schemas';
@@ -82,3 +85,28 @@ describe('TagRenameInputSchema e TagNameInputSchema', () => {
     expect(() => TagNameInputSchema.parse({})).toThrow();
   });
 });
+
+describe('schemas de publicação do projeto', () => {
+  it('aceita identidade local opcional e exige email válido quando fornecida', () => {
+    expect(RepoGitPrepareInputSchema.parse({ id: 'repo-1' })).toEqual({ id: 'repo-1' });
+    expect(RepoGitPrepareInputSchema.parse({ id: 'repo-1', identity: { name: ' Ada ', email: 'ada@example.test' } })).toEqual({
+      id: 'repo-1', identity: { name: 'Ada', email: 'ada@example.test' }
+    });
+    expect(() => RepoGitPrepareInputSchema.parse({ id: 'repo-1', identity: { name: 'Ada', email: 'inválido' } })).toThrow();
+  });
+
+  it('normaliza nome e exige visibilidade e confirmação booleanas para publicar', () => {
+    expect(RepoPublishInputSchema.parse({ id: 'repo-1', name: ' meu-site ', visibility: 'private' })).toEqual({
+      id: 'repo-1', name: 'meu-site', visibility: 'private', confirmProtectedBranch: false
+    });
+    expect(RepoPublishInputSchema.parse({ id: 'repo-1', name: 'site', visibility: 'public', confirmProtectedBranch: true }).confirmProtectedBranch).toBe(true);
+    expect(() => RepoPublishInputSchema.parse({ id: 'repo-1', name: '../fora', visibility: 'private' })).toThrow();
+    expect(() => RepoPublishInputSchema.parse({ id: 'repo-1', name: 'site', visibility: 'private', extra: true })).toThrow();
+  });
+
+  it('mantém validação estrita para push e ramos protegidos', () => {
+    expect(RepoPushInputSchema.parse({ id: 'repo-1' })).toEqual({ id: 'repo-1', confirmProtectedBranch: false });
+    expect(() => RepoPushInputSchema.parse({ id: 'repo-1', confirmProtectedBranch: 'sim' })).toThrow();
+  });
+});
+

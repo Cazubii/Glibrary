@@ -10,6 +10,7 @@ import { promises as fs } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { GitBranchList, LocalBranchSummary, RemoteBranchSummary } from '../../shared/git-branches';
 import type { AgentFileChange, GitChangePreview, GitFile, GitNewFilePreview } from '../../shared/types';
+import { isValidGitUrl } from '../../shared/git-utils';
 import { buildWorkingBranchName, isProtectedBranch } from './git-protection';
 
 export interface CloneProgress {
@@ -119,6 +120,88 @@ export function githubAuthConfig(token: string): string[] {
 export class GitService {
   private readonly clones = new Map<string, { cancel: () => void }>();
 
+  /** Prepara Git na pasta escolhida sem inicializar acidentalmente um repo dentro de outro. */
+  async prepareForPublish(
+    localPath: string,
+    identity?: { name: string; email: string }
+  ): Promise<{ initialized: boolean; identityReady: boolean }> {
+    const target = resolve(localPath);
+    const git = this.at(target);
+    let initialized = false;
+
+    if (await git.checkIsRepo()) {
+      let topLevel: string;
+      try {
+        topLevel = resolve((await git.revparse(['--show-toplevel'])).trim());
+      } catch (error) {
+        throw new Error(sanitizeGitOutput(error instanceof Error ? error.message : String(error)));
+      }
+      const [canonicalTopLevel, canonicalTarget] = await Promise.all([fs.realpath(topLevel), fs.realpath(target)]);
+      const samePath = process.platform === 'win32'
+        ? canonicalTopLevel.toLocaleLowerCase('en-US') === canonicalTarget.toLocaleLowerCase('en-US')
+        : canonicalTopLevel === canonicalTarget;
+      if (!samePath) throw new Error('Esta pasta está dentro de outro repositório Git. Escolha a pasta principal do projeto.');
+    } else {
+      try {
+        await git.init(['--initial-branch=main']);
+        initialized = true;
+      } catch (error) {
+        throw new Error(sanitizeGitOutput(error instanceof Error ? error.message : String(error)));
+      }
+    }
+
+    const getIdentity = async (key: 'user.name' | 'user.email'): Promise<string> => {
+      try {
+        return (await git.getConfig(key)).value?.trim() ?? '';
+      } catch {
+        return '';
+      }
+    };
+    let name = await getIdentity('user.name');
+    let email = await getIdentity('user.email');
+    if (identity != null) {
+      if (name === '') {
+        await git.raw(['config', '--local', 'user.name', identity.name]);
+        name = identity.name;
+      }
+      if (email === '') {
+        await git.raw(['config', '--local', 'user.email', identity.email]);
+        email = identity.email;
+      }
+    }
+    return { initialized, identityReady: name !== '' && email !== '' };
+  }
+
+  /** Confirma que a pasta tem um commit salvo e pode receber o primeiro remote. */
+  async assertReadyToPublish(localPath: string): Promise<{ branch: string }> {
+    const git = this.at(localPath);
+    if (await this.getRemoteUrl(localPath) != null) {
+      throw new Error('Este projeto já tem um endereço GitHub. Use “Enviar ao GitHub” na tela do projeto.');
+    }
+    const status = await git.status();
+    const head = await git.raw(['rev-parse', '--verify', 'HEAD']).then((value) => value.trim(), () => '');
+    if (head === '') throw new Error('Salve uma versão local antes de publicar o projeto.');
+    if (!status.isClean()) throw new Error('Revise e salve as alterações antes de criar o repositório no GitHub.');
+    const branch = status.current;
+    if (branch == null || branch === '') throw new Error('Não foi possível identificar a linha de trabalho atual.');
+    return { branch };
+  }
+
+  /** Adiciona somente a URL pública HTTPS criada pelo GitHub, sem credenciais. */
+  async addOrigin(localPath: string, remoteUrl: string): Promise<void> {
+    if (!isValidGitUrl(remoteUrl) || !isGithubRemote(remoteUrl) || /[?#\s]/.test(remoteUrl)) {
+      throw new Error('O endereço do novo repositório GitHub é inválido.');
+    }
+    if (await this.getRemoteUrl(localPath) != null) {
+      throw new Error('Esta pasta já tem um endereço remoto configurado.');
+    }
+    try {
+      await this.at(localPath).remote(['add', 'origin', remoteUrl]);
+    } catch (error) {
+      throw new Error(sanitizeGitOutput(error instanceof Error ? error.message : String(error)));
+    }
+  }
+
   isCloning(repoId: string): boolean {
     return this.clones.has(repoId);
   }
@@ -205,7 +288,9 @@ export class GitService {
   async getCurrentBranch(localPath: string): Promise<string | null> {
     try {
       const result = await this.at(localPath).branch();
-      return result.current ?? null;
+      if (result.current != null && result.current !== '') return result.current;
+      const unborn = await this.at(localPath).raw(['symbolic-ref', '--quiet', '--short', 'HEAD']);
+      return unborn.trim() === '' ? null : unborn.trim();
     } catch {
       return null;
     }
@@ -262,9 +347,12 @@ export class GitService {
   async ensureWorkingBranch(localPath: string, prompt: string | undefined, date = new Date()): Promise<string | null> {
     const current = await this.getCurrentBranch(localPath);
     if (current == null || !isProtectedBranch(current)) return current;
-    const existing = (await this.at(localPath).branchLocal()).all;
+    const git = this.at(localPath);
+    const existing = (await git.branchLocal()).all;
     const name = buildWorkingBranchName(prompt, date, existing);
-    await this.createBranch(localPath, name, current);
+    const hasCommit = await git.raw(['rev-parse', '--verify', 'HEAD']).then(() => true, () => false);
+    if (hasCommit) await this.createBranch(localPath, name, current);
+    else await git.checkout(['-b', name]);
     return name;
   }
 
@@ -575,3 +663,4 @@ export class GitService {
     }
   }
 }
+

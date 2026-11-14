@@ -32,6 +32,9 @@ Os termos de Git, agentes e consumo agora aparecem com nomes simples e explicaç
 
 Antes de salvar uma versão, a pessoa pode revisar os arquivos e o diff. No modo simples, o Glibrary cria uma linha de trabalho para agentes, pede confirmação antes de enviar direto para `main`/`master` e oferece desfazer versões locais ou reverter versões já enviadas. Depois de cada execução, é possível revisar, manter ou descartar as mudanças do agente; arquivos editados depois são preservados. Limites opcionais por execução e por dia interrompem agentes monitorados ao atingir o valor e avisam aos 80%.
 
+
+Início também reúne três receitas guiadas: criar um site com um modelo incluído ou uma Base, analisar um repositório e perguntar a um agente, e revisar/publicar um projeto no GitHub. O site inicial funciona sem instalar dependências; a publicação é privada por padrão, mostra o diff e pede confirmação antes de enviar. Para criar um repositório pelo login do GitHub App, ainda é necessária a permissão `Repository creation: write`; um token pessoal avançado com o escopo adequado continua disponível.
+
 ## Para onde vai
 
 - Receitas completas para criar, entender e publicar projetos.

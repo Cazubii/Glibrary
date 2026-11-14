@@ -5,7 +5,7 @@ import { copyFileSync, existsSync, statSync } from 'fs';
 import { readFile, rm, writeFile } from 'fs/promises';
 import { spawn } from 'child_process';
 import { basename, join, resolve } from 'path';
-import type { DetectionResult, GitChangePreview, GitStatusDetail, GithubOAuthDeviceSession, GithubOAuthPollResult, GithubUser, IpcResult, Repo, Settings } from '../../shared/types';
+import type { DetectionResult, GitChangePreview, GitStatusDetail, GithubOAuthDeviceSession, GithubOAuthPollResult, GithubUser, IpcResult, Repo, RepoGitPrepareResult, RepoPublishResult, Settings } from '../../shared/types';
 import {
   AddLocalInputSchema,
   AddByUrlInputSchema,
@@ -13,6 +13,8 @@ import {
   GithubOAuthSessionInputSchema,
   CommitInputSchema,
   RepoIdInputSchema,
+  RepoGitPrepareInputSchema,
+  RepoPublishInputSchema,
   RepoPushInputSchema,
   RepoUpdateInputSchema,
   RepoRemoveInputSchema,
@@ -25,7 +27,8 @@ import type { GitService } from '../services/git-service';
 import { assertProtectedBranchPush } from '../services/git-protection';
 import { detectProject } from '../services/detector';
 import { applyDetection } from '../services/detector/apply';
-import { fetchRepoMeta, fetchGithubUser, encodeToken } from '../services/github-api';
+import { fetchJson, fetchRepoMeta, fetchGithubUser, encodeToken } from '../services/github-api';
+import { createAccountRepository } from '../services/github-projects';
 import { GithubOAuthService, getGithubAccessToken } from '../services/github-oauth';
 import { downloadCover } from '../services/cover-service';
 import {
@@ -667,6 +670,22 @@ export function registerRepoIpc(
   );
 
   ipcMain.handle(
+    IpcChannels.repoGitPrepare,
+    async (_event, raw: unknown): Promise<IpcResult<RepoGitPrepareResult>> => {
+      try {
+        const input = RepoGitPrepareInputSchema.parse(raw);
+        const repo = store.getRepo(input.id);
+        if (repo?.localPath == null || !existsSync(repo.localPath) || !statSync(repo.localPath).isDirectory()) {
+          throw new Error('Escolha primeiro uma pasta de projeto que exista no computador.');
+        }
+        return ok(await git.prepareForPublish(repo.localPath, input.identity));
+      } catch (error) {
+        return fail(error);
+      }
+    }
+  );
+
+  ipcMain.handle(
     IpcChannels.repoGitPreview,
     async (_event, raw: unknown): Promise<IpcResult<GitChangePreview>> => {
       try {
@@ -728,6 +747,46 @@ export function registerRepoIpc(
     },
   );
 
+  ipcMain.handle(
+    IpcChannels.repoPublish,
+    async (_event, raw: unknown): Promise<IpcResult<RepoPublishResult>> => {
+      try {
+        const input = RepoPublishInputSchema.parse(raw);
+        const repo = store.getRepo(input.id);
+        if (repo?.localPath == null || !existsSync(repo.localPath) || !statSync(repo.localPath).isDirectory()) {
+          throw new Error('Escolha primeiro uma pasta de projeto que exista no computador.');
+        }
+        const token = await githubToken();
+        if (token == null || token === '') throw new Error('Conecte sua conta GitHub antes de publicar.');
+        const { branch } = await git.assertReadyToPublish(repo.localPath);
+        assertProtectedBranchPush(branch, !store.getSettings().showAdvancedResources, input.confirmProtectedBranch);
+        const created = await createAccountRepository(fetchJson, {
+          token,
+          name: input.name,
+          ...(input.description != null && input.description !== '' ? { description: input.description } : {}),
+          visibility: input.visibility
+        });
+        await store.updateRepo(repo.id, { owner: created.owner, remoteUrl: created.cloneUrl });
+        await git.addOrigin(repo.localPath, created.cloneUrl);
+        try {
+          await git.push(repo.localPath, token);
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          throw new Error(`O repositório ${created.htmlUrl} foi criado, mas a primeira versão ainda não foi enviada. O endereço foi salvo no projeto; abra Projetos e tente “Enviar ao GitHub”. Detalhes: ${detail}`);
+        }
+        return ok({
+          owner: created.owner,
+          name: created.name,
+          visibility: created.visibility,
+          htmlUrl: created.htmlUrl,
+          branch
+        });
+      } catch (error) {
+        return fail(error);
+      }
+    }
+  );
+
   ipcMain.handle(IpcChannels.dialogPickFolder, async (): Promise<IpcResult<string | null>> => {
     try {
       const win = BrowserWindow.getFocusedWindow();
@@ -772,3 +831,4 @@ export function registerRepoIpc(
     },
   );
 }
+

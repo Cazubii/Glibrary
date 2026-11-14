@@ -10,6 +10,7 @@ import GithubAccountSection from '../components/dashboard/GithubAccountSection';
 import GithubCharts from '../components/dashboard/GithubCharts';
 import SyncedReposSection from '../components/dashboard/SyncedReposSection';
 import GettingStartedChecklist from '../components/GettingStartedChecklist';
+import GuidedRecipes from '../components/GuidedRecipes';
 import RepoDetailPage from './RepoDetailPage';
 
 type Section = 'skills' | 'agents';
@@ -75,6 +76,8 @@ export default function DashboardPage({ onError, onSuccess, onOpenProjects, onOp
         onOpenProjects={onOpenProjects}
         onOpenAgents={onOpenAgents}
       />
+
+      <GuidedRecipes onError={onError} onSuccess={onSuccess} onOpenAgents={onOpenAgents} />
 
       {error != null && (
         <div role="alert" className="flex items-center gap-3 rounded border border-steam-error/40 bg-steam-error/10 px-4 py-3 text-sm text-steam-error">
@@ -357,3 +360,4 @@ function LibraryUsageSection({ onError, onSuccess }: Pick<Props, 'onError' | 'on
     </section>
   );
 }
+
