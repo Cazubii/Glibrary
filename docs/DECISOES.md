@@ -495,3 +495,18 @@ A pessoa revisa e salva as mudanças locais antes de criar o repositório remoto
 `POST /user/repos` requer `Repository creation: write` para o user access token do GitHub App; um PAT clássico precisa de `public_repo` para público ou `repo` para privado. A configuração atual do App não inclui a permissão de criação. O executor não alterou o App; o mantenedor precisa conceder essa permissão e solicitar nova autorização, ou a pessoa pode usar o PAT avançado. A recomendação de CLI permanece pendente; cada receita exige que a pessoa escolha uma CLI já instalada.
 
 Referências oficiais: [Criar repositório para a conta autenticada](https://docs.github.com/en/rest/repos/repos#create-a-repository-for-the-authenticated-user), [escolher permissões de GitHub App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app).
+
+## 2026-11-14 — F8 Releases multiplataforma
+
+### A primeira distribuição foca Windows e Linux
+Por orientação do mantenedor em 2026-11-14, o workflow `release.yml` publica Windows NSIS e Linux AppImage quando a tag `v*` corresponde à versão do `package.json`. A matriz de CI continua incluindo macOS para detectar regressões, mas a geração de instaladores macOS foi adiada. A configuração DMG/ZIP fica preservada em `electron-builder.yml` para uma fase futura. O provider é explicitamente `Cazubii/Glibrary`; o token de publicação vem do `GITHUB_TOKEN` do GitHub Actions. Nenhuma release real foi criada nesta frente.
+
+### A assinatura de código continua decisão do mantenedor
+O instalador Windows ainda não tem assinatura e pode exibir avisos do SmartScreen. A assinatura/notarização do macOS será avaliada quando a distribuição dessa plataforma voltar ao escopo. Não criamos certificados nem secrets.
+
+### O updater usa electron-updater com instalação explícita
+O `electron-updater` 6.8.12 é dependência de produção e consulta as Releases do GitHub configuradas no electron-builder. Em builds empacotadas de Windows e Linux, o app verifica e baixa a atualização, mostra o progresso e espera a pessoa escolher “Reiniciar e atualizar”; não instala durante o uso. O IPC expõe estado, verificação e instalação com envelopes `{ ok, data | error }`, e valida os estados com Zod. O auto-update macOS não faz parte do foco atual. O CI do PR #15 validou `pnpm install --frozen-lockfile`, typecheck, lint, testes e build em Windows, macOS e Linux.
+
+Referência técnica: [Auto Update no electron-builder v26](https://www.electron.build/v26/docs/features/auto-update/).
+
+Referências oficiais: [Auto Update no electron-builder v26](https://www.electron.build/v26/docs/features/auto-update/), [GitHub Actions no electron-builder v26](https://www.electron.build/v26/docs/features/github-actions/), [configuração de publicação no electron-builder v26](https://www.electron.build/v26/docs/publish/).

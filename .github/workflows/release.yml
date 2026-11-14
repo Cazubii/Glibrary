@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publicar no ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Windows (NSIS)
+            os: windows-latest
+          - platform: Linux (AppImage)
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Baixar o código da tag
+        uses: actions/checkout@v6
+
+      - name: Instalar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Conferir versão da tag
+        run: node scripts/check-release-tag.mjs "${{ github.ref_name }}"
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Criar instalador e publicar release
+        run: pnpm exec electron-builder --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

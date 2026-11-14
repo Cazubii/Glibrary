@@ -21,7 +21,14 @@ mac:
   icon: resources/icon.png
   target:
     - dmg
+    - zip
 linux:
   icon: resources/icon.png
   target:
     - AppImage
+publish:
+  provider: github
+  owner: Cazubii
+  repo: Glibrary
+  releaseType: release
+
