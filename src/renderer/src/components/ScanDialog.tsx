@@ -7,7 +7,7 @@ import { useLibraryStore } from '../store/library';
 interface Props {
   onClose: () => void;
   onImported: (repos: Repo[]) => void;
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
   initialFolders?: string[];
 }
 
@@ -40,7 +40,7 @@ export default function ScanDialog({
       setSelected(new Set(found.filter((f) => f.duplicateOf == null).map((f) => f.localPath)));
       setPhase('done');
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
       setPhase('done');
     }
   };
@@ -64,7 +64,7 @@ export default function ScanDialog({
         setFolders(next);
       }
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
 
@@ -86,7 +86,7 @@ export default function ScanDialog({
       onImported(imported);
       onClose();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setImporting(false);
     }

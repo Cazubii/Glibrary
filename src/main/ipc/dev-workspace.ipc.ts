@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron';
+import { translateError } from '../services/error-translator';
 import type { GitBranchList } from '../../shared/git-branches';
 import type {
   DevWorkspaceCloseResult,
@@ -10,7 +11,8 @@ import {
   DevWorkspaceBranchInputSchema,
   DevWorkspaceCreateBranchInputSchema,
   DevWorkspaceOpenInputSchema,
-  DevWorkspaceRepoInputSchema
+  DevWorkspaceRepoInputSchema,
+  DevWorkspacePushInputSchema
 } from '../../shared/schemas';
 import { IpcChannels } from '../../shared/ipc-channels';
 import type { DevWorkspaceManager } from '../services/dev-workspace';
@@ -22,7 +24,7 @@ function ok<T>(data: T): IpcResult<T> {
 }
 
 function fail(error: unknown): IpcResult<never> {
-  return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  return { ok: false, error: translateError(error) };
 }
 
 export function registerDevWorkspaceIpc(
@@ -105,10 +107,10 @@ export function registerDevWorkspaceIpc(
   });
 
   ipcMain.handle(IpcChannels.devWorkspacePush, async (_event, raw: unknown): Promise<IpcResult<{ branch: string; status: DevWorkspaceStatus }>> => {
-    const parsed = DevWorkspaceRepoInputSchema.safeParse(raw);
+    const parsed = DevWorkspacePushInputSchema.safeParse(raw);
     if (!parsed.success) return fail(new Error('Parâmetros inválidos para enviar alterações.'));
     try {
-      return ok(await manager.push(parsed.data.repoId));
+      return ok(await manager.push(parsed.data.repoId, parsed.data.confirmProtectedBranch));
     } catch (error) {
       return fail(error);
     }

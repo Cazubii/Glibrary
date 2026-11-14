@@ -5,7 +5,7 @@ import { api } from '../lib/api';
 import { useToolsStore } from '../store/tools';
 
 interface Props {
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
 }
 
 function statusLabel(status: ToolStatus): string {
@@ -47,7 +47,7 @@ export default function NativeToolsPanel({ onError }: Props): React.JSX.Element 
       setUrl('');
       setDialogOpen(false);
     } catch (error) {
-      onError(error instanceof Error ? error.message : String(error));
+      onError(error);
     } finally {
       setSaving(false);
     }
@@ -64,7 +64,7 @@ export default function NativeToolsPanel({ onError }: Props): React.JSX.Element 
         return { logs: { ...state.logs, [run.id]: merged.slice(-2000) } };
       });
     } catch (error) {
-      onError(error instanceof Error ? error.message : String(error));
+      onError(error);
     }
   };
 
@@ -72,7 +72,7 @@ export default function NativeToolsPanel({ onError }: Props): React.JSX.Element 
     try {
       await removeTool(tool.id);
     } catch (error) {
-      onError(error instanceof Error ? error.message : String(error));
+      onError(error);
     }
   };
 
@@ -81,7 +81,7 @@ export default function NativeToolsPanel({ onError }: Props): React.JSX.Element 
     try {
       await api.toolsOpen(tool.id);
     } catch (error) {
-      onError(error instanceof Error ? error.message : String(error));
+      onError(error);
     } finally {
       setOpeningToolId(null);
     }

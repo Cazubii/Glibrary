@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { LibraryStore, emptyLibrary } from '../src/main/services/library-store';
+import { LibraryStore, emptyLibrary, migrateLibrary } from '../src/main/services/library-store';
 import type { BaseItem, ProjectRef, Repo, Skill } from '../src/shared/types';
 
 let dir: string;
@@ -97,7 +97,52 @@ describe('LibraryStore', () => {
     expect(library.version).toBe(2);
     expect(library.projects).toMatchObject([{ id: 'local-1', name: 'App local', localPath: join(dir, 'app'), tags: ['web'], favorite: true }]);
     expect(library.bases).toMatchObject([{ id: 'remote-1', name: 'Starter kit', remoteUrl: 'https://github.com/example/starter-kit.git', notes: 'Origem remota' }]);
+    expect(library.settings.onboarding.status).toBe('dismissed');
     expect(JSON.parse(await fs.readFile(join(dir, 'library.json'), 'utf-8')).version).toBe(2);
+  });
+
+  it('abre o onboarding numa biblioteca nova e salva o estado no arquivo e no backup', async () => {
+    const library = await new LibraryStore(dir, join(dir, 'repos')).load();
+
+    expect(library.settings.onboarding).toMatchObject({
+      status: 'not-started',
+      currentStep: 0,
+      completedChecklist: [],
+      checklistVisible: false
+    });
+    const saved = JSON.parse(await fs.readFile(join(dir, 'library.json'), 'utf-8'));
+    const backup = JSON.parse(await fs.readFile(join(dir, 'library.backup.json'), 'utf-8'));
+    expect(saved.settings.onboarding.status).toBe('not-started');
+    expect(backup.settings.onboarding).toEqual(saved.settings.onboarding);
+  });
+
+  it('migra biblioteca v2 existente sem repetir o assistente e preserva dados e backup', async () => {
+    const library = emptyLibrary(join(dir, 'repos'));
+    library.projects.push({
+      id: 'old-project',
+      name: 'Projeto antigo',
+      localPath: join(dir, 'old-project'),
+      tags: ['legado'],
+      favorite: false,
+      skillIds: [],
+      agentIds: [],
+      baseIds: [],
+      addedAt: '2026-01-01T00:00:00.000Z'
+    });
+    const oldSettings: Record<string, unknown> = { ...library.settings };
+    delete oldSettings['onboarding'];
+    await fs.writeFile(join(dir, 'library.json'), JSON.stringify({ ...library, settings: oldSettings }), 'utf-8');
+
+    const migrated = await new LibraryStore(dir, join(dir, 'repos')).load();
+    const saved = JSON.parse(await fs.readFile(join(dir, 'library.json'), 'utf-8'));
+    const backup = JSON.parse(await fs.readFile(join(dir, 'library.backup.json'), 'utf-8'));
+
+    expect(migrated.settings.onboarding.status).toBe('dismissed');
+    expect(migrated.settings.onboarding.checklistVisible).toBe(false);
+    expect(migrated.projects).toMatchObject([{ id: 'old-project', tags: ['legado'] }]);
+    expect(saved.projects).toMatchObject([{ id: 'old-project', tags: ['legado'] }]);
+    expect(backup.projects).toMatchObject([{ id: 'old-project', tags: ['legado'] }]);
+    expect(backup.settings.onboarding.status).toBe('dismissed');
   });
 
   it('persiste repos e recarrega após "reiniciar"', async () => {
@@ -168,6 +213,24 @@ describe('LibraryStore', () => {
     const settings = await store.updateSettings({ theme: 'light', checkUpdatesOnStart: false });
     expect(settings.theme).toBe('light');
     expect(settings.checkUpdatesOnStart).toBe(false);
+  });
+
+  it('persists optional agent spending limits and reloads old libraries without them', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    const updated = await store.updateSettings({ agentRunBudgetUsd: 3.5, agentDailyBudgetUsd: 12 });
+    expect(updated).toMatchObject({ agentRunBudgetUsd: 3.5, agentDailyBudgetUsd: 12 });
+
+    const reloaded = await new LibraryStore(dir, join(dir, 'repos')).load();
+    expect(reloaded.settings).toMatchObject({ agentRunBudgetUsd: 3.5, agentDailyBudgetUsd: 12 });
+
+    const oldShape = { ...reloaded, settings: { ...reloaded.settings } };
+    delete (oldShape.settings as Record<string, unknown>).agentRunBudgetUsd;
+    delete (oldShape.settings as Record<string, unknown>).agentDailyBudgetUsd;
+    await fs.writeFile(join(dir, 'library.json'), JSON.stringify(oldShape), 'utf-8');
+    const withoutLimits = await new LibraryStore(dir, join(dir, 'repos')).load();
+    expect(withoutLimits.settings.agentRunBudgetUsd).toBeUndefined();
+    expect(withoutLimits.settings.agentDailyBudgetUsd).toBeUndefined();
   });
 
   it('emptyLibrary tem settings padrão', () => {
@@ -440,5 +503,49 @@ describe('LibraryStore — kits e uso', () => {
     expect(lib.kits).toEqual([]);
     expect(lib.usage).toEqual([]);
     expect(lib.settings.inheritTags).toBe(true);
+    expect(lib.settings.showAdvancedResources).toBe(true);
+  });
+
+  it('preenche showAdvancedResources ao carregar uma biblioteca v2 anterior', () => {
+    const library = emptyLibrary('C:/repos');
+    const oldSettings: Record<string, unknown> = { ...library.settings };
+    delete oldSettings['showAdvancedResources'];
+    delete oldSettings['onboarding'];
+
+    const migrated = migrateLibrary({ ...library, settings: oldSettings });
+
+    expect((migrated.settings as unknown as Record<string, unknown>)['showAdvancedResources']).toBe(true);
+    expect(migrated.settings.reposRoot).toBe('C:/repos');
+    expect(migrated.settings.onboarding.status).toBe('not-started');
+    expect(migrated.kits).toEqual([]);
+  });
+
+  it('persiste access token e refresh token já cifrados sem quebrar a biblioteca v2', async () => {
+    const store = new LibraryStore(dir, join(dir, 'repos'));
+    await store.load();
+    await store.updateSettings({
+      githubToken: 'safe:access',
+      githubRefreshToken: 'safe:refresh',
+      githubTokenExpiresAt: 1_800_000_000_000,
+      githubRefreshTokenExpiresAt: 1_800_500_000_000
+    });
+
+    const saved = JSON.parse(await fs.readFile(join(dir, 'library.json'), 'utf-8')) as { settings: Record<string, unknown> };
+    const backup = JSON.parse(await fs.readFile(join(dir, 'library.backup.json'), 'utf-8')) as { settings: Record<string, unknown> };
+    expect(saved.settings).toMatchObject({
+      githubToken: 'safe:access',
+      githubRefreshToken: 'safe:refresh',
+      githubTokenExpiresAt: 1_800_000_000_000,
+      githubRefreshTokenExpiresAt: 1_800_500_000_000
+    });
+    expect(backup.settings).toEqual(saved.settings);
+
+    const reloaded = await new LibraryStore(dir, join(dir, 'repos')).load();
+    expect(reloaded.settings).toMatchObject({
+      githubToken: 'safe:access',
+      githubRefreshToken: 'safe:refresh',
+      githubTokenExpiresAt: 1_800_000_000_000,
+      githubRefreshTokenExpiresAt: 1_800_500_000_000
+    });
   });
 });

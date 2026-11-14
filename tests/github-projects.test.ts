@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  createAccountRepository,
   listAccountRepos,
   loadAccountRepos,
+  type GithubJsonRequestOptions,
   type JsonFetcher
 } from '../src/main/services/github-projects';
 
@@ -106,17 +108,72 @@ describe('serviço de projetos do GitHub', () => {
     const unauthorized = await loadAccountRepos(fakeFetcher(new Error('GitHub API: HTTP 401')), {
       token: 'token', page: 1, perPage: 50, sort: 'updated', visibility: 'all', fork: true
     });
-    expect(unauthorized).toEqual({
+    expect(unauthorized).toMatchObject({
       ok: false,
-      error: 'Token do GitHub inválido ou expirado. Conecte a conta novamente.'
+      error: {
+        title: 'A conexão com o GitHub precisa ser renovada',
+        nextStep: 'Abra Projetos e conecte sua conta novamente.',
+        technicalDetails: 'GitHub API: HTTP 401'
+      }
     });
 
     const invalid = await loadAccountRepos(fakeFetcher({ items: [] }), {
       token: 'token', page: 1, perPage: 50, sort: 'updated', visibility: 'all', fork: true
     });
-    expect(invalid).toEqual({
+    expect(invalid).toMatchObject({
       ok: false,
-      error: 'Não foi possível carregar os repositórios do GitHub: Resposta inesperada da API do GitHub (/user/repos)'
+      error: {
+        title: 'Não foi possível concluir esta ação',
+        technicalDetails: 'Resposta inesperada da API do GitHub (/user/repos)'
+      }
     });
+  });
+
+  it('cria repositório do usuário por POST e mapeia visibilidade e URLs', async () => {
+    const fetcher = vi.fn(async () => ({
+      id: 45,
+      name: 'meu-site',
+      owner: { login: 'igor' },
+      private: true,
+      html_url: 'https://github.com/igor/meu-site',
+      clone_url: 'https://github.com/igor/meu-site.git'
+    })) as JsonFetcher & ReturnType<typeof vi.fn>;
+
+    const created = await createAccountRepository(fetcher, {
+      token: 'token-secreto',
+      name: 'meu-site',
+      description: 'Meu primeiro site',
+      visibility: 'private'
+    });
+
+    expect(fetcher).toHaveBeenCalledWith('https://api.github.com/user/repos', 'token-secreto', {
+      method: 'POST',
+      body: { name: 'meu-site', description: 'Meu primeiro site', private: true, auto_init: false }
+    } satisfies GithubJsonRequestOptions);
+    expect(created).toEqual({
+      id: 45,
+      owner: 'igor',
+      name: 'meu-site',
+      visibility: 'private',
+      htmlUrl: 'https://github.com/igor/meu-site',
+      cloneUrl: 'https://github.com/igor/meu-site.git'
+    });
+  });
+
+  it('explica a permissão mínima necessária quando o GitHub recusa a criação', async () => {
+    const fetcher = fakeFetcher(new Error('GitHub API: HTTP 403'));
+    await expect(createAccountRepository(fetcher, {
+      token: 'token-secreto',
+      name: 'meu-site',
+      visibility: 'public'
+    })).rejects.toThrow(/Repository creation: write/);
+  });
+
+  it('não aceita uma resposta inválida do endpoint de criação', async () => {
+    await expect(createAccountRepository(fakeFetcher({ name: 'meu-site' }), {
+      token: 'token-secreto',
+      name: 'meu-site',
+      visibility: 'private'
+    })).rejects.toThrow('Resposta inesperada da API do GitHub (/user/repos create)');
   });
 });

@@ -3,7 +3,9 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { simpleGit } from 'simple-git';
+import { createHash } from 'node:crypto';
 import { githubAuthConfig, GitService } from '../src/main/services/git-service';
+import type { AgentFileChange } from '../src/shared/types';
 
 let root: string;
 let origin: string;
@@ -15,6 +17,8 @@ beforeAll(async () => {
   await fs.mkdir(origin, { recursive: true });
   const git = simpleGit({ baseDir: origin });
   await git.init(['--initial-branch=main']);
+  await git.addConfig('user.name', 'Teste');
+  await git.addConfig('user.email', 'teste@example.test');
   await fs.writeFile(join(origin, 'README.md'), '# demo\n');
   await git.add('.');
   await git.commit('initial');
@@ -25,6 +29,66 @@ afterAll(async () => {
 });
 
 describe('GitService', () => {
+  it('inicializa a própria pasta em main, registra identidade local e é idempotente', async () => {
+    const service = new GitService();
+    const project = join(root, 'publish-init-demo');
+    await fs.mkdir(project);
+
+    const first = await service.prepareForPublish(project);
+    expect(first.initialized).toBe(true);
+    expect((await simpleGit({ baseDir: project }).raw(['symbolic-ref', '--short', 'HEAD'])).trim()).toBe('main');
+
+    const git = simpleGit({ baseDir: project });
+    await git.addConfig('user.name', '');
+    await git.addConfig('user.email', '');
+    const prepared = await service.prepareForPublish(project, { name: 'Ada Lovelace', email: 'ada@example.test' });
+    expect(prepared).toEqual({ initialized: false, identityReady: true });
+    expect((await git.getConfig('user.name')).value).toBe('Ada Lovelace');
+    expect((await git.getConfig('user.email')).value).toBe('ada@example.test');
+    expect((await git.getConfig('user.name', 'local')).value).toBe('Ada Lovelace');
+
+    expect(await service.prepareForPublish(project)).toEqual({ initialized: false, identityReady: true });
+  }, 15_000);
+
+  it('recusa inicializar uma pasta que está dentro de outro repositório', async () => {
+    const service = new GitService();
+    const parent = join(root, 'publish-parent-demo');
+    const nested = join(parent, 'nested-project');
+    await fs.mkdir(nested, { recursive: true });
+    const git = simpleGit({ baseDir: parent });
+    await git.init(['--initial-branch=main']);
+
+    await expect(service.prepareForPublish(nested)).rejects.toThrow('dentro de outro repositório');
+    await expect(fs.stat(join(nested, '.git'))).rejects.toThrow();
+  });
+
+  it('protege a branch principal mesmo antes da primeira versão salva', async () => {
+    const service = new GitService();
+    const project = join(root, 'publish-unborn-demo');
+    await fs.mkdir(project);
+    await service.prepareForPublish(project);
+
+    expect(await service.getCurrentBranch(project)).toBe('main');
+    const branch = await service.ensureWorkingBranch(project, 'Cria a primeira página', new Date('2026-11-14T12:00:00.000Z'));
+    expect(branch).toBe('glibrary/2026-11-14-cria-a-primeira-pagina');
+    expect(await service.getCurrentBranch(project)).toBe(branch);
+  });
+
+  it('prepara uma primeira publicação somente depois de salvar e aceita origin HTTPS do GitHub', async () => {
+    const service = new GitService();
+    const project = join(root, 'publish-ready-demo');
+    await fs.mkdir(project);
+    await service.prepareForPublish(project, { name: 'Ada Lovelace', email: 'ada@example.test' });
+    await fs.writeFile(join(project, 'README.md'), '# Meu primeiro projeto\n');
+    await expect(service.assertReadyToPublish(project)).rejects.toThrow('Salve uma versão');
+    await service.commitAll(project, 'Minha primeira versão');
+
+    await expect(service.assertReadyToPublish(project)).resolves.toEqual({ branch: 'main' });
+    await expect(service.addOrigin(project, 'https://github.com/ada/meu-site.git')).resolves.toBeUndefined();
+    await expect(service.getRemoteUrl(project)).resolves.toBe('https://github.com/ada/meu-site.git');
+    await expect(service.addOrigin(project, 'https://github.com/ada/outro-site.git')).rejects.toThrow('já tem um endereço');
+  });
+
   it('clona com progresso e cria a pasta', async () => {
     const service = new GitService();
     const stages: string[] = [];
@@ -112,5 +176,134 @@ describe('GitService', () => {
     await service.createBranch(clone, 'feature/nova', 'main');
     expect(await service.getCurrentBranch(clone)).toBe('feature/nova');
     await expect(service.createBranch(clone, '-inválida', 'main')).rejects.toThrow('Nome de branch inválido.');
+  }, 15_000);
+
+  it('shows tracked and new files and rejects a changed review before commit', async () => {
+    const service = new GitService();
+    const clone = await service.clone('r6', origin, root, 'review-demo', () => undefined);
+    const git = simpleGit({ baseDir: clone });
+    const originalCommit = (await git.log()).latest?.message;
+    await git.addConfig('user.name', 'Teste');
+    await git.addConfig('user.email', 'teste@example.test');
+    await fs.writeFile(join(clone, 'README.md'), '# demo\nchanged line\n');
+    await fs.writeFile(join(clone, 'new file.txt'), 'new content\n');
+
+    const preview = await service.previewChanges(clone);
+    expect(preview.files.map((file) => file.path)).toEqual(expect.arrayContaining(['README.md', 'new file.txt']));
+    expect(preview.files).toHaveLength(2);
+    expect(preview.diff).toContain('+changed line');
+    expect(preview.newFiles).toEqual([{ path: 'new file.txt', content: 'new content\n', binary: false, truncated: false }]);
+
+    await fs.appendFile(join(clone, 'README.md'), 'changed after review\n');
+    await expect(service.commitReviewed(clone, 'Save reviewed change', preview.revision)).rejects.toThrow('As alterações mudaram');
+    expect((await git.log()).latest?.message).toBe(originalCommit);
+  }, 15_000);
+
+  it('limits an agent review to the paths captured for that execution', async () => {
+    const service = new GitService();
+    const clone = await service.clone('r-review-agent', origin, root, 'agent-review-filter-demo', () => undefined);
+    await fs.writeFile(join(clone, 'from-agent.txt'), 'agent output\n');
+    await fs.writeFile(join(clone, 'unrelated.txt'), 'other work\n');
+
+    const preview = await service.previewChanges(clone, ['from-agent.txt']);
+
+    expect(preview.files.map((file) => file.path)).toEqual(['from-agent.txt']);
+    expect(preview.newFiles.map((file) => file.path)).toEqual(['from-agent.txt']);
+  }, 15_000);
+
+  it('creates a unique Glibrary work branch from main', async () => {
+    const service = new GitService();
+    const clone = await service.clone('r7', origin, root, 'safe-branch-demo', () => undefined);
+    const date = new Date('2026-11-13T12:00:00.000Z');
+    const first = await service.ensureWorkingBranch(clone, 'Corrige login', date);
+    expect(first).toBe('glibrary/2026-11-13-corrige-login');
+    await service.checkoutBranch(clone, 'main');
+    const second = await service.ensureWorkingBranch(clone, 'Corrige login', date);
+    expect(second).toBe('glibrary/2026-11-13-corrige-login-2');
+    expect(await service.getCurrentBranch(clone)).toBe(second);
+  }, 15_000);
+
+  it('undoes an unpushed commit while keeping its files in the workspace', async () => {
+    const service = new GitService();
+    const clone = await service.clone('r8', origin, root, 'undo-demo', () => undefined);
+    const git = simpleGit({ baseDir: clone });
+    await git.addConfig('user.name', 'Teste');
+    await git.addConfig('user.email', 'teste@example.test');
+    await fs.writeFile(join(clone, 'undo.txt'), 'keep this work\n');
+    await git.add('.');
+    await git.commit('Local change');
+
+    await service.undoLastUnsentCommit(clone);
+    expect((await git.status()).ahead).toBe(0);
+    expect((await fs.readFile(join(clone, 'undo.txt'), 'utf8'))).toBe('keep this work\n');
+    expect((await git.status()).files.map((file) => file.path)).toContain('undo.txt');
+  }, 15_000);
+
+  it('reverts a sent commit into a new local commit without pushing it', async () => {
+    const service = new GitService();
+    const clone = await service.clone('r9', origin, root, 'revert-demo', () => undefined);
+    const git = simpleGit({ baseDir: clone });
+    await git.addConfig('user.name', 'Teste');
+    await git.addConfig('user.email', 'teste@example.test');
+    const original = await fs.readFile(join(clone, 'README.md'), 'utf8');
+    await fs.appendFile(join(clone, 'README.md'), 'sent change\n');
+    await git.add('README.md');
+    await git.commit('Sent change');
+    await simpleGit({ baseDir: origin }).addConfig('receive.denyCurrentBranch', 'updateInstead');
+    await git.push('origin', 'main');
+
+    const result = await service.revertLastSentCommit(clone);
+    expect(result.commit).toMatch(/^[a-f0-9]{7,40}$/i);
+    expect((await fs.readFile(join(clone, 'README.md'), 'utf8'))).toBe(original);
+    expect((await git.log()).latest?.message).toContain('Revert');
+    expect((await git.status()).ahead).toBe(1);
+  }, 15_000);
+
+  it('captures only new agent changes and preserves edits made after the snapshot', async () => {
+    const service = new GitService();
+    const clone = await service.clone('r10', origin, root, 'agent-changes-demo', () => undefined);
+    const git = simpleGit({ baseDir: clone });
+    await git.addConfig('user.name', 'Teste');
+    await git.addConfig('user.email', 'teste@example.test');
+    await fs.writeFile(join(clone, 'tracked.txt'), 'base content\n');
+    await git.add('tracked.txt');
+    await git.commit('Add tracked file');
+
+    await fs.appendFile(join(clone, 'README.md'), 'pre-existing edit\n');
+    const baseline = new Set((await service.listChanges(clone)).files.map((file) => file.path));
+    await fs.appendFile(join(clone, 'README.md'), 'agent touched pre-existing file\n');
+    await fs.writeFile(join(clone, 'tracked.txt'), 'agent tracked edit\n');
+    await fs.writeFile(join(clone, 'new agent file.txt'), 'agent new file\n');
+
+    const changes = await service.captureAgentChanges(clone, baseline);
+    expect(changes.map((change) => change.path)).toEqual(expect.arrayContaining(['tracked.txt', 'new agent file.txt']));
+    expect(changes.map((change) => change.path)).not.toContain('README.md');
+    await fs.writeFile(join(clone, 'new agent file.txt'), 'user edited after snapshot\n');
+
+    const result = await service.discardAgentChanges(clone, changes);
+    expect(result.discarded).toEqual(['tracked.txt']);
+    expect(result.skipped).toEqual(['new agent file.txt']);
+    expect((await fs.readFile(join(clone, 'tracked.txt'), 'utf8')).replace(/\r\n/g, '\n')).toBe('base content\n');
+    expect(await fs.readFile(join(clone, 'new agent file.txt'), 'utf8')).toBe('user edited after snapshot\n');
+    expect(await fs.readFile(join(clone, 'README.md'), 'utf8')).toContain('agent touched pre-existing file');
+  }, 15_000);
+
+  it('never discards a snapshot path outside the repository root', async () => {
+    const service = new GitService();
+    const clone = await service.clone('r11', origin, root, 'agent-path-safety-demo', () => undefined);
+    const outsidePath = join(root, 'outside-agent-file.txt');
+    const outsideContent = 'keep outside the project\n';
+    await fs.writeFile(outsidePath, outsideContent);
+    const changes: AgentFileChange[] = [{
+      path: '../outside-agent-file.txt',
+      kind: 'untracked',
+      sha256: createHash('sha256').update(outsideContent).digest('hex')
+    }];
+
+    const result = await service.discardAgentChanges(clone, changes);
+
+    expect(result.discarded).toEqual([]);
+    expect(result.skipped).toEqual(['../outside-agent-file.txt']);
+    expect(await fs.readFile(outsidePath, 'utf8')).toBe(outsideContent);
   }, 15_000);
 });

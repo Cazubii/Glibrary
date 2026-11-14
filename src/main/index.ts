@@ -1,4 +1,5 @@
 import { app, BrowserWindow, shell } from 'electron';
+import { createRequire } from 'node:module';
 import { join } from 'path';
 import { LibraryStore } from './services/library-store';
 import { GitService } from './services/git-service';
@@ -17,6 +18,30 @@ import { registerToolsIpc } from './ipc/tools.ipc';
 import { ToolsChecker } from './services/tools-checker';
 import { DevWorkspaceManager } from './services/dev-workspace';
 import { registerDevWorkspaceIpc } from './ipc/dev-workspace.ipc';
+import { registerAppUpdaterIpc } from './ipc/app-updater.ipc';
+import { AppUpdaterManager, shouldEnableAutoUpdates, type UpdaterPort } from './services/app-updater';
+import { IpcChannels } from '../shared/ipc-channels';
+
+function loadAutoUpdater(): UpdaterPort | null {
+  if (!shouldEnableAutoUpdates(app.isPackaged, process.platform, __GLIBRARY_MACOS_AUTO_UPDATE__)) return null;
+
+  try {
+    const loaded: unknown = createRequire(__filename)('electron-updater');
+    if (typeof loaded !== 'object' || loaded == null || !('autoUpdater' in loaded)) return null;
+    const updater = loaded.autoUpdater;
+    if (
+      typeof updater !== 'object' || updater == null ||
+      !('on' in updater) || typeof updater.on !== 'function' ||
+      !('checkForUpdates' in updater) || typeof updater.checkForUpdates !== 'function' ||
+      !('quitAndInstall' in updater) || typeof updater.quitAndInstall !== 'function' ||
+      !('autoDownload' in updater) || !('autoInstallOnAppQuit' in updater)
+    ) return null;
+    return updater as UpdaterPort;
+  } catch (error) {
+    console.error('NÃ£o foi possÃ­vel carregar as atualizaÃ§Ãµes do aplicativo.', error);
+    return null;
+  }
+}
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -65,7 +90,22 @@ void app.whenReady().then(async () => {
     terminalManager
   );
   registerToolsIpc(new ToolsChecker());
+  const autoUpdater = loadAutoUpdater();
+  const updateManager = new AppUpdaterManager(
+    autoUpdater,
+    app.getVersion(),
+    (state) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send(IpcChannels.appUpdateChanged, state);
+      }
+    },
+    process.platform === 'darwin' && app.isPackaged && !__GLIBRARY_MACOS_AUTO_UPDATE__
+      ? 'As atualizaÃ§Ãµes automÃ¡ticas no macOS serÃ£o ativadas quando o app tiver assinatura de cÃ³digo.'
+      : undefined
+  );
+  registerAppUpdaterIpc(updateManager);
   createWindow();
+  if (autoUpdater != null) void updateManager.check();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
   app.on('before-quit', () => {
     terminalManager.killAll();

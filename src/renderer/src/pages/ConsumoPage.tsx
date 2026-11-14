@@ -3,21 +3,22 @@ import { Activity, Bot, Coins, Flame, RefreshCw, TrendingUp, WandSparkles } from
 import type { Agent, AgentRun, Skill, UsageEvent } from '@shared/types';
 import { buildRank, computeUsageWindow, type UsageRankItem } from '@shared/usage-meter';
 import { api } from '../lib/api';
+import Termo from '../components/Termo';
 
 type Kind = 'agent' | 'skill';
 type Window = 7 | 30 | 90;
 
 interface Props {
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
   onSuccess?: (message: string) => void;
 }
 
-const KIND_TABS: Array<{ id: Kind; label: string; icon: ReactNode }> = [
-  { id: 'agent', label: 'Agents', icon: <Bot size={15} /> },
-  { id: 'skill', label: 'Skills', icon: <WandSparkles size={15} /> }
+const KIND_TABS: Array<{ id: Kind; label: ReactNode; icon: ReactNode }> = [
+  { id: 'agent', label: <Termo id="agent" />, icon: <Bot size={15} /> },
+  { id: 'skill', label: <Termo id="skill" />, icon: <WandSparkles size={15} /> }
 ];
 
-function StatCard({ label, value, icon }: { label: string; value: string | number; icon: ReactNode }): React.JSX.Element {
+function StatCard({ label, value, icon }: { label: ReactNode; value: string | number; icon: ReactNode }): React.JSX.Element {
   return (
     <div className="rounded-lg bg-steam-panel p-4">
       <div className="flex items-center gap-2 text-steam-text/50">
@@ -64,7 +65,7 @@ export default function ConsumoPage({ onError, onSuccess }: Props): React.JSX.El
       setData({ skills: response.skills, agents: response.agents, usage: response.usage });
       setAgentRuns(runs);
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setBusy(false);
     }
@@ -141,7 +142,7 @@ export default function ConsumoPage({ onError, onSuccess }: Props): React.JSX.El
       await load();
       onSuccess?.(`Uso registrado: ${item.name}`);
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
 
@@ -174,13 +175,13 @@ export default function ConsumoPage({ onError, onSuccess }: Props): React.JSX.El
         <section className="mb-5 rounded-lg border border-steam-elevated/50 bg-steam-panel p-4">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Coins size={16} className="text-steam-accent" />
-            <h2 className="text-sm font-semibold">Tokens das sessões de agentes</h2>
+            <h2 className="text-sm font-semibold">Uso de texto nas sessões de agentes</h2>
             <span className="text-xs text-steam-text/40">execuções monitoradas · últimos {windowDays} dias</span>
           </div>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-            <div className="rounded bg-steam-bg/60 p-3"><p className="text-[11px] text-steam-text/45">Entrada</p><p className="mt-1 font-semibold">{formatTokens(tokenTotals.input)}</p></div>
-            <div className="rounded bg-steam-bg/60 p-3"><p className="text-[11px] text-steam-text/45">Saída</p><p className="mt-1 font-semibold">{formatTokens(tokenTotals.output)}</p></div>
-            <div className="rounded bg-steam-bg/60 p-3"><p className="text-[11px] text-steam-text/45">Cache</p><p className="mt-1 font-semibold">{formatTokens(tokenTotals.cache)}</p></div>
+            <div className="rounded bg-steam-bg/60 p-3"><p className="text-[11px] text-steam-text/45"><Termo id="inputTokens" /></p><p className="mt-1 font-semibold">{formatTokens(tokenTotals.input)}</p></div>
+            <div className="rounded bg-steam-bg/60 p-3"><p className="text-[11px] text-steam-text/45"><Termo id="outputTokens" /></p><p className="mt-1 font-semibold">{formatTokens(tokenTotals.output)}</p></div>
+            <div className="rounded bg-steam-bg/60 p-3"><p className="text-[11px] text-steam-text/45"><Termo id="cache" /></p><p className="mt-1 font-semibold">{formatTokens(tokenTotals.cache)}</p></div>
             <div className="rounded bg-steam-bg/60 p-3"><p className="text-[11px] text-steam-text/45">Raciocínio</p><p className="mt-1 font-semibold">{formatTokens(tokenTotals.reasoning)}</p></div>
             <div className="rounded bg-steam-bg/60 p-3"><p className="text-[11px] text-steam-text/45">Custo informado</p><p className="mt-1 font-semibold">{formatUsd(tokenTotals.cost)}</p></div>
           </div>
@@ -190,7 +191,7 @@ export default function ConsumoPage({ onError, onSuccess }: Props): React.JSX.El
             <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(240px,0.65fr)]">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[520px] text-left text-xs">
-                  <thead className="text-steam-text/40"><tr><th className="py-1">Projeto / sessão</th><th>Provedor / conta</th><th className="text-right">Tokens</th><th className="text-right">Custo</th></tr></thead>
+                  <thead className="text-steam-text/40"><tr><th className="py-1">Projeto / sessão</th><th>Provedor / conta</th><th className="text-right"><Termo id="tokens" /></th><th className="text-right">Custo</th></tr></thead>
                   <tbody>
                     {tokenRuns.slice(0, 12).map((run) => {
                       const usage = run.tokenUsage!;
@@ -263,14 +264,14 @@ export default function ConsumoPage({ onError, onSuccess }: Props): React.JSX.El
           <StatCard label={`Usos em ${windowDays}d`} value={aggregate.total} icon={<Flame size={16} />} />
           <StatCard label="Projeção mensal" value={aggregate.projectedMonthly} icon={<TrendingUp size={16} />} />
           <StatCard label="Último uso" value={aggregate.lastAt != null ? relativeDate(aggregate.lastAt) : '—'} icon={<Activity size={16} />} />
-          <StatCard label={kind === 'agent' ? 'Agents com uso' : 'Skills com uso'} value={aggregate.byAsset.size} icon={<Bot size={16} />} />
+          <StatCard label={kind === 'agent' ? <><Termo id="agent" /> com uso</> : <><Termo id="skill" /> com uso</>} value={aggregate.byAsset.size} icon={<Bot size={16} />} />
         </div>
 
         <section className="mt-5 grid gap-4 lg:grid-cols-2">
           <div className="rounded-lg bg-steam-panel p-4">
             <h2 className="mb-3 text-sm font-semibold">Usos por dia</h2>
             {aggregate.total === 0 ? (
-              <p className="text-sm text-steam-text/50">Nenhum uso no período — abra um agent/skill na Biblioteca ou clique em +1.</p>
+              <p className="text-sm text-steam-text/50">Nenhum uso no período — abra um assistente ou uma instrução reutilizável na Biblioteca, ou clique em +1.</p>
             ) : (
               <div className="flex h-36 items-end gap-0.5">
                 {aggregate.days.map((day) => (

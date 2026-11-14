@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron';
+import { translateError } from '../services/error-translator';
 import type { CommandSpec, IpcResult, LogLine, RunHandle } from '../../shared/types';
 import { ProcessRunInputSchema, RepoIdInputSchema } from '../../shared/schemas';
 import { IpcChannels } from '../../shared/ipc-channels';
@@ -10,7 +11,7 @@ function ok<T>(data: T): IpcResult<T> {
 }
 
 function fail(error: unknown): IpcResult<never> {
-  return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  return { ok: false, error: translateError(error) };
 }
 
 function resolveSpec(

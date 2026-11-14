@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron';
+import { translateError } from '../services/error-translator';
 import type { IpcResult } from '../../shared/types';
 import type { ToolStatus } from '../../shared/tools';
 import { IpcChannels } from '../../shared/ipc-channels';
@@ -9,7 +10,7 @@ function ok<T>(data: T): IpcResult<T> {
 }
 
 function fail(error: unknown): IpcResult<never> {
-  return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  return { ok: false, error: translateError(error) };
 }
 
 export function registerToolsIpc(checker: ToolsChecker): void {

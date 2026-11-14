@@ -1,11 +1,26 @@
 import { describe, it, expect } from 'vitest';
 import {
+  AppUpdateStateSchema,
   SkillUpdateInputSchema,
   BaseUpdateInputSchema,
   ProjectUpdateInputSchema,
+  RepoGitPrepareInputSchema,
+  RepoPublishInputSchema,
+  RepoPushInputSchema,
   TagRenameInputSchema,
   TagNameInputSchema
 } from '../src/shared/schemas';
+
+describe('AppUpdateStateSchema', () => {
+  it('valida o estado e o progresso da atualização antes de exibi-los', () => {
+    expect(AppUpdateStateSchema.parse({ status: 'downloading', currentVersion: '0.1.0', percent: 44 })).toEqual({
+      status: 'downloading',
+      currentVersion: '0.1.0',
+      percent: 44
+    });
+    expect(() => AppUpdateStateSchema.parse({ status: 'downloading', currentVersion: '0.1.0', percent: 120 })).toThrow();
+  });
+});
 
 describe('SkillUpdateInputSchema', () => {
   it('aceita patch com tags e favorite', () => {
@@ -80,5 +95,29 @@ describe('TagRenameInputSchema e TagNameInputSchema', () => {
     expect(TagNameInputSchema.parse({ name: 'docs' })).toEqual({ name: 'docs' });
     expect(() => TagNameInputSchema.parse({ name: '' })).toThrow();
     expect(() => TagNameInputSchema.parse({})).toThrow();
+  });
+});
+
+describe('schemas de publicação do projeto', () => {
+  it('aceita identidade local opcional e exige email válido quando fornecida', () => {
+    expect(RepoGitPrepareInputSchema.parse({ id: 'repo-1' })).toEqual({ id: 'repo-1' });
+    expect(RepoGitPrepareInputSchema.parse({ id: 'repo-1', identity: { name: ' Ada ', email: 'ada@example.test' } })).toEqual({
+      id: 'repo-1', identity: { name: 'Ada', email: 'ada@example.test' }
+    });
+    expect(() => RepoGitPrepareInputSchema.parse({ id: 'repo-1', identity: { name: 'Ada', email: 'inválido' } })).toThrow();
+  });
+
+  it('normaliza nome e exige visibilidade e confirmação booleanas para publicar', () => {
+    expect(RepoPublishInputSchema.parse({ id: 'repo-1', name: ' meu-site ', visibility: 'private' })).toEqual({
+      id: 'repo-1', name: 'meu-site', visibility: 'private', confirmProtectedBranch: false
+    });
+    expect(RepoPublishInputSchema.parse({ id: 'repo-1', name: 'site', visibility: 'public', confirmProtectedBranch: true }).confirmProtectedBranch).toBe(true);
+    expect(() => RepoPublishInputSchema.parse({ id: 'repo-1', name: '../fora', visibility: 'private' })).toThrow();
+    expect(() => RepoPublishInputSchema.parse({ id: 'repo-1', name: 'site', visibility: 'private', extra: true })).toThrow();
+  });
+
+  it('mantém validação estrita para push e ramos protegidos', () => {
+    expect(RepoPushInputSchema.parse({ id: 'repo-1' })).toEqual({ id: 'repo-1', confirmProtectedBranch: false });
+    expect(() => RepoPushInputSchema.parse({ id: 'repo-1', confirmProtectedBranch: 'sim' })).toThrow();
   });
 });

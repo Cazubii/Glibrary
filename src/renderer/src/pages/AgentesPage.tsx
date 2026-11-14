@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bot, LayoutGrid, Pencil, PanelsTopLeft, Play, Plus, Trash2 } from 'lucide-react';
+import { Bot, FolderOpen, LayoutGrid, Pencil, PanelsTopLeft, Play, Plus, Trash2 } from 'lucide-react';
 import { useLibraryStore } from '../store/library';
 import { useAgentsStore } from '../store/agents';
+import { api } from '../lib/api';
 import LogConsole from '../components/LogConsole';
 import AgentProfileDialog from '../components/AgentProfileDialog';
 import AgentRunDialog from '../components/AgentRunDialog';
@@ -25,6 +26,7 @@ export default function AgentesPage(): React.JSX.Element {
   const [profileDialog, setProfileDialog] = useState<{ open: boolean; editing: AgentProfile | null }>({ open: false, editing: null });
   const [runDialogFor, setRunDialogFor] = useState<AgentProfile | null>(null);
   const [logDialogFor, setLogDialogFor] = useState<AgentRun | null>(null);
+  const [folderError, setFolderError] = useState<string | null>(null);
 
   useEffect(() => { void load(); return initEvents(); }, [load, initEvents]);
 
@@ -41,6 +43,15 @@ export default function AgentesPage(): React.JSX.Element {
   const historyRuns = runs.filter((r) => r.status !== 'running');
 
   const launch = async (profileId: string, prompt?: string): Promise<void> => { await startRun(profileId, prompt); };
+
+  const openProjectFolder = async (repoId: string): Promise<void> => {
+    setFolderError(null);
+    try {
+      await api.repoOpenFolder(repoId);
+    } catch (error) {
+      setFolderError(error instanceof Error ? error.message : 'Não foi possível abrir a pasta do projeto.');
+    }
+  };
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -89,6 +100,7 @@ export default function AgentesPage(): React.JSX.Element {
             {historyRuns.length > 0 && (
               <div className="rounded-lg border border-steam-elevated/50 bg-steam-panel/40 p-3">
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-steam-text/40">Histórico</p>
+                {folderError != null && <p role="alert" className="mb-2 text-xs text-steam-error">{folderError}</p>}
                 <table className="w-full text-left text-xs">
                   <thead className="text-steam-text/40"><tr><th className="py-1">Agente</th><th>Repo</th><th>Status</th><th>Duração</th><th>Início</th><th/></tr></thead>
                   <tbody>
@@ -99,7 +111,7 @@ export default function AgentesPage(): React.JSX.Element {
                         <td className={`pr-2 ${run.status === 'error' ? 'text-steam-error' : 'text-steam-text/60'}`}>{run.status}</td>
                         <td className="pr-2 text-steam-text/60">{run.durationMs != null ? `${Math.round(run.durationMs / 1000)}s` : '—'}</td>
                         <td className="pr-2 text-steam-text/60">{new Date(run.startedAt).toLocaleString('pt-BR')}</td>
-                        <td><button type="button" onClick={() => setLogDialogFor(run)} className="text-steam-accent hover:underline">Log</button></td>
+                        <td><div className="flex items-center gap-2"><button type="button" onClick={() => setLogDialogFor(run)} className="text-steam-accent hover:underline">Log</button><button type="button" onClick={() => void openProjectFolder(run.repoId)} className="inline-flex items-center gap-1 text-steam-text/60 hover:text-steam-accent" aria-label={`Abrir pasta de ${run.repoName}`}><FolderOpen size={13} aria-hidden="true"/>Pasta</button></div></td>
                       </tr>
                     ))}
                   </tbody>

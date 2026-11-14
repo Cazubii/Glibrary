@@ -1,16 +1,21 @@
 import { ipcMain, dialog, BrowserWindow, shell } from 'electron';
+import { translateError } from '../services/error-translator';
 import { randomUUID } from 'crypto';
 import { copyFileSync, existsSync, statSync } from 'fs';
 import { readFile, rm, writeFile } from 'fs/promises';
 import { spawn } from 'child_process';
 import { basename, join, resolve } from 'path';
-import type { DetectionResult, GitStatusDetail, GithubUser, IpcResult, Repo, Settings } from '../../shared/types';
+import type { DetectionResult, GitChangePreview, GitStatusDetail, GithubOAuthDeviceSession, GithubOAuthPollResult, GithubUser, IpcResult, Repo, RepoGitPrepareResult, RepoPublishResult, Settings } from '../../shared/types';
 import {
   AddLocalInputSchema,
   AddByUrlInputSchema,
   AuthTokenInputSchema,
+  GithubOAuthSessionInputSchema,
   CommitInputSchema,
   RepoIdInputSchema,
+  RepoGitPrepareInputSchema,
+  RepoPublishInputSchema,
+  RepoPushInputSchema,
   RepoUpdateInputSchema,
   RepoRemoveInputSchema,
   SettingsPatchSchema,
@@ -19,9 +24,12 @@ import { IpcChannels } from '../../shared/ipc-channels';
 import type { LibraryStore } from '../services/library-store';
 import { migrateLibrary } from '../services/library-store';
 import type { GitService } from '../services/git-service';
+import { assertProtectedBranchPush } from '../services/git-protection';
 import { detectProject } from '../services/detector';
 import { applyDetection } from '../services/detector/apply';
-import { fetchRepoMeta, fetchGithubUser, encodeToken, decodeToken } from '../services/github-api';
+import { fetchJson, fetchRepoMeta, fetchGithubUser, encodeToken } from '../services/github-api';
+import { createAccountRepository } from '../services/github-projects';
+import { GithubOAuthService, getGithubAccessToken } from '../services/github-oauth';
 import { downloadCover } from '../services/cover-service';
 import {
   isValidGitUrl,
@@ -35,7 +43,7 @@ function ok<T>(data: T): IpcResult<T> {
 }
 
 function fail(error: unknown): IpcResult<never> {
-  return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  return { ok: false, error: translateError(error) };
 }
 
 function broadcastStatus(id: string, status: Repo['status']): void {
@@ -88,8 +96,8 @@ export function registerRepoIpc(
   git: GitService,
   coversDir: string,
 ): void {
-  const githubToken = (): string | undefined =>
-    decodeToken(store.getSettings().githubToken);
+  const githubOAuth = new GithubOAuthService(store);
+  const githubToken = (): Promise<string | undefined> => getGithubAccessToken(store);
   /** Resolve a pasta local de um repo OU de um projeto da biblioteca. */
   const gitTarget = (id: string): string => {
     const repoLocal = store.getRepo(id)?.localPath;
@@ -288,7 +296,7 @@ export function registerRepoIpc(
 
         if (gh != null) {
           try {
-            const meta = await fetchRepoMeta(gh.owner, gh.repo, { token: githubToken() });
+            const meta = await fetchRepoMeta(gh.owner, gh.repo, { token: await githubToken() });
             repo.description = meta.description;
             repo.stars = meta.stars;
             repo.language = meta.language;
@@ -313,7 +321,7 @@ export function registerRepoIpc(
                 store.getSettings().reposRoot,
                 name,
                 (progress) => broadcast(IpcChannels.cloneProgress, { id: saved.id, ...progress }),
-                githubToken(),
+                await githubToken(),
               );
               const detection = await detectProject(target);
               const updated = await store.updateRepo(
@@ -359,7 +367,7 @@ export function registerRepoIpc(
               store.getSettings().reposRoot,
               name,
               (progress) => broadcast(IpcChannels.cloneProgress, { id, ...progress }),
-              githubToken(),
+              await githubToken(),
             );
             const detection = await detectProject(target);
             const updated = await store.updateRepo(
@@ -426,7 +434,7 @@ export function registerRepoIpc(
         if (!repo) return fail(new Error('Repositório não encontrado'));
         const gh = repo.remoteUrl != null ? parseGithubRepo(repo.remoteUrl) : null;
         if (gh == null) return fail(new Error('Não é um repositório GitHub'));
-        const meta = await fetchRepoMeta(gh.owner, gh.repo, { token: githubToken() });
+        const meta = await fetchRepoMeta(gh.owner, gh.repo, { token: await githubToken() });
         const coverPath =
           (await downloadCover(coversDir, id, gh.owner, gh.repo)) ?? repo.coverPath;
         const updated = await store.updateRepo(id, {
@@ -582,6 +590,47 @@ export function registerRepoIpc(
   );
 
   ipcMain.handle(
+    IpcChannels.githubOAuthStatus,
+    async (): Promise<IpcResult<{ configured: boolean }>> => ok({ configured: githubOAuth.isConfigured() }),
+  );
+
+  ipcMain.handle(
+    IpcChannels.githubOAuthStart,
+    async (): Promise<IpcResult<GithubOAuthDeviceSession>> => {
+      try {
+        return ok(await githubOAuth.startDeviceFlow());
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.githubOAuthPoll,
+    async (_event, raw: unknown): Promise<IpcResult<GithubOAuthPollResult>> => {
+      try {
+        const { sessionId } = GithubOAuthSessionInputSchema.parse(raw);
+        return ok(await githubOAuth.pollDeviceFlow(sessionId));
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.githubOAuthCancel,
+    async (_event, raw: unknown): Promise<IpcResult<null>> => {
+      try {
+        const { sessionId } = GithubOAuthSessionInputSchema.parse(raw);
+        githubOAuth.cancelDeviceFlow(sessionId);
+        return ok(null);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  ipcMain.handle(
     IpcChannels.githubAuthCheck,
     async (_event, raw: unknown): Promise<IpcResult<GithubUser>> => {
       try {
@@ -597,7 +646,7 @@ export function registerRepoIpc(
 
   ipcMain.handle(IpcChannels.githubAuthMe, async (): Promise<IpcResult<GithubUser | null>> => {
     try {
-      const token = decodeToken(store.getSettings().githubToken);
+      const token = await githubToken();
       if (token == null) return ok(null);
       return ok(await fetchGithubUser(token));
     } catch (e) {
@@ -621,11 +670,39 @@ export function registerRepoIpc(
   );
 
   ipcMain.handle(
+    IpcChannels.repoGitPrepare,
+    async (_event, raw: unknown): Promise<IpcResult<RepoGitPrepareResult>> => {
+      try {
+        const input = RepoGitPrepareInputSchema.parse(raw);
+        const repo = store.getRepo(input.id);
+        if (repo?.localPath == null || !existsSync(repo.localPath) || !statSync(repo.localPath).isDirectory()) {
+          throw new Error('Escolha primeiro uma pasta de projeto que exista no computador.');
+        }
+        return ok(await git.prepareForPublish(repo.localPath, input.identity));
+      } catch (error) {
+        return fail(error);
+      }
+    }
+  );
+
+  ipcMain.handle(
+    IpcChannels.repoGitPreview,
+    async (_event, raw: unknown): Promise<IpcResult<GitChangePreview>> => {
+      try {
+        const { id } = RepoIdInputSchema.parse(raw);
+        return ok(await git.previewChanges(gitTarget(id)));
+      } catch (error) {
+        return fail(error);
+      }
+    }
+  );
+
+  ipcMain.handle(
     IpcChannels.repoCommit,
     async (_event, raw: unknown): Promise<IpcResult<{ commit: string }>> => {
       try {
-        const { id, message } = CommitInputSchema.parse(raw);
-        return ok(await git.commitAll(gitTarget(id), message));
+        const { id, message, revision } = CommitInputSchema.parse(raw);
+        return ok(await git.commitReviewed(gitTarget(id), message, revision));
       } catch (e) {
         return fail(e);
       }
@@ -633,15 +710,81 @@ export function registerRepoIpc(
   );
 
   ipcMain.handle(
+    IpcChannels.repoGitUndo,
+    async (_event, raw: unknown): Promise<IpcResult<{ branch: string; commit: string }>> => {
+      try {
+        const { id } = RepoIdInputSchema.parse(raw);
+        return ok(await git.undoLastUnsentCommit(gitTarget(id)));
+      } catch (error) {
+        return fail(error);
+      }
+    }
+  );
+
+  ipcMain.handle(
+    IpcChannels.repoGitRevert,
+    async (_event, raw: unknown): Promise<IpcResult<{ branch: string; commit: string }>> => {
+      try {
+        const { id } = RepoIdInputSchema.parse(raw);
+        return ok(await git.revertLastSentCommit(gitTarget(id)));
+      } catch (error) {
+        return fail(error);
+      }
+    }
+  );
+
+  ipcMain.handle(
     IpcChannels.repoPush,
     async (_event, raw: unknown): Promise<IpcResult<{ branch: string }>> => {
       try {
-        const { id } = RepoIdInputSchema.parse(raw);
-        return ok(await git.push(gitTarget(id), githubToken()));
+        const { id, confirmProtectedBranch } = RepoPushInputSchema.parse(raw);
+        const branch = await git.getCurrentBranch(gitTarget(id));
+        assertProtectedBranchPush(branch, !store.getSettings().showAdvancedResources, confirmProtectedBranch);
+        return ok(await git.push(gitTarget(id), await githubToken()));
       } catch (e) {
         return fail(e);
       }
     },
+  );
+
+  ipcMain.handle(
+    IpcChannels.repoPublish,
+    async (_event, raw: unknown): Promise<IpcResult<RepoPublishResult>> => {
+      try {
+        const input = RepoPublishInputSchema.parse(raw);
+        const repo = store.getRepo(input.id);
+        if (repo?.localPath == null || !existsSync(repo.localPath) || !statSync(repo.localPath).isDirectory()) {
+          throw new Error('Escolha primeiro uma pasta de projeto que exista no computador.');
+        }
+        const token = await githubToken();
+        if (token == null || token === '') throw new Error('Conecte sua conta GitHub antes de publicar.');
+        const { branch } = await git.assertReadyToPublish(repo.localPath);
+        assertProtectedBranchPush(branch, !store.getSettings().showAdvancedResources, input.confirmProtectedBranch);
+        const created = await createAccountRepository(fetchJson, {
+          token,
+          name: input.name,
+          ...(input.description != null && input.description !== '' ? { description: input.description } : {}),
+          visibility: input.visibility
+        });
+        await store.updateRepo(repo.id, { owner: created.owner, remoteUrl: created.cloneUrl });
+        await git.addOrigin(repo.localPath, created.cloneUrl);
+        try {
+          await git.push(repo.localPath, token);
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          throw new Error(`O repositório ${created.htmlUrl} foi criado, mas a primeira versão ainda não foi enviada. O endereço foi salvo no projeto; abra Projetos e tente “Enviar ao GitHub”. Detalhes: ${detail}`);
+        }
+        return ok({
+          owner: created.owner,
+          name: created.name,
+          visibility: created.visibility,
+          htmlUrl: created.htmlUrl,
+          branch
+        });
+      } catch (error) {
+        return fail(error);
+      }
+    }
   );
 
   ipcMain.handle(IpcChannels.dialogPickFolder, async (): Promise<IpcResult<string | null>> => {
@@ -674,6 +817,12 @@ export function registerRepoIpc(
         if (patch.githubToken != null) {
           patch.githubToken =
             patch.githubToken === '' ? '' : encodeToken(patch.githubToken);
+          patch.githubRefreshToken = '';
+          patch.githubTokenExpiresAt = undefined;
+          patch.githubRefreshTokenExpiresAt = undefined;
+        } else if (patch.githubRefreshToken != null) {
+          patch.githubRefreshToken =
+            patch.githubRefreshToken === '' ? '' : encodeToken(patch.githubRefreshToken);
         }
         return ok(await store.updateSettings(patch));
       } catch (e) {

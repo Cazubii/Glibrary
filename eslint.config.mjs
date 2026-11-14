@@ -2,7 +2,7 @@ import tseslint from 'typescript-eslint'
 import prettier from 'eslint-config-prettier'
 
 export default tseslint.config(
-  { ignores: ['out/**', 'dist/**', 'node_modules/**', 'tests/fixtures/**'] },
+  { ignores: ['out/**', 'dist/**', 'node_modules/**', 'tests/fixtures/**', '.agents/skills/impeccable/scripts/**'] },
   ...tseslint.configs.recommended,
   prettier,
   {

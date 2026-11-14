@@ -8,7 +8,7 @@ import { TopRepoCard } from '../components/AssetCards';
 const LANGUAGES = ['', 'TypeScript', 'JavaScript', 'Python', 'Go', 'Rust', 'Java', 'C#', 'C++', 'PHP', 'Ruby', 'Kotlin', 'Swift'];
 const GH_REPO_URL = /github\.com\/[^\s?#]+\/([^\s/?#]+?)(?:\.git)?\/?/i;
 
-interface Props { onError: (message: string) => void; onSuccess?: (message: string) => void }
+interface Props { onError: (error: unknown) => void; onSuccess?: (message: string) => void }
 
 export default function GithubSearchPage({ onError }: Props): React.JSX.Element {
   const [query, setQuery] = useState('');
@@ -33,7 +33,7 @@ export default function GithubSearchPage({ onError }: Props): React.JSX.Element 
         )
       );
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   }, [onError]);
   useEffect(() => { void refreshKnown(); }, [refreshKnown]);
@@ -55,7 +55,7 @@ export default function GithubSearchPage({ onError }: Props): React.JSX.Element 
       setSkillImported(new Set());
       setAgentsImported(new Set());
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setBusy(false);
     }
@@ -67,7 +67,7 @@ export default function GithubSearchPage({ onError }: Props): React.JSX.Element 
       setAddingRepo((prev) => new Set(prev).add(repo.remoteUrl));
       await refreshKnown();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   };
 
@@ -77,7 +77,7 @@ export default function GithubSearchPage({ onError }: Props): React.JSX.Element 
       await api.skillImport(repo.remoteUrl);
       setSkillImported((prev) => new Set(prev).add(repo.remoteUrl));
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setImportBusy(null);
     }
@@ -89,7 +89,7 @@ export default function GithubSearchPage({ onError }: Props): React.JSX.Element 
       await api.agentImport(repo.remoteUrl);
       setAgentsImported((prev) => new Set(prev).add(repo.remoteUrl));
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setImportBusy(null);
     }

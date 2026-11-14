@@ -13,6 +13,11 @@ export interface GithubApiOptions {
   token?: string;
 }
 
+export interface GithubJsonRequestOptions {
+  method?: 'GET' | 'POST';
+  body?: Record<string, unknown>;
+}
+
 /** Seção 10: token sempre via safeStorage. */
 export function encodeToken(token: string): string {
   return safeStorage.encryptString(token).toString('base64');
@@ -27,14 +32,18 @@ export function decodeToken(stored: string | undefined): string | undefined {
   }
 }
 
-export function fetchJson(url: string, token?: string): Promise<unknown> {
+export function fetchJson(url: string, token?: string, options: GithubJsonRequestOptions = {}): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const request = net.request({ url, method: 'GET' });
+    const request = net.request({ url, method: options.method ?? 'GET' });
     if (token != null && token !== '') {
       request.setHeader('Authorization', `Bearer ${token}`);
     }
     request.setHeader('Accept', 'application/vnd.github+json');
     request.setHeader('User-Agent', 'Glibrary');
+    if (options.body != null) {
+      request.setHeader('Content-Type', 'application/json');
+      request.write(JSON.stringify(options.body));
+    }
     let body = '';
     request.on('response', (response) => {
       response.on('data', (chunk: Buffer) => {

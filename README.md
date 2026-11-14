@@ -1,8 +1,60 @@
 # Glibrary
 
-Biblioteca desktop para organizar **Skills de agentes**, **repositórios-base** e os **projetos que usam esses recursos**.
+[![CI](https://github.com/Cazubii/Glibrary/actions/workflows/ci.yml/badge.svg)](https://github.com/Cazubii/Glibrary/actions/workflows/ci.yml)
+[![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-blue.svg)](LICENSE)
+[![Baixar Glibrary](https://img.shields.io/badge/Baixar-Glibrary-1a9fff?logo=github)](https://github.com/Cazubii/Glibrary/releases/latest)
+![Instaladores](https://img.shields.io/badge/instaladores-Windows%20%7C%20Linux-lightgrey)
+![Electron](https://img.shields.io/badge/Electron-React%20%2B%20TypeScript-47848F?logo=electron&logoColor=white)
 
-## Recursos
+**A biblioteca dos seus agentes de IA.** Um app desktop, no estilo da biblioteca da Steam, que reúne num lugar só os **agentes**, as **Skills** e os **repositórios** que você usa, e os **projetos** que dependem deles.
+
+O objetivo é juntar a versatilidade de um ambiente de desenvolvimento com a gestão de agentes: abrir o terminal, editar o projeto, trabalhar com subagentes e com os repositórios direto no GitHub, de um jeito fácil o suficiente para quem está começando a desenvolver com IA.
+
+Glibrary é um projeto próprio de [BezierClick](https://bezierclick.com), aberto para a comunidade contribuir. Está no começo do desenvolvimento e nasceu para uso próprio do autor.
+
+## Por que existe
+
+Quem trabalha com agentes acaba com Skills espalhadas em várias pastas, dezenas de repositórios clonados e nenhuma visão de qual projeto usa o quê. O Glibrary cataloga tudo isso, mostra o que está sendo usado e deixa cada recurso a um clique de distância.
+
+## O que já faz
+
+| Área | O que você encontra |
+|---|---|
+| **Início** | Painel com próximos passos e projetos locais recentes. |
+| **Projetos** | Pastas deste computador, repositórios do GitHub, área de desenvolvimento, Git e terminal. |
+| **Biblioteca** | Skills, agentes, modelos de projeto (Bases) e Coleções. |
+| **Descobrir** | Busca de repositórios, Top GitHub dos últimos 7 dias e análise de projetos. |
+| **Agentes** | Execuções e consumo; detalhes avançados podem ser ocultados em Configurações. |
+| **Ferramentas** | Instalação e verificação de ferramentas no menu Configurações. |
+| **Distribuição** | Uma tag versionada gera instaladores Windows (NSIS) e Linux (AppImage) nas Releases. |
+
+O app abre em **Início**, mantém o tema escuro e claro e organiza as tarefas em cinco áreas principais. Coleções, Análise de repositório e Consumo detalhado ficam disponíveis em Configurações por **Mostrar recursos avançados**.
+
+Os termos de Git, agentes e consumo agora aparecem com nomes simples e explicações acessíveis por teclado. Falhas frequentes agora explicam o que ocorreu e como seguir, com detalhes técnicos recolhidos. A primeira abertura agora orienta a configuração e a escolha do primeiro projeto. O login pelo navegador usa o Device Flow do GitHub App quando o client ID público estiver configurado; o token pessoal continua nas opções avançadas.
+
+Antes de salvar uma versão, a pessoa pode revisar os arquivos e o diff. No modo simples, o Glibrary cria uma linha de trabalho para agentes, pede confirmação antes de enviar direto para `main`/`master` e oferece desfazer versões locais ou reverter versões já enviadas. Depois de cada execução, é possível revisar, manter ou descartar as mudanças do agente; arquivos editados depois são preservados. Limites opcionais por execução e por dia interrompem agentes monitorados ao atingir o valor e avisam aos 80%.
+
+Início também reúne três receitas guiadas: criar um site com um modelo incluído ou uma Base, analisar um repositório e perguntar a um agente, e revisar/publicar um projeto no GitHub. O site inicial funciona sem instalar dependências; a publicação é privada por padrão, mostra o diff e pede confirmação antes de enviar. Para criar um repositório pelo login do GitHub App, ainda é necessária a permissão `Repository creation: write`; um token pessoal avançado com o escopo adequado continua disponível.
+
+## Para onde vai
+
+- Validar o fluxo de atualização automática em uma release real.
+- Validação das receitas com pessoas iniciantes.
+- Retomar o instalador macOS depois do foco inicial em Windows e Linux.
+
+Ao criar uma tag `v` igual à versão do `package.json`, o GitHub Actions monta Windows (NSIS) e
+Linux (AppImage) e publica os arquivos na [página de releases](https://github.com/Cazubii/Glibrary/releases).
+O CI continua verificando macOS, mas os instaladores dessa plataforma foram adiados. A configuração
+DMG/ZIP permanece em `electron-builder.yml` para uma etapa futura. Uma versão só ficará disponível
+depois que o mantenedor criar a tag correspondente.
+
+Os instaladores Windows ainda não têm assinatura de código e podem mostrar o aviso do Microsoft
+Defender SmartScreen. O app verifica e baixa atualizações automaticamente no Windows e Linux; a
+instalação só ocorre depois que a pessoa escolhe **Reiniciar e atualizar**. A distribuição e a
+atualização automática no macOS estão adiadas. Nenhuma release real foi publicada ainda.
+
+O login pelo navegador depende do client ID público do GitHub App do mantenedor e de habilitar Device Flow; a publicação por esse login também depende da permissão mínima de criação de repositório. Até lá, o PAT avançado continua disponível. A preferência inicial pelo modo simples, a CLI recomendada e a assinatura dos instaladores também aguardam decisão.
+## Detalhes técnicos
 
 - Descobre Skills em arquivos `SKILL.md` nas origens configuradas. Por padrão, procura em `~/.claude/skills`, `~/.opencode/skills` e `~/.agents/skills`.
 - Registra Bases por URL Git ou pasta local e clona repositórios para `~/BASES`.
@@ -28,6 +80,8 @@ pnpm test
 pnpm build
 pnpm dist
 ```
+
+Para habilitar o login do GitHub sem token, copie `.env.example` para `.env.local` e preencha `GLIBRARY_GITHUB_OAUTH_CLIENT_ID` com o client ID público informado pelo mantenedor. Não configure client secret em um app desktop.
 
 ## Dados e segurança
 

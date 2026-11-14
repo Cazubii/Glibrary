@@ -21,6 +21,7 @@ import { findLibraryRepo } from '../store/projects';
 import { useLibraryStore } from '../store/library';
 import { useTerminalGroup, useTerminalsStore } from '../store/terminals';
 import RepoTerminal from '../components/RepoTerminal';
+import Termo from '../components/Termo';
 
 interface Props {
   project: ProjectRepoSummary;
@@ -69,7 +70,7 @@ export default function DevWorkspacePage({ project, repo: initialRepo, onBack, o
     try {
       setBranches(await api.devWorkspaceBranches(repoId));
     } catch (error) {
-      setBranchError(errorMessage(error, 'Não foi possível carregar as branches.'));
+      setBranchError(errorMessage(error, 'Não foi possível carregar as linhas de trabalho.'));
     }
   }, []);
 
@@ -141,7 +142,7 @@ export default function DevWorkspacePage({ project, repo: initialRepo, onBack, o
       const result = await api.devWorkspaceSwitchBranch(repoId, branch);
       setWorkspace((current) => current == null ? current : { ...current, branch: result.branch });
       await reloadWorkspaceInfo(repoId);
-      onSuccess(`Branch ${result.branch} selecionada.`);
+      onSuccess(`Linha de trabalho "${result.branch}" selecionada.`);
     } catch (error) {
       setOpenError(errorMessage(error, 'Não foi possível trocar de branch.'));
     } finally {
@@ -159,7 +160,7 @@ export default function DevWorkspacePage({ project, repo: initialRepo, onBack, o
       setBranchName('');
       setWorkspace((current) => current == null ? current : { ...current, branch: result.branch });
       await reloadWorkspaceInfo(repoId);
-      onSuccess(`Branch ${result.branch} criada a partir de ${project.defaultBranch}.`);
+      onSuccess(`Linha de trabalho "${result.branch}" criada a partir de ${project.defaultBranch}.`);
     } catch (error) {
       setOpenError(errorMessage(error, 'Não foi possível criar a branch.'));
     } finally {
@@ -174,9 +175,9 @@ export default function DevWorkspacePage({ project, repo: initialRepo, onBack, o
     try {
       const result = await api.devWorkspaceSync(repoId);
       setStatus(result.status);
-      onSuccess(result.updated ? 'Workspace sincronizado com origin.' : 'A branch já estava sincronizada.');
+      onSuccess(result.updated ? 'As novidades do GitHub foram baixadas.' : 'A linha de trabalho já está atualizada.');
     } catch (error) {
-      setOpenError(errorMessage(error, 'Não foi possível sincronizar a branch.'));
+      setOpenError(errorMessage(error, 'Não foi possível baixar as novidades do GitHub.'));
     } finally {
       setBusy(null);
     }
@@ -184,12 +185,15 @@ export default function DevWorkspacePage({ project, repo: initialRepo, onBack, o
 
   const push = async (): Promise<void> => {
     if (repoId == null) return;
+    const branchName = status?.branch ?? workspace?.branch;
+    const confirmProtectedBranch = branchName === 'main' || branchName === 'master';
+    if (confirmProtectedBranch && !window.confirm(`Você está prestes a enviar alterações para a linha principal (${branchName}). Isso publicará o trabalho no GitHub. Deseja continuar?`)) return;
     setBusy('push');
     setOpenError(null);
     try {
-      const result = await api.devWorkspacePush(repoId);
+      const result = await api.devWorkspacePush(repoId, confirmProtectedBranch);
       setStatus(result.status);
-      onSuccess(`Alterações enviadas na branch ${result.branch}.`);
+      onSuccess(`Alterações enviadas para o GitHub na linha ${result.branch}.`);
     } catch (error) {
       setOpenError(errorMessage(error, 'Não foi possível enviar as alterações.'));
     } finally {
@@ -200,7 +204,7 @@ export default function DevWorkspacePage({ project, repo: initialRepo, onBack, o
   const discard = async (): Promise<void> => {
     if (repoId == null) return;
     const confirmed = window.confirm(
-      `Descartar o workspace de ${project.fullName}? A cópia gerenciada será removida. Um clone cadastrado na biblioteca será preservado.`
+      `Descartar a pasta de trabalho de ${project.fullName}? A cópia gerenciada será removida. Uma cópia já cadastrada na biblioteca será preservada.`
     );
     if (!confirmed) return;
     setBusy('discard');
@@ -208,7 +212,7 @@ export default function DevWorkspacePage({ project, repo: initialRepo, onBack, o
     try {
       const result = await api.devWorkspaceClose(repoId);
       await loadLibrary();
-      onSuccess(result.removed ? 'Workspace descartado.' : 'Sessão encerrada. O clone cadastrado foi preservado.');
+      onSuccess(result.removed ? 'Pasta de trabalho descartada.' : 'Sessão encerrada. A cópia cadastrada foi preservada.');
       onBack();
     } catch (error) {
       setOpenError(errorMessage(error, 'Não foi possível descartar o workspace.'));
@@ -288,10 +292,10 @@ export default function DevWorkspacePage({ project, repo: initialRepo, onBack, o
         </section>
       ) : workspace != null ? (
         <>
-          <section className="flex flex-wrap items-end gap-3" aria-label="Branch de trabalho">
+          <section className="flex flex-wrap items-end gap-3" aria-label="Linha de trabalho (branch)">
             <div className="min-w-56 flex-1 sm:max-w-md">
               <label htmlFor="dev-branch" className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-steam-text/85">
-                <GitBranch size={13} className="text-steam-accent" aria-hidden="true" /> Branch atual
+                <GitBranch size={13} className="text-steam-accent" aria-hidden="true" /> <Termo id="branch" showTechnical /> atual
               </label>
               <select
                 id="dev-branch"
@@ -306,7 +310,7 @@ export default function DevWorkspacePage({ project, repo: initialRepo, onBack, o
             </div>
             <form onSubmit={(event) => void createBranch(event)} className="flex min-w-56 flex-1 items-end gap-2 sm:max-w-lg">
               <div className="min-w-0 flex-1">
-                <label htmlFor="dev-new-branch" className="mb-1.5 block text-xs font-medium text-steam-text/85">Nova branch a partir de {project.defaultBranch ?? 'branch padrão'}</label>
+                <label htmlFor="dev-new-branch" className="mb-1.5 block text-xs font-medium text-steam-text/85">Nova linha de trabalho (branch) a partir de {project.defaultBranch ?? 'linha principal'}</label>
                 <input
                   id="dev-new-branch"
                   value={branchName}
@@ -344,7 +348,7 @@ export default function DevWorkspacePage({ project, repo: initialRepo, onBack, o
               className="inline-flex min-h-9 items-center gap-2 rounded bg-steam-accent px-3 text-xs font-semibold text-steam-bg transition-colors duration-150 hover:bg-steam-accent/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steam-accent focus-visible:ring-offset-2 focus-visible:ring-offset-steam-bg disabled:cursor-wait disabled:opacity-55"
             >
               <RefreshCw size={13} className={busy === 'sync' ? 'animate-spin motion-reduce:animate-none' : ''} aria-hidden="true" />
-              {busy === 'sync' ? 'Sincronizando…' : 'Sincronizar'}
+              {busy === 'sync' ? 'Baixando novidades…' : <Termo id="pull" showTechnical />}
             </button>
             <button
               type="button"
@@ -352,7 +356,7 @@ export default function DevWorkspacePage({ project, repo: initialRepo, onBack, o
               disabled={busy != null}
               className="inline-flex min-h-9 items-center gap-2 rounded border border-steam-elevated bg-steam-panel px-3 text-xs font-medium text-steam-text/90 transition-colors duration-150 hover:bg-steam-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steam-accent disabled:cursor-wait disabled:opacity-55"
             >
-              <Send size={13} aria-hidden="true" /> {busy === 'push' ? 'Enviando…' : 'Enviar alterações'}
+              <Send size={13} aria-hidden="true" /> {busy === 'push' ? 'Enviando…' : <Termo id="push" showTechnical />}
             </button>
             <button
               type="button"
@@ -360,24 +364,24 @@ export default function DevWorkspacePage({ project, repo: initialRepo, onBack, o
               disabled={busy != null}
               className="ml-auto inline-flex min-h-9 items-center gap-2 rounded border border-steam-error/35 px-3 text-xs font-medium text-steam-error transition-colors duration-150 hover:bg-steam-error/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steam-error disabled:cursor-wait disabled:opacity-55"
             >
-              <Trash2 size={13} aria-hidden="true" /> {busy === 'discard' ? 'Descartando…' : 'Descartar workspace'}
+              <Trash2 size={13} aria-hidden="true" /> {busy === 'discard' ? 'Descartando…' : <>Descartar <Termo id="workspace" /></>}
             </button>
             <div className="flex basis-full flex-wrap items-center gap-x-4 gap-y-1 text-xs text-steam-text/75 sm:basis-auto sm:ml-auto" aria-live="polite">
               <span className="tabular-nums">{changeLabel}</span>
               {status != null && status.ahead > 0 && (
-                <span className="inline-flex items-center gap-1 tabular-nums"><ArrowUp size={12} aria-hidden="true" /> {status.ahead} para enviar</span>
+                <span className="inline-flex items-center gap-1 tabular-nums"><ArrowUp size={12} aria-hidden="true" /> {status.ahead} versão(ões) para enviar</span>
               )}
               {status != null && status.behind > 0 && (
-                <span className="inline-flex items-center gap-1 tabular-nums"><ArrowDown size={12} aria-hidden="true" /> {status.behind} para sincronizar</span>
+                <span className="inline-flex items-center gap-1 tabular-nums"><ArrowDown size={12} aria-hidden="true" /> {status.behind === 1 ? 'Há 1 novidade no GitHub' : `Há ${status.behind} novidades no GitHub`}</span>
               )}
             </div>
           </section>
 
           <section className={`flex flex-col ${terminalPanelOpen ? 'min-h-80 flex-1' : ''}`} aria-labelledby="workspace-terminal-title">
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              <h2 id="workspace-terminal-title" className="text-sm font-semibold">Terminal</h2>
+              <h2 id="workspace-terminal-title" className="text-sm font-semibold">Terminal da <Termo id="workspace" /></h2>
               <code className="min-w-0 truncate text-[11px] text-steam-text/50" title={workspace.workspacePath}>{workspace.workspacePath}</code>
-              {busy === 'branch' && <span className="text-[11px] text-steam-text/60" role="status">Atualizando branch…</span>}
+              {busy === 'branch' && <span className="text-[11px] text-steam-text/60" role="status">Atualizando linha de trabalho…</span>}
               <button
                 type="button"
                 onClick={() => {

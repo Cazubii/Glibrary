@@ -52,7 +52,7 @@ function RateLimitCard({ rate, connected }: { rate: GithubRateLimit | null; conn
   );
 }
 
-function ConnectCard({ onConnected, onError }: { onConnected: () => void; onError: (m: string) => void }): React.JSX.Element {
+function ConnectCard({ onConnected, onError }: { onConnected: () => void; onError: (error: unknown) => void }): React.JSX.Element {
   const { updateSettings } = useLibraryStore();
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
@@ -66,7 +66,7 @@ function ConnectCard({ onConnected, onError }: { onConnected: () => void; onErro
       setDraft('');
       onConnected();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       setSaving(false);
     }
@@ -115,7 +115,7 @@ function ConnectCard({ onConnected, onError }: { onConnected: () => void; onErro
 interface Props {
   account: DashboardAccount;
   onConnected: () => void;
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
 }
 
 /** Seção 1 — perfil GitHub e status da cota da API. */

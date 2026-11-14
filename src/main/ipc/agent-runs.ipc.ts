@@ -1,9 +1,12 @@
 import { ipcMain } from 'electron';
+import { translateError } from '../services/error-translator';
 import type { AgentProfile, AgentRun, IpcResult, LogLine } from '../../shared/types';
 import {
   AgentIdInputSchema,
   AgentProfileInputSchema,
   AgentProfileUpdateInputSchema,
+  AgentRunChangesInputSchema,
+  AgentRunChangesResolveInputSchema,
   AgentRunStartInputSchema
 } from '../../shared/schemas';
 import { IpcChannels } from '../../shared/ipc-channels';
@@ -15,7 +18,7 @@ function ok<T>(data: T): IpcResult<T> {
 }
 
 function fail(error: unknown): IpcResult<never> {
-  return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  return { ok: false, error: translateError(error) };
 }
 
 export function registerAgentRunsIpc(store: LibraryStore, manager: AgentRunManager): void {
@@ -73,6 +76,20 @@ export function registerAgentRunsIpc(store: LibraryStore, manager: AgentRunManag
     try {
       const { id } = AgentIdInputSchema.parse(raw);
       return ok(manager.getLogs(id));
+    } catch (e) { return fail(e); }
+  });
+
+  ipcMain.handle(IpcChannels.agentRunsGetChanges, async (_event, raw: unknown): Promise<IpcResult<Awaited<ReturnType<AgentRunManager['getAgentChanges']>>>> => {
+    try {
+      const { id } = AgentRunChangesInputSchema.parse(raw);
+      return ok(await manager.getAgentChanges(id));
+    } catch (e) { return fail(e); }
+  });
+
+  ipcMain.handle(IpcChannels.agentRunsResolveChanges, async (_event, raw: unknown): Promise<IpcResult<Awaited<ReturnType<AgentRunManager['resolveAgentChanges']>>>> => {
+    try {
+      const input = AgentRunChangesResolveInputSchema.parse(raw);
+      return ok(await manager.resolveAgentChanges(input.id, input.action));
     } catch (e) { return fail(e); }
   });
 }

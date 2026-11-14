@@ -11,7 +11,8 @@ import type {
   Repo
 } from '../../shared/types';
 import { isSafeDirectoryName } from '../../shared/validators';
-import { decodeToken } from './github-api';
+import { assertProtectedBranchPush } from './git-protection';
+import { getGithubAccessToken } from './github-oauth';
 import { GitService, githubAuthHeader, isGithubRemote, sanitizeGitOutput } from './git-service';
 import type { LibraryStore } from './library-store';
 
@@ -86,7 +87,7 @@ function userFacingError(error: unknown): Error {
 class NodeDevWorkspaceExecutor implements DevWorkspaceExecutor {
   constructor(
     private readonly git: GitService,
-    private readonly token: () => string | undefined
+    private readonly token: () => Promise<string | undefined>
   ) {}
 
   async exists(path: string): Promise<boolean> {
@@ -116,7 +117,7 @@ class NodeDevWorkspaceExecutor implements DevWorkspaceExecutor {
 
   async clone(repoId: string, remoteUrl: string, target: string): Promise<void> {
     const name = basename(target);
-    await this.git.clone(repoId, remoteUrl, dirname(target), name, () => undefined, this.token());
+    await this.git.clone(repoId, remoteUrl, dirname(target), name, () => undefined, await this.token());
   }
 
   async currentBranch(path: string): Promise<string | null> {
@@ -168,7 +169,7 @@ class NodeDevWorkspaceExecutor implements DevWorkspaceExecutor {
   }
 
   async push(path: string): Promise<{ branch: string }> {
-    return this.git.push(path, this.token());
+    return this.git.push(path, await this.token());
   }
 
   private at(path: string): SimpleGit {
@@ -177,7 +178,7 @@ class NodeDevWorkspaceExecutor implements DevWorkspaceExecutor {
 
   private async authenticatedAt(path: string): Promise<SimpleGit> {
     const remoteUrl = await this.git.getRemoteUrl(path);
-    const token = this.token();
+    const token = await this.token();
     if (remoteUrl != null && isGithubRemote(remoteUrl) && token != null && token !== '') {
       return simpleGit({ baseDir: path, config: ['-c', `http.extraHeader=${githubAuthHeader(token)}`] });
     }
@@ -198,7 +199,7 @@ export class DevWorkspaceManager {
     this.workspacesRoot = resolve(workspacesRoot);
     this.executor = executor ?? new NodeDevWorkspaceExecutor(
       new GitService(),
-      () => decodeToken(this.store.getSettings().githubToken)
+      () => getGithubAccessToken(this.store)
     );
   }
 
@@ -343,8 +344,10 @@ export class DevWorkspaceManager {
     return { ...result, status: await this.status(session.workspacePath) };
   }
 
-  async push(repoId: string): Promise<{ branch: string; status: DevWorkspaceStatus }> {
+  async push(repoId: string, confirmProtectedBranch = false): Promise<{ branch: string; status: DevWorkspaceStatus }> {
     const session = this.requireSession(repoId);
+    const branch = await this.executor.currentBranch(session.workspacePath);
+    assertProtectedBranchPush(branch, !this.store.getSettings().showAdvancedResources, confirmProtectedBranch);
     const result = await this.executor.push(session.workspacePath);
     return { ...result, status: await this.status(session.workspacePath) };
   }

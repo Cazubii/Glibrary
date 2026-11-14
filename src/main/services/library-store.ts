@@ -54,10 +54,17 @@ export function defaultSettings(reposRoot: string): Settings {
     editorCommand: 'code',
     terminalPreference: 'auto',
     theme: 'dark',
+    showAdvancedResources: true,
     viewMode: 'grid',
     checkUpdatesOnStart: false,
     inheritTags: true,
-    userTools: []
+    userTools: [],
+    onboarding: {
+      status: 'not-started',
+      currentStep: 0,
+      completedChecklist: [],
+      checklistVisible: false
+    }
   };
 }
 
@@ -88,15 +95,37 @@ export function migrateLibrary(raw: unknown): LibraryFile {
     }
     return LibraryFileSchema.parse({
       version: 2, repos: [], skills: [], bases, projects,
-      settings: { ...old.settings, basesRoot: join(homedir(), 'BASES'), skillFolders: defaultSettings(old.settings.reposRoot).skillFolders }
+      settings: {
+        ...defaultSettings(old.settings.reposRoot),
+        ...old.settings,
+        basesRoot: join(homedir(), 'BASES'),
+        skillFolders: defaultSettings(old.settings.reposRoot).skillFolders,
+        onboarding: {
+          status: old.repos.length > 0 ? 'dismissed' : 'not-started',
+          currentStep: 0,
+          completedChecklist: [],
+          checklistVisible: false
+        }
+      }
     });
   }
   if (version === 2) {
     const settings = record['settings'] != null && typeof record['settings'] === 'object'
       ? record['settings'] as Record<string, unknown> : {};
+    const hasExistingContent = ['repos', 'skills', 'agents', 'bases', 'projects', 'kits', 'agentProfiles']
+      .some((key) => Array.isArray(record[key]) && (record[key] as unknown[]).length > 0);
+    const onboardingDefault = {
+      status: hasExistingContent ? 'dismissed' : 'not-started',
+      currentStep: 0,
+      completedChecklist: [],
+      checklistVisible: false
+    } as const;
+    const onboarding = settings['onboarding'] != null && typeof settings['onboarding'] === 'object'
+      ? { ...onboardingDefault, ...(settings['onboarding'] as Record<string, unknown>) }
+      : onboardingDefault;
     const parsed = LibraryFileSchema.parse({
       ...record,
-      settings: { ...defaultSettings(String(settings['reposRoot'] ?? '')), ...settings }
+      settings: { ...defaultSettings(String(settings['reposRoot'] ?? '')), ...settings, onboarding }
     });
     return { ...parsed, settings: { ...defaultSettings(parsed.settings.reposRoot), ...parsed.settings } };
   }
@@ -150,7 +179,14 @@ export class LibraryStore {
     try {
       const parsed = JSON.parse(raw) as unknown;
       this.data = migrateLibrary(parsed);
-      if (parsed != null && typeof parsed === 'object' && (parsed as Record<string, unknown>)['version'] === 1) {
+      const record = parsed != null && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
+      const rawSettings = record['settings'] != null && typeof record['settings'] === 'object'
+        ? record['settings'] as Record<string, unknown> : {};
+      const rawOnboarding = rawSettings['onboarding'] != null && typeof rawSettings['onboarding'] === 'object'
+        ? rawSettings['onboarding'] as Record<string, unknown> : {};
+      const hasCompleteOnboardingState = ['status', 'currentStep', 'completedChecklist', 'checklistVisible']
+        .every((key) => Object.hasOwn(rawOnboarding, key));
+      if (record['version'] === 1 || (record['version'] === 2 && !hasCompleteOnboardingState)) {
         await this.save();
       }
     } catch {

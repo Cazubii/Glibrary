@@ -1,12 +1,18 @@
 import type {
   DetectionResult,
+  AppUpdateState,
+  IpcError,
+  GitChangePreview,
   GitStatusDetail,
   GithubUser,
+  GithubOAuthDeviceSession,
+  GithubOAuthPollResult,
   IpcResult,
   LibraryFile,
   Agent,
   AgentProfile,
   AgentRun,
+  AgentChangesResolution,
   AgentsScanResult,
   BaseItem,
   Kit,
@@ -16,6 +22,8 @@ import type {
   LogLine,
   ProcessKind,
   Repo,
+  RepoGitPrepareResult,
+  RepoPublishResult,
   RunHandle,
   ScanFolderSuggestion,
   ScanProgress,
@@ -36,16 +44,29 @@ import type {
   TerminalListResult,
   TerminalSessionSummary
 } from '../../../shared/types';
+import { AppUpdateStateSchema, IpcErrorSchema } from '../../../shared/schemas';
 import type { ToolStatus as SystemToolStatus } from '../../../shared/tools';
 import { IpcChannels } from '../../../shared/ipc-channels';
 import type { DashboardAccount } from '../../../shared/github-dashboard';
 import type { ProjectRepoPage, ProjectVisibility } from '../../../shared/github-projects';
 import type { GitBranchList } from '../../../shared/git-branches';
 
-async function unwrap<T>(promise: Promise<unknown>): Promise<T> {
+export async function unwrap<T>(promise: Promise<unknown>): Promise<T> {
   const result = (await promise) as IpcResult<T>;
-  if (!result.ok) throw new Error(result.error);
+  if (!result.ok) {
+    const parsedError = IpcErrorSchema.safeParse(result.error);
+    if (parsedError.success) throw new GlibraryApiError(parsedError.data);
+    if (typeof result.error === 'string') throw new Error(result.error);
+    throw new Error('Não foi possível concluir esta ação.');
+  }
   return result.data;
+}
+
+export class GlibraryApiError extends Error {
+  constructor(readonly presentation: IpcError) {
+    super(`${presentation.title}. ${presentation.whatHappened} ${presentation.nextStep}`);
+    this.name = 'GlibraryApiError';
+  }
 }
 
 function detectNativeTools(): Promise<Record<string, ToolStatus>>;
@@ -55,6 +76,17 @@ function detectNativeTools(id?: string): Promise<ToolStatus | Record<string, Too
 }
 
 export const api = {
+  appUpdateGetState: async (): Promise<AppUpdateState> =>
+    AppUpdateStateSchema.parse(await unwrap<AppUpdateState>(window.api.invoke(IpcChannels.appUpdateGetState))),
+  appUpdateCheck: async (): Promise<AppUpdateState> =>
+    AppUpdateStateSchema.parse(await unwrap<AppUpdateState>(window.api.invoke(IpcChannels.appUpdateCheck))),
+  appUpdateInstall: (): Promise<null> =>
+    unwrap<null>(window.api.invoke(IpcChannels.appUpdateInstall)),
+  onAppUpdateChanged: (listener: (state: AppUpdateState) => void) =>
+    window.api.on(IpcChannels.appUpdateChanged, (payload: unknown) => {
+      const parsed = AppUpdateStateSchema.safeParse(payload);
+      if (parsed.success) listener(parsed.data);
+    }),
   assetsGet: (): Promise<{
     skills: Skill[];
     agents: Agent[];
@@ -152,6 +184,9 @@ export const api = {
       listener(payload as IpcResult<TopRepos>);
     }),
   projectAdd: (path: string): Promise<ProjectRef> => unwrap(window.api.invoke(IpcChannels.projectAdd, { path })),
+
+  projectCreateStarter: (): Promise<string> =>
+    unwrap<string>(window.api.invoke(IpcChannels.projectCreateStarter)),
   libraryGet: (): Promise<LibraryFile> =>
     unwrap<LibraryFile>(window.api.invoke(IpcChannels.libraryGet)),
 
@@ -200,8 +235,8 @@ export const api = {
   devWorkspaceSync: (repoId: string): Promise<{ updated: boolean; summary: string; status: DevWorkspaceStatus }> =>
     unwrap<{ updated: boolean; summary: string; status: DevWorkspaceStatus }>(window.api.invoke(IpcChannels.devWorkspaceSync, { repoId })),
 
-  devWorkspacePush: (repoId: string): Promise<{ branch: string; status: DevWorkspaceStatus }> =>
-    unwrap<{ branch: string; status: DevWorkspaceStatus }>(window.api.invoke(IpcChannels.devWorkspacePush, { repoId })),
+  devWorkspacePush: (repoId: string, confirmProtectedBranch = false): Promise<{ branch: string; status: DevWorkspaceStatus }> =>
+    unwrap<{ branch: string; status: DevWorkspaceStatus }>(window.api.invoke(IpcChannels.devWorkspacePush, { repoId, confirmProtectedBranch })),
 
   repoPull: (id: string): Promise<{ updated: boolean; summary: string }> =>
     unwrap<{ updated: boolean; summary: string }>(window.api.invoke(IpcChannels.repoPull, { id })),
@@ -325,6 +360,18 @@ export const api = {
   githubAuthCheck: (token: string): Promise<GithubUser> =>
     unwrap<GithubUser>(window.api.invoke(IpcChannels.githubAuthCheck, { token })),
 
+  githubOAuthStatus: (): Promise<{ configured: boolean }> =>
+    unwrap<{ configured: boolean }>(window.api.invoke(IpcChannels.githubOAuthStatus)),
+
+  githubOAuthStart: (): Promise<GithubOAuthDeviceSession> =>
+    unwrap<GithubOAuthDeviceSession>(window.api.invoke(IpcChannels.githubOAuthStart)),
+
+  githubOAuthPoll: (sessionId: string): Promise<GithubOAuthPollResult> =>
+    unwrap<GithubOAuthPollResult>(window.api.invoke(IpcChannels.githubOAuthPoll, { sessionId })),
+
+  githubOAuthCancel: (sessionId: string): Promise<void> =>
+    unwrap<void>(window.api.invoke(IpcChannels.githubOAuthCancel, { sessionId })),
+
   usageRecord: (kind: 'skill' | 'agent', id: string): Promise<UsageEvent> =>
     unwrap<UsageEvent>(window.api.invoke(IpcChannels.usageRecord, { kind, id })),
 
@@ -339,11 +386,26 @@ export const api = {
   repoGitStatus: (id: string): Promise<GitStatusDetail> =>
     unwrap<GitStatusDetail>(window.api.invoke(IpcChannels.repoGitStatus, { id })),
 
-  repoCommit: (id: string, message: string): Promise<{ commit: string }> =>
-    unwrap<{ commit: string }>(window.api.invoke(IpcChannels.repoCommit, { id, message })),
+  repoGitPrepare: (id: string, identity?: { name: string; email: string }): Promise<RepoGitPrepareResult> =>
+    unwrap<RepoGitPrepareResult>(window.api.invoke(IpcChannels.repoGitPrepare, { id, ...(identity != null ? { identity } : {}) })),
 
-  repoPush: (id: string): Promise<{ branch: string }> =>
-    unwrap<{ branch: string }>(window.api.invoke(IpcChannels.repoPush, { id })),
+  repoGitPreview: (id: string): Promise<GitChangePreview> =>
+    unwrap<GitChangePreview>(window.api.invoke(IpcChannels.repoGitPreview, { id })),
+
+  repoCommit: (id: string, message: string, revision: string): Promise<{ commit: string }> =>
+    unwrap<{ commit: string }>(window.api.invoke(IpcChannels.repoCommit, { id, message, revision })),
+
+  repoGitUndo: (id: string): Promise<{ branch: string; commit: string }> =>
+    unwrap<{ branch: string; commit: string }>(window.api.invoke(IpcChannels.repoGitUndo, { id })),
+
+  repoGitRevert: (id: string): Promise<{ branch: string; commit: string }> =>
+    unwrap<{ branch: string; commit: string }>(window.api.invoke(IpcChannels.repoGitRevert, { id })),
+
+  repoPush: (id: string, confirmProtectedBranch = false): Promise<{ branch: string }> =>
+    unwrap<{ branch: string }>(window.api.invoke(IpcChannels.repoPush, { id, confirmProtectedBranch })),
+
+  repoPublish: (input: { id: string; name: string; description?: string; visibility: 'private' | 'public'; confirmProtectedBranch?: boolean }): Promise<RepoPublishResult> =>
+    unwrap<RepoPublishResult>(window.api.invoke(IpcChannels.repoPublish, input)),
 
   terminalList: (cwd: string): Promise<TerminalListResult> =>
     unwrap<TerminalListResult>(window.api.invoke(IpcChannels.terminalList, { cwd })),
@@ -405,6 +467,12 @@ export const api = {
 
   agentRunsGetLogs: (id: string): Promise<LogLine[]> =>
     unwrap<LogLine[]>(window.api.invoke(IpcChannels.agentRunsGetLogs, { id })),
+
+  agentRunsGetChanges: (id: string): Promise<GitChangePreview> =>
+    unwrap<GitChangePreview>(window.api.invoke(IpcChannels.agentRunsGetChanges, { id })),
+
+  agentRunsResolveChanges: (id: string, action: 'keep' | 'discard'): Promise<AgentChangesResolution> =>
+    unwrap<AgentChangesResolution>(window.api.invoke(IpcChannels.agentRunsResolveChanges, { id, action })),
 
   onAgentRunsChanged: (listener: (run: AgentRun) => void) =>
     window.api.on(IpcChannels.agentRunsChanged, (payload: unknown) => {

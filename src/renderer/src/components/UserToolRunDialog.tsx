@@ -21,7 +21,7 @@ export default function UserToolRunDialog({
 }: {
   pending: PendingToolRun;
   onClose: () => void;
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
   onSuccess?: (message: string) => void;
 }): React.JSX.Element {
   const [stage, setStage] = useState<Stage>({ state: 'confirm' });
@@ -38,7 +38,7 @@ export default function UserToolRunDialog({
       setStage({ state: 'result', output: result.output ?? '', code: result.code ?? 0, started: false });
     } catch (e) {
       onClose();
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     }
   }, [pending, onClose, onError, onSuccess]);
 

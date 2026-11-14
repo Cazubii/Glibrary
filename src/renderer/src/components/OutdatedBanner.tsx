@@ -6,7 +6,7 @@ import { api } from '../lib/api';
 const MAX_CHECKS = 12;
 
 interface Props {
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
   onSuccess?: (message: string) => void;
   checkOnStart: boolean;
   onCheckOnStartChange: (enabled: boolean) => void;
@@ -51,7 +51,7 @@ export default function OutdatedBanner({ onError, onSuccess, checkOnStart, onChe
       );
     } catch (e) {
       setResultMessage('A verificação falhou. Tente novamente.');
-      onError(e instanceof Error ? e.message : String(e));
+      onError(e);
     } finally {
       checkInProgress.current = false;
       setChecked(true);
@@ -72,7 +72,7 @@ export default function OutdatedBanner({ onError, onSuccess, checkOnStart, onChe
         const result = await api.repoPull(repo.id);
         if (result.updated) updated += 1;
       } catch (e) {
-        onError(e instanceof Error ? e.message : String(e));
+        onError(e);
       }
     }
     setPulling(false);

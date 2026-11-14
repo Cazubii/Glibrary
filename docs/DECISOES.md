@@ -1,5 +1,16 @@
 # Decisões do projeto
 
+## 2026-11-13 — F1 Navegação por intenção
+
+### Cinco áreas principais agrupam as telas existentes
+O shell do app passa a abrir em **Início** e apresentar **Projetos**, **Biblioteca**, **Descobrir** e **Agentes**. Projetos locais e do GitHub ficam em subáreas; Skills, agentes e Bases ficam em Biblioteca; busca, Top GitHub e análise ficam em Descobrir; execuções e consumo ficam em Agentes. Ferramentas, tema e preferências ficam em Configurações.
+
+### Visibilidade de recursos avançados é uma preferência persistida
+`settings.showAdvancedResources` controla Coleções, Análise e Consumo detalhado. Até o mantenedor escolher se o modo simples deve ser o padrão, bibliotecas novas e existentes usam `true` para manter todas as funções visíveis; essa compatibilidade não fecha a decisão de produto. A migração v2 mescla o valor padrão e preserva os demais dados.
+
+### Início mostra os projetos locais recentes
+A lista deriva de `assets:get`, ordena pelo campo `addedAt` e limita a quatro itens. O botão abre a área Projetos. O checklist de cinco passos e o assistente persistente de primeira abertura ficam para F2.
+
 Registro de decisões tomadas durante a execução (diretriz 12 da spec).
 
 ## 2026-10-30 — Fase 0
@@ -404,3 +415,98 @@ GitHub conectada, gráficos e os repositórios registrados, acima do uso da bibl
 - Projetos sincronizados derivam do `useLibraryStore` (mesmos dados do detalhe do
   repositório), sem canal extra, para não divergir após favoritar.
 - Gráficos em SVG/CSS puro, reaproveitando `charts.tsx`; nenhuma dependência nova.
+
+## 2026-11-13 — F4 Linguagem simples e ajuda no contexto
+
+### Termos técnicos aparecem depois do nome simples e têm dica de contexto
+O glossário compartilhado mantém nome cotidiano, termo técnico e explicação curta. O componente `Termo` mostra o nome cotidiano com um ícone de informação; ações Git prioritárias também exibem o termo técnico entre parênteses. A dica abre por foco e clique, é vinculada com `aria-describedby` e fecha com Escape.
+
+### Explicações não escolhem o padrão do modo simples
+A preferência inicial por modo simples continua pendente do mantenedor. As dicas da F4 aparecem nas telas alteradas independentemente dessa preferência para que o significado não dependa de uma configuração oculta.
+
+## 2026-11-13 — F5 Erros que ensinam
+
+### Erros IPC estruturados preservam o envelope existente
+As respostas de falha continuam usando `{ ok: false, error }`; `error` pode ser uma frase legada ou uma estrutura com título, resumo, próximo passo, detalhes técnicos e ação opcional. Isso permite orientar a interface sem quebrar consumidores que ainda enviam strings.
+
+### Detalhes técnicos ficam recolhidos e credenciais são mascaradas
+Erros comuns de Git, GitHub, sistema e ferramentas recebem mensagens em pt-BR. O tradutor verifica limites da API antes de permissão HTTP 403, pois ambos podem compartilhar o mesmo status; detalhes são sanitizados antes de chegar à interface.
+
+### Botões só aparecem quando existe destino claro no app
+Falhas de autenticação levam à área Projetos e ferramentas ausentes levam a Ferramentas. Conflitos, permissões, rede e outros casos mostram um próximo passo sem prometer uma ação automática.
+
+Registro de decisões tomadas durante a execução (diretriz 12 da spec).
+
+## 2026-11-13 — F2 Primeira experiência guiada
+
+### Assistente persistente com retomada e saída explícita
+O progresso fica em `settings.onboarding` no `library.json`: estado do assistente, passo atual, pasta de projetos, checklist e sua visibilidade. Bibliotecas novas começam em `not-started`; bibliotecas v1/v2 antigas com conteúdo são migradas para `dismissed`, sem interromper a pessoa. Bibliotecas antigas vazias recebem o assistente. A migração v2 é gravada pelo fluxo atômico existente e mantém a cópia de backup.
+
+### Verificação cobre CLIs suportados sem eleger o padrão
+Git, Node.js e os CLIs Claude Code, OpenCode, Codex, Gemini e Aider são detectados pela lista fixa de comandos. A detecção não escolhe nem recomenda um CLI; a decisão continua pendente do mantenedor.
+
+### Checklist só aparece depois que a pessoa conclui ou dispensa o assistente
+As cinco etapas ficam em Início e são marcadas pela própria pessoa; o painel some quando todas estiverem concluídas. A conta GitHub segue opcional e usa a tela PAT existente. Device Flow aguarda a F3 e o client ID OAuth do mantenedor.
+
+## 2026-11-13 — Login GitHub por Device Flow
+
+**Contexto:** o fluxo atual exige gerar e colar manualmente um Personal Access Token com escopo amplo `repo`, o que é uma barreira para iniciantes.
+
+**Decisão de implementação:** preparar autenticação desktop pelo Device Flow de um GitHub App. A documentação do GitHub recomenda esse fluxo para apps desktop, e GitHub Apps permitem permissões de repositório mais específicas do que OAuth Apps. O client ID é público e será injetado no build pela variável `GLIBRARY_GITHUB_OAUTH_CLIENT_ID`; nenhum `client_secret` será empacotado. O login fica desativado e explica a dependência enquanto o client ID estiver vazio.
+
+- Permissões iniciais propostas: `Metadata: read` e `Contents: read/write`; a instalação do app e a seleção de repositórios determinam onde pode atuar. `Administration: write` fica fora do escopo inicial e só será avaliada se a F7 precisar criar repositórios remotos.
+- Pedir `offline_access` para access token de 8 horas e refresh token de 6 meses; renovar antes do vencimento e guardar a rotação dos dois tokens cifrada com `safeStorage`.
+- O código temporário de dispositivo fica apenas na memória do processo principal; o renderer recebe o código de uso único e nunca recebe device/access/refresh token.
+- “Sair deste computador” apaga as credenciais locais, mas não revoga a autorização remota. A interface aponta Configurações > Integrações > Aplicações para revogar o GitHub App e Developer settings > Personal access tokens para revogar um PAT.
+- PAT permanece em “Opções avançadas” e continua cifrado por `safeStorage`; ao salvar PAT, dados de renovação OAuth antigos são apagados.
+
+**Comparação:** OAuth App também suporta Device Flow, mas usa escopos tradicionais como `repo`, que combina acesso de leitura e escrita a repositórios privados. GitHub App foi escolhido por permitir permissões granulares; essa escolha depende de registrar um GitHub App e habilitar Device Flow pelo mantenedor. Nenhum app foi registrado pelo executor.
+
+**Decisão pendente do mantenedor:** fornecer o client ID e habilitar Device Flow nas configurações do GitHub App. O `client_secret` e a assinatura de código não são necessários para o fluxo de dispositivo.
+
+Referências oficiais: [Device Flow e user access tokens](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app), [renovação e expiração](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/refreshing-user-access-tokens), [permissões GitHub App versus OAuth App](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/differences-between-github-apps-and-oauth-apps), [habilitar Device Flow](https://docs.github.com/en/apps/maintaining-github-apps/modifying-a-github-app-registration), [revogar autorização](https://docs.github.com/en/apps/using-github-apps/reviewing-and-revoking-authorization-of-github-apps).
+
+## 2026-11-13 — F6 Rede de proteção
+
+### Revisão de versão e recuperação Git
+O salvamento primeiro mostra os arquivos e o diff; só depois da confirmação prepara e salva exatamente a revisão exibida. Se os arquivos mudarem enquanto a tela está aberta, é exigida uma nova revisão. No modo simples, agentes iniciados em `main` ou `master` passam para `glibrary/<data>-<assunto>`; o processo principal também exige confirmação antes de enviar diretamente para essas branches. Desfazer usa reset misto apenas para um commit local ainda não enviado, preservando os arquivos. Para um commit enviado, Reverter cria um novo commit local e não publica automaticamente.
+
+### Descarte do agente depende do snapshot e do projeto salvo
+O Glibrary captura quais arquivos já estavam sujos antes da execução e não os inclui no resumo. Ao terminar, grava hash SHA-256 dos caminhos novos e alterados que estavam limpos no início. O processo principal compara a pasta real da execução com o caminho atual salvo para o projeto e compara novamente o hash antes de apagar/restaurar. Arquivos que mudaram depois do snapshot permanecem no resumo e não são descartados. “Manter” limpa apenas o resumo; “Descartar” pede confirmação com os nomes dos arquivos.
+
+### Limites de custo usam somente telemetria disponível
+Os tetos opcionais por execução e por dia ficam em `settings.agentRunBudgetUsd` e `settings.agentDailyBudgetUsd`, sem mudar `library.json` v2. O dia é local e o custo vem da telemetria de Claude Code ou OpenCode; um comando genérico não inicia enquanto houver teto configurado. O aviso aparece a 80%, e o processo principal para a execução ao receber um valor que alcança o teto. No limite diário, para todas as execuções monitoradas ativas. Como a medição depende do provedor, o valor reportado pela CLI é a referência usada pelo aplicativo.
+
+## 2026-11-14 — F7 Receitas guiadas
+
+### Modelo de site incluído funciona sem dependências
+Além de Bases cadastradas pela pessoa, a primeira receita oferece um site estático incluído no pacote do aplicativo. O main copia os arquivos para `settings.basesRoot` em uma pasta nova (`meu-primeiro-site`, com sufixo se necessário), nunca sobrescreve um projeto existente e não executa código durante a cópia. A pessoa pode abrir `index.html` no navegador depois da execução do agente.
+
+### Projetos do catálogo e projetos de agentes são registros separados
+Uma Base clonada para a primeira receita é registrada como `ProjectRef` para associar uma Coleção e como `Repo` para usar perfis e execuções de agentes. A receita reutiliza registros existentes para o mesmo caminho, evitando duplicatas.
+
+### Cancelar uma receita preserva o trabalho já iniciado
+Cancelar interrompe os próximos passos e não remove arquivos, commits, clones ou repositórios remotos criados. Se um clone já começou, ele pode terminar em segundo plano e continua disponível em Projetos.
+
+### Publicação revisa primeiro, cria privado por padrão e guarda o token fora do remote
+A pessoa revisa e salva as mudanças locais antes de criar o repositório remoto. O remoto é privado por padrão; a opção pública mostra aviso e exige confirmação adicional. O GitHub devolve apenas uma URL HTTPS sem credencial, e o token permanece no header temporário do processo Git, sem entrar em `.git/config` ou no retorno IPC. Se a criação remota for concluída e o push falhar, o Glibrary mantém a URL salva para permitir nova tentativa sem recriar o repositório.
+
+### Criação de repositório exige permissão mínima do GitHub App
+`POST /user/repos` requer `Repository creation: write` para o user access token do GitHub App; um PAT clássico precisa de `public_repo` para público ou `repo` para privado. A configuração atual do App não inclui a permissão de criação. O executor não alterou o App; o mantenedor precisa conceder essa permissão e solicitar nova autorização, ou a pessoa pode usar o PAT avançado. A recomendação de CLI permanece pendente; cada receita exige que a pessoa escolha uma CLI já instalada.
+
+Referências oficiais: [Criar repositório para a conta autenticada](https://docs.github.com/en/rest/repos/repos#create-a-repository-for-the-authenticated-user), [escolher permissões de GitHub App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app).
+
+## 2026-11-14 — F8 Releases multiplataforma
+
+### A primeira distribuição foca Windows e Linux
+Por orientação do mantenedor em 2026-11-14, o workflow `release.yml` publica Windows NSIS e Linux AppImage quando a tag `v*` corresponde à versão do `package.json`. A matriz de CI continua incluindo macOS para detectar regressões, mas a geração de instaladores macOS foi adiada. A configuração DMG/ZIP fica preservada em `electron-builder.yml` para uma fase futura. O provider é explicitamente `Cazubii/Glibrary`; o token de publicação vem do `GITHUB_TOKEN` do GitHub Actions. Nenhuma release real foi criada nesta frente.
+
+### A assinatura de código continua decisão do mantenedor
+O instalador Windows ainda não tem assinatura e pode exibir avisos do SmartScreen. A assinatura/notarização do macOS será avaliada quando a distribuição dessa plataforma voltar ao escopo. Não criamos certificados nem secrets.
+
+### O updater usa electron-updater com instalação explícita
+O `electron-updater` 6.8.12 é dependência de produção e consulta as Releases do GitHub configuradas no electron-builder. Em builds empacotadas de Windows e Linux, o app verifica e baixa a atualização, mostra o progresso e espera a pessoa escolher “Reiniciar e atualizar”; não instala durante o uso. O IPC expõe estado, verificação e instalação com envelopes `{ ok, data | error }`, e valida os estados com Zod. O auto-update macOS não faz parte do foco atual. O CI do PR #15 validou `pnpm install --frozen-lockfile`, typecheck, lint, testes e build em Windows, macOS e Linux.
+
+Referência técnica: [Auto Update no electron-builder v26](https://www.electron.build/v26/docs/features/auto-update/).
+
+Referências oficiais: [Auto Update no electron-builder v26](https://www.electron.build/v26/docs/features/auto-update/), [GitHub Actions no electron-builder v26](https://www.electron.build/v26/docs/features/github-actions/), [configuração de publicação no electron-builder v26](https://www.electron.build/v26/docs/publish/).

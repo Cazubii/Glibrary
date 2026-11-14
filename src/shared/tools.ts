@@ -1,3 +1,5 @@
+import { AGENT_CLI_PRESETS } from './agent-presets';
+
 export interface ToolDef {
   id: string;
   name: string;
@@ -43,7 +45,13 @@ export const TOOLS: ToolDef[] = [
   { id: 'java', name: 'Java', command: 'java', args: ['-version'], downloadUrl: 'https://adoptium.net' },
   { id: 'mvn', name: 'Maven', command: 'mvn', args: ['-v'] },
   { id: 'make', name: 'Make', command: 'make', args: ['--version'] },
-  { id: 'code', name: 'VS Code', command: 'code', args: ['--version'], downloadUrl: 'https://code.visualstudio.com' }
+  { id: 'code', name: 'VS Code', command: 'code', args: ['--version'], downloadUrl: 'https://code.visualstudio.com' },
+  ...AGENT_CLI_PRESETS.map((preset) => ({
+    id: `agent-cli-${preset.id}`,
+    name: `${preset.label} CLI`,
+    command: preset.command,
+    args: ['--version']
+  }))
 ];
 
 export const TOOLS_BY_ID: Record<string, ToolDef> = Object.fromEntries(

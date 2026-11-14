@@ -9,17 +9,40 @@ import { useDashboardStore } from '../store/dashboard';
 import GithubAccountSection from '../components/dashboard/GithubAccountSection';
 import GithubCharts from '../components/dashboard/GithubCharts';
 import SyncedReposSection from '../components/dashboard/SyncedReposSection';
+import GettingStartedChecklist from '../components/GettingStartedChecklist';
+import GuidedRecipes from '../components/GuidedRecipes';
 import RepoDetailPage from './RepoDetailPage';
 
 type Section = 'skills' | 'agents';
 
-interface Props { onError: (message: string) => void; onSuccess: (message: string) => void }
+interface Props {
+  onError: (error: unknown) => void;
+  onSuccess: (message: string) => void;
+  onOpenProjects: () => void;
+  onOpenTools: () => void;
+  onOpenAgents: () => void;
+}
 
 /** Aba inicial: conta GitHub, gráficos, projetos sincronizados e uso da biblioteca. */
-export default function DashboardPage({ onError, onSuccess }: Props): React.JSX.Element {
+export default function DashboardPage({ onError, onSuccess, onOpenProjects, onOpenTools, onOpenAgents }: Props): React.JSX.Element {
   const { account, loading, refreshing, error, load } = useDashboardStore();
   const [openRepoId, setOpenRepoId] = useState<string | null>(null);
+  const [recentProjects, setRecentProjects] = useState<ProjectRef[] | null>(null);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    api.assetsGet()
+      .then(({ projects }) => {
+        if (cancelled) return;
+        const recent = projects
+          .filter((project) => project.localPath != null)
+          .sort((left, right) => Date.parse(right.addedAt) - Date.parse(left.addedAt))
+          .slice(0, 4);
+        setRecentProjects(recent);
+      })
+      .catch((e: unknown) => onError(e));
+    return () => { cancelled = true; };
+  }, [onError]);
   const refresh = useCallback(() => { void load(true); }, [load]);
 
   if (openRepoId != null) {
@@ -30,7 +53,7 @@ export default function DashboardPage({ onError, onSuccess }: Props): React.JSX.
     <main className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto p-6">
       <header className="flex items-center">
         <div>
-          <h1 className="text-xl font-semibold">Dashboard</h1>
+            <h1 className="text-xl font-semibold">Início</h1>
           <p className="mt-1 text-xs text-steam-text/50">
             Sua conta GitHub, os repositórios sincronizados e a saúde da biblioteca.
             {account != null && ` Atualizado às ${new Date(account.fetchedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`}
@@ -46,6 +69,15 @@ export default function DashboardPage({ onError, onSuccess }: Props): React.JSX.
           {refreshing ? 'Atualizando…' : 'Atualizar'}
         </button>
       </header>
+
+      <GettingStartedChecklist
+        onError={onError}
+        onOpenTools={onOpenTools}
+        onOpenProjects={onOpenProjects}
+        onOpenAgents={onOpenAgents}
+      />
+
+      <GuidedRecipes onError={onError} onSuccess={onSuccess} onOpenAgents={onOpenAgents} />
 
       {error != null && (
         <div role="alert" className="flex items-center gap-3 rounded border border-steam-error/40 bg-steam-error/10 px-4 py-3 text-sm text-steam-error">
@@ -68,6 +100,40 @@ export default function DashboardPage({ onError, onSuccess }: Props): React.JSX.
         </>
       )}
 
+      <section aria-labelledby="recent-projects-title" className="flex flex-col gap-3 border-b border-steam-elevated/30 pb-5">
+        <header className="flex flex-wrap items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <h2 id="recent-projects-title" className="text-base font-semibold">Projetos recentes</h2>
+            <p className="mt-1 text-xs text-steam-text/55">Seus projetos neste computador, prontos para continuar.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenProjects}
+            className="rounded border border-steam-elevated bg-steam-panel px-3 py-1.5 text-xs font-medium hover:bg-steam-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steam-accent"
+          >
+            {recentProjects?.length ? 'Ver projetos' : 'Abrir ou adicionar um projeto'}
+          </button>
+        </header>
+        {recentProjects == null ? (
+          <p className="text-sm text-steam-text/50" role="status">Carregando projetos…</p>
+        ) : recentProjects.length > 0 ? (
+          <ul className="divide-y divide-steam-elevated/40 rounded border border-steam-elevated/50 bg-steam-panel/40">
+            {recentProjects.map((project) => (
+              <li key={project.id} className="flex min-w-0 items-center gap-3 px-3 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-sm font-medium">{project.name}</h3>
+                  <p className="truncate text-xs text-steam-text/50">Adicionado {new Date(project.addedAt).toLocaleDateString('pt-BR')}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded border border-steam-elevated/50 bg-steam-panel/40 px-3 py-4 text-sm text-steam-text/60">
+            Ainda não há projetos locais. Abra ou adicione um projeto para começar.
+          </p>
+        )}
+      </section>
+
       <SyncedReposSection onOpen={setOpenRepoId} onError={onError} />
 
       <LibraryUsageSection onError={onError} onSuccess={onSuccess} />
@@ -76,7 +142,7 @@ export default function DashboardPage({ onError, onSuccess }: Props): React.JSX.
 }
 
 /** Uso de Skills/Agents nos projetos (conteúdo original do Dashboard). */
-function LibraryUsageSection({ onError, onSuccess }: Props): React.JSX.Element {
+function LibraryUsageSection({ onError, onSuccess }: Pick<Props, 'onError' | 'onSuccess'>): React.JSX.Element {
   const [assets, setAssets] = useState<{
     skills: Skill[];
     agents: Agent[];
@@ -93,7 +159,7 @@ function LibraryUsageSection({ onError, onSuccess }: Props): React.JSX.Element {
       .then((data) => {
         if (!cancelled) setAssets({ skills: data.skills, agents: data.agents, bases: data.bases, projects: data.projects, usage: data.usage });
       })
-      .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
+      .catch((e: unknown) => onError(e));
     return () => { cancelled = true; };
   }, [onError]);
 
@@ -152,7 +218,7 @@ function LibraryUsageSection({ onError, onSuccess }: Props): React.JSX.Element {
               const path = await api.dashboardExport(markdown);
               if (path) onSuccess(`Dashboard exportado: ${path}`);
             } catch (e) {
-              onError(e instanceof Error ? e.message : String(e));
+              onError(e);
             }
           }}
           className="ml-auto flex items-center gap-1.5 rounded border border-steam-elevated bg-steam-panel px-3 py-1.5 text-xs hover:bg-steam-elevated/40"

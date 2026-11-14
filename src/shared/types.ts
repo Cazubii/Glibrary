@@ -173,6 +173,17 @@ export interface DevWorkspaceCloseResult {
   removed: boolean;
 }
 
+export type OnboardingStatus = 'not-started' | 'dismissed' | 'completed';
+export type OnboardingChecklistId = 'tools' | 'github' | 'project' | 'agent' | 'publish';
+
+export interface OnboardingProgress {
+  status: OnboardingStatus;
+  currentStep: number;
+  completedChecklist: OnboardingChecklistId[];
+  checklistVisible: boolean;
+  projectsRoot?: string;
+}
+
 export interface Settings {
   reposRoot: string; // pasta padrão para clonar; padrão: ~/Glibrary
   scanFolders: string[];
@@ -180,14 +191,39 @@ export interface Settings {
   skillFolders: string[];
   agentFolders: string[]; // pastas com arquivos .md de agentes
   githubToken?: string; // opcional; salvar com safeStorage
+  githubRefreshToken?: string; // token cifrado de renovação OAuth
+  githubTokenExpiresAt?: number;
+  githubRefreshTokenExpiresAt?: number;
   editorCommand: string; // padrão: "code"
   terminalPreference: 'auto' | string;
   theme: 'dark' | 'light'; // padrão: dark (estilo Steam)
+  showAdvancedResources: boolean; // fallback true até o mantenedor definir o padrão simples
   viewMode: 'grid' | 'list';
   checkUpdatesOnStart: boolean;
   inheritTags: boolean; // projetos herdam tags dos skills/agents/bases associados
   userTools?: UserTool[]; // ferramentas do usuário; ligadas ficam nos projetos
   agentsViewMode?: AgentViewMode; // modo de visualização da página Agentes
+  agentRunBudgetUsd?: number;
+  agentDailyBudgetUsd?: number;
+  onboarding: OnboardingProgress;
+}
+
+export type AppUpdateStatus =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'up-to-date'
+  | 'error'
+  | 'unavailable';
+
+export interface AppUpdateState {
+  status: AppUpdateStatus;
+  currentVersion: string;
+  availableVersion?: string;
+  percent?: number;
+  message?: string;
 }
 
 /** Ferramenta configurada pelo usuário (nome + comando) com chave on/off. */
@@ -309,7 +345,20 @@ export interface LibraryFile {
   settings: Settings;
 }
 
-export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: string };
+export type IpcErrorAction = {
+  label: string;
+  target: 'tools' | 'projects';
+};
+
+export interface IpcError {
+  title: string;
+  whatHappened: string;
+  nextStep: string;
+  technicalDetails: string;
+  action?: IpcErrorAction;
+}
+
+export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: string | IpcError };
 
 export type ProcessKind = 'install' | 'start' | 'extra';
 
@@ -407,6 +456,9 @@ export interface AgentRun {
   accountKey?: string;
   accountLabel?: string;
   tokenUsage?: AgentTokenUsage;
+  agentChanges?: AgentFileChange[];
+  budgetWarning?: boolean;
+  budgetStopReason?: 'execution' | 'daily';
   activity?: AgentActivity[];
   subagents?: AgentSubagent[];
   command: string; // linha completa executada
@@ -418,6 +470,18 @@ export interface AgentRun {
   durationMs?: number;
   lastError?: string; // cauda do stderr quando falha
   logFile: string;
+}
+
+export interface AgentFileChange {
+  path: string;
+  kind: 'tracked' | 'untracked';
+  sha256: string;
+}
+
+export interface AgentChangesResolution {
+  run: AgentRun;
+  discarded: string[];
+  skipped: string[];
 }
 
 export type ToolSource = 'builtin' | 'custom';
@@ -485,6 +549,20 @@ export interface GithubUser {
   avatarUrl?: string;
 }
 
+export interface GithubOAuthDeviceSession {
+  sessionId: string;
+  userCode: string;
+  verificationUri: string;
+  expiresAt: number;
+  intervalSeconds: number;
+}
+
+export type GithubOAuthPollResult =
+  | { status: 'pending'; intervalSeconds: number }
+  | { status: 'complete'; user: GithubUser }
+  | { status: 'expired' }
+  | { status: 'denied' };
+
 export type GitFileState = 'staged' | 'modified' | 'untracked';
 
 export interface GitFile {
@@ -492,9 +570,37 @@ export interface GitFile {
   state: GitFileState;
 }
 
+export interface GitNewFilePreview {
+  path: string;
+  content: string;
+  binary: boolean;
+  truncated: boolean;
+}
+
+export interface GitChangePreview {
+  revision: string;
+  files: GitFile[];
+  diff: string;
+  newFiles: GitNewFilePreview[];
+  truncated: boolean;
+}
+
 export interface GitStatusDetail {
   branch: string | null;
   ahead: number;
   behind: number;
   files: GitFile[];
+}
+
+export interface RepoGitPrepareResult {
+  initialized: boolean;
+  identityReady: boolean;
+}
+
+export interface RepoPublishResult {
+  owner: string;
+  name: string;
+  visibility: 'private' | 'public';
+  htmlUrl: string;
+  branch: string;
 }
