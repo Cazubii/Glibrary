@@ -41,3 +41,6 @@ library.backup.json
 # impeccable-ignore-end
 # Impeccable downloads the engine per platform; keep local binaries out of Git.
 **/skills/impeccable/scripts/bin/
+
+# Super UI Agent: capturas e harness locais
+.super-ui/
