@@ -88,7 +88,7 @@ export function registerRepoIpc(
   git: GitService,
   coversDir: string,
 ): void {
-  const githubToken = (): string | undefined =>
+  const githubToken = async (): Promise<string | undefined> =>
     decodeToken(store.getSettings().githubToken);
   /** Resolve a pasta local de um repo OU de um projeto da biblioteca. */
   const gitTarget = (id: string): string => {
@@ -288,7 +288,7 @@ export function registerRepoIpc(
 
         if (gh != null) {
           try {
-            const meta = await fetchRepoMeta(gh.owner, gh.repo, { token: githubToken() });
+            const meta = await fetchRepoMeta(gh.owner, gh.repo, { token: await githubToken() });
             repo.description = meta.description;
             repo.stars = meta.stars;
             repo.language = meta.language;
@@ -313,7 +313,7 @@ export function registerRepoIpc(
                 store.getSettings().reposRoot,
                 name,
                 (progress) => broadcast(IpcChannels.cloneProgress, { id: saved.id, ...progress }),
-                githubToken(),
+                await githubToken(),
               );
               const detection = await detectProject(target);
               const updated = await store.updateRepo(
@@ -359,7 +359,7 @@ export function registerRepoIpc(
               store.getSettings().reposRoot,
               name,
               (progress) => broadcast(IpcChannels.cloneProgress, { id, ...progress }),
-              githubToken(),
+              await githubToken(),
             );
             const detection = await detectProject(target);
             const updated = await store.updateRepo(
@@ -426,7 +426,7 @@ export function registerRepoIpc(
         if (!repo) return fail(new Error('Repositório não encontrado'));
         const gh = repo.remoteUrl != null ? parseGithubRepo(repo.remoteUrl) : null;
         if (gh == null) return fail(new Error('Não é um repositório GitHub'));
-        const meta = await fetchRepoMeta(gh.owner, gh.repo, { token: githubToken() });
+        const meta = await fetchRepoMeta(gh.owner, gh.repo, { token: await githubToken() });
         const coverPath =
           (await downloadCover(coversDir, id, gh.owner, gh.repo)) ?? repo.coverPath;
         const updated = await store.updateRepo(id, {
@@ -597,7 +597,7 @@ export function registerRepoIpc(
 
   ipcMain.handle(IpcChannels.githubAuthMe, async (): Promise<IpcResult<GithubUser | null>> => {
     try {
-      const token = decodeToken(store.getSettings().githubToken);
+      const token = await decodeToken(store.getSettings().githubToken);
       if (token == null) return ok(null);
       return ok(await fetchGithubUser(token));
     } catch (e) {
@@ -637,7 +637,7 @@ export function registerRepoIpc(
     async (_event, raw: unknown): Promise<IpcResult<{ branch: string }>> => {
       try {
         const { id } = RepoIdInputSchema.parse(raw);
-        return ok(await git.push(gitTarget(id), githubToken()));
+        return ok(await git.push(gitTarget(id), await githubToken()));
       } catch (e) {
         return fail(e);
       }
@@ -672,8 +672,7 @@ export function registerRepoIpc(
       try {
         const patch = SettingsPatchSchema.parse(raw);
         if (patch.githubToken != null) {
-          patch.githubToken =
-            patch.githubToken === '' ? '' : encodeToken(patch.githubToken);
+          patch.githubToken = patch.githubToken === '' ? '' : await encodeToken(patch.githubToken);
         }
         return ok(await store.updateSettings(patch));
       } catch (e) {

@@ -9,7 +9,7 @@ import { loadDashboardAccount } from '../services/github-dashboard';
 /** Dados da conta GitHub para a aba Dashboard (token salvo via safeStorage). */
 export function registerDashboardIpc(store: LibraryStore): void {
   ipcMain.handle(IpcChannels.dashboardAccount, async (): Promise<IpcResult<DashboardAccount>> => {
-    const token = decodeToken(store.getSettings().githubToken);
+    const token = await decodeToken(store.getSettings().githubToken);
     return loadDashboardAccount(fetchJson, token);
   });
 }

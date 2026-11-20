@@ -38,7 +38,7 @@ export function registerProjectsIpc(store: LibraryStore, git: GitService): void 
     async (_event, raw: unknown): Promise<IpcResult<ProjectRepoPage>> => {
       const parsed = ListAccountReposInputSchema.safeParse(raw ?? {});
       if (!parsed.success) return fail(new Error('Parâmetros inválidos para listar repositórios.'));
-      const token = decodeToken(store.getSettings().githubToken);
+      const token = await decodeToken(store.getSettings().githubToken);
       return loadAccountRepos(fetchJson, { ...parsed.data, token });
     }
   );
