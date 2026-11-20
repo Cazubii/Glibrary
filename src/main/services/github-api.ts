@@ -14,14 +14,16 @@ export interface GithubApiOptions {
 }
 
 /** Seção 10: token sempre via safeStorage. */
-export function encodeToken(token: string): string {
-  return safeStorage.encryptString(token).toString('base64');
+export async function encodeToken(token: string): Promise<string> {
+  const encrypted = await safeStorage.encryptStringAsync(token);
+  return encrypted.toString('base64');
 }
 
-export function decodeToken(stored: string | undefined): string | undefined {
+export async function decodeToken(stored: string | undefined): Promise<string | undefined> {
   if (stored == null || stored === '') return undefined;
   try {
-    return safeStorage.decryptString(Buffer.from(stored, 'base64'));
+    const { result } = await safeStorage.decryptStringAsync(Buffer.from(stored, 'base64'));
+    return result;
   } catch {
     return stored;
   }

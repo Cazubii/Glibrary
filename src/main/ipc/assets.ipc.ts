@@ -128,7 +128,7 @@ async function ensureImportFolder(store: LibraryStore, kind: 'skill' | 'agent'):
         existingSkills: store.listSkills(),
         fetchJson,
         fetchText,
-        token: decodeToken(settings.githubToken)
+        token: await decodeToken(settings.githubToken)
       });
       const rescan = await discoverSkills(skillFolders, store.listSkills());
       await store.replaceAssets({ skills: rescan.skills });
@@ -149,7 +149,7 @@ async function ensureImportFolder(store: LibraryStore, kind: 'skill' | 'agent'):
         existingAgents: store.listAgents(),
         fetchJson,
         fetchText,
-        token: decodeToken(settings.githubToken)
+        token: await decodeToken(settings.githubToken)
       });
       if (imported.agents.length === 0) throw new Error('Agentes baixados não aparecem no rescan');
       await store.replaceAssets({ agents: [...store.listAgents(), ...imported.agents.filter((agent) => !store.listAgents().some((item) => item.file.toLowerCase() === agent.file.toLowerCase()))] });
@@ -451,7 +451,7 @@ async function ensureImportFolder(store: LibraryStore, kind: 'skill' | 'agent'):
           limit: z.number().int().positive().max(50).optional()
         })
         .parse(raw);
-      const token = decodeToken(store.getSettings().githubToken);
+      const token = await decodeToken(store.getSettings().githubToken);
       return ok(await searchGithubRepos(fetchJson, { query: input.query, ...(input.language ? { language: input.language } : {}), limit: input.limit, token }));
     } catch (e) {
       return fail(e);
@@ -461,7 +461,7 @@ async function ensureImportFolder(store: LibraryStore, kind: 'skill' | 'agent'):
   ipcMain.handle(IpcChannels.githubAgentSearch, async (_event, raw: unknown): Promise<IpcResult<AgentSearchResponse>> => {
     try {
       const { input } = z.object({ input: z.string().min(1) }).parse(raw);
-      const token = decodeToken(store.getSettings().githubToken);
+      const token = await decodeToken(store.getSettings().githubToken);
       return ok(await searchAgentRepos(fetchJson, { input, token }));
     } catch (e) {
       return fail(e);
@@ -474,7 +474,7 @@ async function ensureImportFolder(store: LibraryStore, kind: 'skill' | 'agent'):
       const settings = store.getSettings();
       const analysis = await analyzeGithubRepo(fetchJson, {
         remoteUrl: url,
-        token: decodeToken(settings.githubToken)
+        token: await decodeToken(settings.githubToken)
       });
       return ok(analysis);
     } catch (e) {
@@ -485,7 +485,7 @@ async function ensureImportFolder(store: LibraryStore, kind: 'skill' | 'agent'):
 
 /** Busca a lista de repos em alta na janela e escopo pedidos, persiste e avisa o renderer. */
 export async function refreshTopReposAndBroadcast(store: LibraryStore, windowDays = 30, scope: TopScope = 'all'): Promise<TopRepos> {
-  const token = decodeToken(store.getSettings().githubToken);
+  const token = await decodeToken(store.getSettings().githubToken);
   const fetched = await fetchTopRepos(fetchJson, { token, limit: 25, windowDays, scope });
   await store.setTopRepos({ ...fetched, windowDays, scope });
   const payload = ok(store.getTopRepos(windowDays, scope));
