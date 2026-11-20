@@ -10,27 +10,28 @@ body,
 
 :root {
   color-scheme: dark;
-  /* Steam dark — equivale a #171a21 #1b2838 #2a475e #c7d5e0 #66c0f4 #5ba32b #c94a4a #d8a031 */
-  --steam-bg: 222 18% 11%;
-  --steam-panel: 213 35% 16%;
-  --steam-elevated: 207 38% 27%;
-  --steam-text: 206 29% 83%;
-  --steam-accent: 202 86% 68%;
-  --steam-green: 96 58% 40%;
-  --steam-error: 0 54% 54%;
-  --steam-warn: 40 68% 52%;
+  /* Tokens mantêm o prefixo steam-* por compatibilidade; paleta grafite com destaque verde.
+     Equivale a #0b0d0e #151718 #26292b #e7e9ea #45d483 #23914f #fc5455 #f5c542 */
+  --steam-bg: 200 12% 5%;
+  --steam-panel: 200 6% 9%;
+  --steam-elevated: 200 6% 16%;
+  --steam-text: 200 6% 91%;
+  --steam-accent: 146 62% 55%;
+  --steam-green: 144 61% 35%;
+  --steam-error: 0 96% 66%;
+  --steam-warn: 44 90% 61%;
 }
 
 html[data-theme='light'] {
   color-scheme: light;
-  --steam-bg: 210 25% 96%;
+  --steam-bg: 200 10% 96%;
   --steam-panel: 0 0% 100%;
-  --steam-elevated: 207 42% 89%;
-  --steam-text: 207 25% 24%;
-  --steam-accent: 203 74% 38%;
-  --steam-green: 96 55% 30%;
-  --steam-error: 0 56% 43%;
-  --steam-warn: 41 72% 33%;
+  --steam-elevated: 200 9% 88%;
+  --steam-text: 200 10% 12%;
+  --steam-accent: 145 70% 30%;
+  --steam-green: 145 70% 30%;
+  --steam-error: 0 72% 46%;
+  --steam-warn: 38 92% 34%;
 }
 
 html[data-theme='light'] ::placeholder {
@@ -40,6 +41,7 @@ html[data-theme='light'] ::placeholder {
 body {
   margin: 0;
   font-family:
+    'Inter',
     'Segoe UI',
     system-ui,
     -apple-system,
@@ -49,30 +51,6 @@ body {
 
 #root {
   transition: background-color 160ms ease-out, color 160ms ease-out;
-}
-
-.glibrary-app-header {
-  min-width: 0;
-}
-
-.glibrary-app-nav {
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-}
-
-.glibrary-app-nav::-webkit-scrollbar {
-  display: none;
-}
-
-.glibrary-app-nav > button {
-  flex: none;
-  white-space: nowrap;
-}
-
-.glibrary-app-nav > button:focus-visible {
-  outline: 2px solid hsl(var(--steam-accent));
-  outline-offset: 2px;
 }
 
 .projects-surface {
@@ -102,4 +80,14 @@ body {
   border: 2px solid hsl(var(--steam-bg));
   border-radius: 8px;
   background: hsl(var(--steam-elevated));
+}
+
+.glibrary-sidebar {
+  scrollbar-width: none;
+}
+
+.glibrary-sidebar nav > button:focus-visible,
+.glibrary-sidebar > div button:focus-visible {
+  outline: 2px solid hsl(var(--steam-accent));
+  outline-offset: 2px;
 }

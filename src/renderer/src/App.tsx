@@ -69,34 +69,69 @@ export default function App(): React.JSX.Element {
     }
   }, [page]);
   if (!loaded) return <div className="flex h-full items-center justify-center bg-steam-bg text-steam-text">Carregando biblioteca…</div>;
-  return <div className="relative flex h-full flex-col bg-steam-bg text-steam-text">
-    <header className="glibrary-app-header flex items-center gap-3 border-b border-steam-elevated/50 px-4 py-2">
-      <Library size={22} className="text-steam-accent"/>
-      <span className="text-lg font-bold tracking-wide">GLIBRARY</span>
-      <nav className="glibrary-app-nav ml-2 flex min-w-0 flex-1 gap-1 text-sm">
-        <button type="button" onClick={() => setPage('dashboard')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'dashboard' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><BarChart3 size={15}/>Dashboard</button>
-        <button type="button" onClick={() => setPage('projects')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'projects' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><FolderGit2 size={15}/>Projetos</button>
-        <button type="button" onClick={() => setPage('library')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'library' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Library size={15}/>Biblioteca</button>
-        <button type="button" onClick={() => setPage('collections')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'collections' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Boxes size={15}/>Coleções</button>
-        <button type="button" onClick={() => setPage('search')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'search' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Search size={15}/>Busca</button>
-        <button type="button" onClick={() => setPage('analyze')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'analyze' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><ScanSearch size={15}/>Análise</button>
-        <button type="button" onClick={() => setPage('consumo')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'consumo' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Activity size={15}/>Consumo</button>
-        <button type="button" onClick={() => setPage('agentes')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'agentes' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Bot size={15}/>Agentes</button>
-        <button type="button" onClick={() => setPage('ferramentas')} className={`flex items-center gap-1.5 rounded px-3 py-1.5 ${page === 'ferramentas' ? 'bg-steam-elevated text-steam-accent' : 'text-steam-text/60 hover:bg-steam-panel'}`}><Wrench size={15}/>Ferramentas</button>
-      </nav>
-      <span className="ml-2 hidden shrink-0 whitespace-nowrap text-sm text-steam-text/50 2xl:block">Skills · Agents · Bases · Projetos</span>
-      <GithubAccountMenu onError={onError} />
-      <button
-        type="button"
-        onClick={toggleTheme}
-        aria-label={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
-        title={theme === 'dark' ? 'Tema claro' : 'Tema escuro'}
-        className="ml-auto shrink-0 rounded p-1.5 text-steam-text/60 hover:bg-steam-panel hover:text-steam-accent"
-      >
-        {theme === 'dark' ? <Sun size={16}/> : <Moon size={16}/>}
+  const navItems: { id: Page; label: string; icon: React.ReactNode }[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: <BarChart3 size={16}/> },
+    { id: 'projects', label: 'Projetos', icon: <FolderGit2 size={16}/> },
+    { id: 'library', label: 'Biblioteca', icon: <Library size={16}/> },
+    { id: 'collections', label: 'Coleções', icon: <Boxes size={16}/> },
+    { id: 'search', label: 'Busca', icon: <Search size={16}/> },
+    { id: 'analyze', label: 'Análise', icon: <ScanSearch size={16}/> },
+    { id: 'consumo', label: 'Consumo', icon: <Activity size={16}/> },
+    { id: 'agentes', label: 'Agentes', icon: <Bot size={16}/> },
+    { id: 'ferramentas', label: 'Ferramentas', icon: <Wrench size={16}/> }
+  ];
+  const openSearch = (): void => {
+    const input = document.getElementById('library-search') as HTMLInputElement | null;
+    if (page === 'library' && input) {
+      input.focus();
+      input.select();
+      return;
+    }
+    pendingSearch.current = true;
+    setPage('library');
+  };
+  return <div className="relative flex h-full bg-steam-bg text-steam-text">
+    <aside className="glibrary-sidebar flex w-14 shrink-0 flex-col gap-4 overflow-y-auto border-r border-steam-elevated/70 bg-steam-bg px-2 py-4 md:w-56 md:px-3">
+      <div className="flex items-center gap-2.5 px-1.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-steam-accent/40 bg-steam-accent/10 text-steam-accent"><Library size={16}/></span>
+        <span className="hidden text-base font-semibold tracking-tight md:inline">Glibrary</span>
+      </div>
+      <button type="button" onClick={openSearch} aria-label="Buscar na biblioteca (Ctrl+K)" className="flex items-center gap-2 rounded-lg border border-steam-elevated bg-steam-panel px-2.5 py-2 text-xs text-steam-text/50 hover:border-steam-text/20 hover:text-steam-text/80">
+        <Search size={14} className="shrink-0"/>
+        <span className="hidden flex-1 text-left md:inline">Buscar</span>
+        <kbd className="hidden rounded border border-steam-elevated px-1 font-sans text-[10px] text-steam-text/40 md:inline">Ctrl K</kbd>
       </button>
-    </header>
-    <div className="flex min-h-0 flex-1">
+      <nav className="flex flex-col gap-0.5 text-sm" aria-label="Menu principal">
+        <span className="mb-1 hidden px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-steam-text/35 md:block">Menu principal</span>
+        {navItems.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setPage(item.id)}
+            aria-current={page === item.id ? 'page' : undefined}
+            title={item.label}
+            className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left ${page === item.id ? 'border-steam-elevated bg-steam-panel text-steam-text shadow-[inset_0_1px_0_hsl(var(--steam-text)/0.04)]' : 'border-transparent text-steam-text/55 hover:bg-steam-panel/60 hover:text-steam-text/85'}`}
+          >
+            <span className={`shrink-0 ${page === item.id ? 'text-steam-accent' : ''}`}>{item.icon}</span>
+            <span className="sr-only md:not-sr-only">{item.label}</span>
+          </button>
+        ))}
+      </nav>
+      <div className="mt-auto flex flex-col gap-0.5 border-t border-steam-elevated/70 pt-3 text-sm">
+        <GithubAccountMenu onError={onError} placement="sidebar"/>
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+          title={theme === 'dark' ? 'Tema claro' : 'Tema escuro'}
+          className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-steam-text/55 hover:bg-steam-panel/60 hover:text-steam-text/85"
+        >
+          {theme === 'dark' ? <Sun size={16} className="shrink-0"/> : <Moon size={16} className="shrink-0"/>}
+          <span className="hidden md:inline">{theme === 'dark' ? 'Tema claro' : 'Tema escuro'}</span>
+        </button>
+      </div>
+    </aside>
+    <div className="flex min-h-0 min-w-0 flex-1">
       <Suspense fallback={<div className="m-auto text-sm text-steam-text/50">Carregando página…</div>}>
         {page === 'library'
           ? <AssetLibraryPage onError={onError} onSuccess={onSuccess}/>

@@ -7,7 +7,8 @@ import { api } from '../lib/api';
 type AuthError = (message: string) => void;
 
 /** Botão de conta GitHub no header: conecte via PAT (validado em /user). */
-export default function GithubAccountMenu({ onError }: { onError: AuthError }): React.JSX.Element {
+export default function GithubAccountMenu({ onError, placement = 'header' }: { onError: AuthError; placement?: 'header' | 'sidebar' }): React.JSX.Element {
+  const inSidebar = placement === 'sidebar';
   const { updateSettings } = useLibraryStore();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -64,11 +65,13 @@ export default function GithubAccountMenu({ onError }: { onError: AuthError }): 
   };
 
   return (
-    <div className="relative ml-auto" ref={menuRef}>
+    <div className={inSidebar ? 'relative' : 'relative ml-auto'} ref={menuRef}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-sm text-steam-text/70 hover:bg-steam-panel hover:text-steam-accent"
+        className={inSidebar
+          ? 'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-steam-text/55 hover:bg-steam-panel/60 hover:text-steam-text/85'
+          : 'flex items-center gap-1.5 rounded px-2.5 py-1.5 text-sm text-steam-text/70 hover:bg-steam-panel hover:text-steam-accent'}
         aria-label="Conta GitHub"
       >
         {user?.avatarUrl != null ? (
@@ -76,10 +79,10 @@ export default function GithubAccountMenu({ onError }: { onError: AuthError }): 
         ) : (
           <Cloud size={16} />
         )}
-        <span className="hidden xl:inline">{user?.login ?? 'GitHub'}</span>
+        <span className={inSidebar ? 'hidden truncate md:inline' : 'hidden xl:inline'}>{user?.login ?? 'GitHub'}</span>
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-lg border border-steam-elevated bg-steam-panel p-4 shadow-xl">
+        <div className={`absolute z-50 w-80 rounded-lg border border-steam-elevated bg-steam-panel p-4 shadow-xl ${inSidebar ? 'bottom-0 left-full ml-2' : 'right-0 top-full mt-2'}`}>
           {loading ? (
             <p className="flex items-center gap-2 text-sm text-steam-text/60">
               <RefreshCw size={14} className="animate-spin" /> Verificando sessão…

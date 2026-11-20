@@ -4,6 +4,7 @@ import { buildSyncedReposView } from '@shared/github-dashboard';
 import { useLibraryStore } from '../../store/library';
 import StatusBadge from '../StatusBadge';
 import DevSessionBadge from '../DevSessionBadge';
+import { Panel } from './ui';
 
 interface Props {
   onOpen: (repoId: string) => void;
@@ -20,21 +21,17 @@ export default function SyncedReposSection({ onOpen, onError }: Props): React.JS
     { label: 'Favoritos', value: view.summary.favorites }
   ];
   return (
-    <section className="rounded border border-steam-elevated bg-steam-panel p-5">
-      <div className="mb-4 flex items-center gap-2">
-        <FolderGit2 size={16} className="text-steam-accent" />
-        <h2 className="text-sm font-semibold">Projetos sincronizados</h2>
-      </div>
+    <Panel icon={<FolderGit2 size={15} />} title="Projetos sincronizados">
       <div className="mb-4 grid grid-cols-3 gap-3">
         {strip.map((item) => (
-          <div key={item.label} className="rounded border border-steam-elevated/70 bg-steam-bg/40 px-4 py-3">
-            <p className="text-xs uppercase tracking-wide text-steam-text/40">{item.label}</p>
-            <p className="mt-1 text-xl font-semibold tabular-nums">{item.value}</p>
+          <div key={item.label} className="flex items-baseline gap-2 rounded-lg border border-steam-elevated/70 bg-steam-bg/40 px-4 py-3">
+            <p className="text-xs text-steam-text/50">{item.label}</p>
+            <p className="ml-auto text-xl font-semibold tabular-nums">{item.value}</p>
           </div>
         ))}
       </div>
       {view.rows.length === 0 ? (
-        <p className="flex h-32 items-center justify-center rounded border border-dashed border-steam-elevated text-sm text-steam-text/40">
+        <p className="flex h-32 items-center justify-center rounded-lg border border-dashed border-steam-elevated text-sm text-steam-text/40">
           Nenhum repositório registrado no sistema ainda.
         </p>
       ) : (
@@ -46,7 +43,7 @@ export default function SyncedReposSection({ onOpen, onError }: Props): React.JS
                 onClick={() => { toggleFavorite(row.id).catch((e: unknown) => onError(e instanceof Error ? e.message : String(e))); }}
                 aria-label={row.favorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
                 aria-pressed={row.favorite}
-                className={`shrink-0 rounded p-1 hover:bg-steam-elevated ${row.favorite ? 'text-steam-warn' : 'text-steam-text/30'}`}
+                className={`shrink-0 rounded-md p-1 hover:bg-steam-elevated ${row.favorite ? 'text-steam-warn' : 'text-steam-text/30'}`}
               >
                 <Star size={14} fill={row.favorite ? 'currentColor' : 'none'} />
               </button>
@@ -75,7 +72,7 @@ export default function SyncedReposSection({ onOpen, onError }: Props): React.JS
               <button
                 type="button"
                 onClick={() => onOpen(row.id)}
-                className="flex shrink-0 items-center gap-1 rounded border border-steam-elevated px-2.5 py-1 text-xs hover:bg-steam-elevated hover:text-steam-accent"
+                className="flex shrink-0 items-center gap-1 rounded-lg border border-steam-elevated px-2.5 py-1 text-xs hover:bg-steam-elevated hover:text-steam-accent"
               >
                 <ExternalLink size={12} /> Abrir
               </button>
@@ -83,6 +80,6 @@ export default function SyncedReposSection({ onOpen, onError }: Props): React.JS
           ))}
         </ul>
       )}
-    </section>
+    </Panel>
   );
 }
